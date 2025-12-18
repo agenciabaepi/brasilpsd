@@ -11,7 +11,9 @@ import {
   LogOut, 
   ExternalLink,
   CheckSquare,
-  Crown
+  Crown,
+  CreditCard,
+  Repeat
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -20,7 +22,9 @@ const menuItems = [
   { name: 'Aprovações', href: '/admin/approvals', icon: CheckSquare },
   { name: 'Recursos', href: '/admin/resources', icon: Files },
   { name: 'Usuários', href: '/admin/users', icon: Users },
+  { name: 'Assinaturas', href: '/admin/subscriptions', icon: Repeat },
   { name: 'Categorias', href: '/admin/categories', icon: Tag },
+  { name: 'Financeiro', href: '/admin/finance', icon: CreditCard },
   { name: 'Configurações', href: '/admin/settings', icon: Settings },
 ]
 

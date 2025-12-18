@@ -10,6 +10,8 @@ export interface Profile {
   role: UserRole
   is_creator: boolean
   is_admin: boolean
+  is_premium: boolean
+  subscription_tier: string
   created_at: string
   updated_at: string
 }

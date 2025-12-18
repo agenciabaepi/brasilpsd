@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { Heart, Sparkles } from 'lucide-react'
+import { Heart, Sparkles, Crown } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 
@@ -37,8 +37,8 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
           {/* Status Badge (Top Corners like Designi) */}
           <div className="absolute top-2 left-2 z-10">
             {resource.is_premium && (
-              <div className="bg-primary-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm">
-                Exclusivo
+              <div className="bg-gray-900/80 backdrop-blur-sm p-1.5 rounded-lg shadow-lg border border-white/10">
+                <Crown className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
               </div>
             )}
             {!resource.is_premium && (

@@ -20,12 +20,12 @@ export default function HomeClient({
   latestResources, 
   freeResources 
 }: HomeClientProps) {
-  const [activeTab, setActiveTab] = useState<'destaques' | 'exclusivos' | 'novos' | 'gratis'>('destaques')
+  const [activeTab, setActiveTab] = useState<'destaques' | 'exclusivos' | 'novos' | 'gratis'>('novos')
 
   const tabs = [
+    { id: 'novos', label: 'Novos', data: latestResources },
     { id: 'destaques', label: 'Destaques', data: officialResources },
     { id: 'exclusivos', label: 'Exclusivos', data: popularResources },
-    { id: 'novos', label: 'Novos', data: latestResources },
     { id: 'gratis', label: 'Grátis', data: freeResources },
   ] as const
 

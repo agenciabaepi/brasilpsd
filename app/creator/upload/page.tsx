@@ -21,94 +21,130 @@ export default function UploadResourcePage() {
     keywords: '',
     is_premium: false,
     is_official: false,
-    price: '',
   })
 
-  useEffect(() => {
-    loadInitialData()
-  }, [])
-
-  async function loadInitialData() {
-    // Load Profile
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-      setUserProfile(data)
-    }
-
-    // Load Categories
-    const { data: cats } = await supabase
-      .from('categories')
-      .select('id, name, parent_id')
-      .order('name')
-    setCategories(cats || [])
-  }
   const [file, setFile] = useState<File | null>(null)
   const [thumbnail, setThumbnail] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'processing'>('idle')
+  
   const router = useRouter()
   const supabase = createSupabaseClient()
+
+  useEffect(() => {
+    async function loadInitialData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single()
+          setUserProfile(data)
+        }
+
+        const { data: cats, error: catsError } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .order('name')
+        
+        if (catsError) {
+          console.error('Erro Supabase Categorias:', catsError)
+          toast.error('Erro ao carregar categorias do banco')
+        }
+        
+        console.log('Categorias carregadas:', cats?.length || 0)
+        setCategories(cats || [])
+      } catch (error) {
+        console.error('Erro ao carregar dados iniciais:', error)
+      }
+    }
+    
+    loadInitialData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function uploadWithProgress(file: File, type: 'resource' | 'thumbnail'): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('type', type)
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100)
+          setUploadProgress(percent)
+          if (percent === 100) {
+            setUploadPhase('processing')
+          }
+        }
+      })
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText))
+            } catch (err) {
+              reject(new Error('Resposta inválida do servidor'))
+            }
+          } else {
+            try {
+              const errorData = JSON.parse(xhr.responseText)
+              reject(new Error(errorData.error || 'Erro no upload'))
+            } catch (err) {
+              reject(new Error(`Erro ${xhr.status} no servidor`))
+            }
+          }
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('Erro de conexão'))
+      xhr.open('POST', '/api/upload')
+      xhr.send(fd)
+    })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
     if (!file) {
-      toast.error('Selecione um arquivo')
+      toast.error('Selecione um arquivo principal')
       return
     }
 
     setIsUploading(true)
+    setUploadProgress(0)
+    setUploadPhase('uploading')
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        toast.error('Você precisa estar logado')
-        return
-      }
+      if (!user) throw new Error('Usuário não autenticado')
 
-      // 1. Upload main file
-      const fileFormData = new FormData()
-      fileFormData.append('file', file)
-      fileFormData.append('type', 'resource')
+      // 1. Upload do Arquivo Principal
+      const fileData = await uploadWithProgress(file, 'resource')
+      const fileUrl = fileData.url
+      const detectedAi = fileData.isAiGenerated
 
-      const fileResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: fileFormData,
-      })
-
-      if (!fileResponse.ok) {
-        const errorData = await fileResponse.json()
-        throw new Error(errorData.error || 'Falha no upload do arquivo principal')
-      }
-
-      const { url: fileUrl, isAiGenerated: detectedAi } = await fileResponse.json()
-
-      // 2. Upload thumbnail if exists
+      // 2. Upload da Capa (se houver)
       let thumbnailUrl = null
       let thumbAiDetected = false
       if (thumbnail) {
-        const thumbFormData = new FormData()
-        thumbFormData.append('file', thumbnail)
-        thumbFormData.append('type', 'thumbnail')
-
-        const thumbResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: thumbFormData,
-        })
-
-        if (thumbResponse.ok) {
-          const thumbData = await thumbResponse.json()
-          thumbnailUrl = thumbData.url
-          thumbAiDetected = thumbData.isAiGenerated
-        }
+        setUploadProgress(0)
+        setUploadPhase('uploading')
+        const thumbData = await uploadWithProgress(thumbnail, 'thumbnail')
+        thumbnailUrl = thumbData.url
+        thumbAiDetected = thumbData.isAiGenerated
       }
 
-      // 3. Save to database
+      setUploadPhase('processing')
+      setUploadProgress(100)
+
+      // 3. Salvar no Banco
       const { error } = await supabase
         .from('resources')
         .insert({
@@ -125,17 +161,17 @@ export default function UploadResourcePage() {
           is_premium: formData.is_premium,
           is_official: formData.is_official,
           is_ai_generated: detectedAi || thumbAiDetected,
-          price: formData.price ? parseFloat(formData.price) : null,
           status: userProfile?.is_admin ? 'approved' : 'pending',
         })
 
       if (error) throw error
 
-      toast.success('Recurso enviado com sucesso! Aguardando aprovação.')
+      toast.success('Arquivo enviado com sucesso!')
       router.push('/creator')
     } catch (error: any) {
+      console.error(error)
       toast.error(error.message || 'Erro ao enviar recurso')
-    } finally {
+      setUploadPhase('idle')
       setIsUploading(false)
     }
   }
@@ -146,23 +182,14 @@ export default function UploadResourcePage() {
       setFile(selectedFile)
       if (selectedFile.type.startsWith('image/')) {
         const reader = new FileReader()
-        reader.onloadend = () => {
-          setPreview(reader.result as string)
-        }
+        reader.onloadend = () => setPreview(reader.result as string)
         reader.readAsDataURL(selectedFile)
       }
     }
   }
 
-  function handleThumbnailChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      setThumbnail(selectedFile)
-    }
-  }
-
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto px-4 md:px-0">
       <div className="flex flex-col space-y-2 mb-10">
         <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">Novo Upload</h1>
         <p className="text-gray-400 font-medium text-sm tracking-wider">Envie seus arquivos para a comunidade BrasilPSD.</p>
@@ -256,7 +283,7 @@ export default function UploadResourcePage() {
               />
 
               <div className="pt-4 space-y-4">
-                <div className="flex items-center space-x-8 p-6 bg-gray-50 rounded-3xl border border-gray-100">
+                <div className="flex items-center space-x-8 p-6 bg-gray-50 rounded-3xl border border-gray-100 shadow-sm">
                   <label className="flex items-center cursor-pointer group">
                     <div className="relative">
                       <input
@@ -268,26 +295,15 @@ export default function UploadResourcePage() {
                       <div className={`block w-14 h-8 rounded-full transition-all ${formData.is_premium ? 'bg-primary-500' : 'bg-gray-300'}`} />
                       <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-all transform ${formData.is_premium ? 'translate-x-6' : 'translate-x-0'}`} />
                     </div>
-                    <span className="ml-4 text-xs font-semibold text-gray-700 tracking-tighter uppercase">Este recurso é Premium</span>
-                  </label>
-
-                  {formData.is_premium && (
-                    <div className="flex-1">
-                      <Input
-                        type="number"
-                        label="Preço de Venda (R$)"
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      />
+                    <div className="ml-4 flex flex-col">
+                      <span className="text-xs font-semibold text-gray-700 tracking-tighter uppercase">Este recurso é Premium</span>
+                      <span className="text-[10px] text-gray-400 font-medium tracking-tight">Disponível apenas para assinantes do site</span>
                     </div>
-                  )}
+                  </label>
                 </div>
 
                 {userProfile?.is_admin && (
-                  <div className="flex items-center space-x-8 p-6 bg-gray-900 rounded-3xl border border-gray-800">
+                  <div className="flex items-center space-x-8 p-6 bg-gray-900 rounded-3xl border border-gray-800 shadow-xl">
                     <label className="flex items-center cursor-pointer group">
                       <div className="relative">
                         <input
@@ -333,7 +349,7 @@ export default function UploadResourcePage() {
                   />
                   <div className="h-40 rounded-3xl border-2 border-dashed border-gray-200 group-hover:border-primary-500 group-hover:bg-primary-50/30 transition-all flex flex-col items-center justify-center p-6 text-center">
                     <UploadIcon className="h-8 w-8 text-gray-300 group-hover:text-primary-500 mb-2 transition-colors" />
-                    <p className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase group-hover:text-primary-600">
+                    <p className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase group-hover:text-primary-600 truncate max-w-full px-4">
                       {file ? file.name : 'Selecionar Arquivo'}
                     </p>
                   </div>
@@ -349,11 +365,11 @@ export default function UploadResourcePage() {
                     type="file"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     accept="image/*"
-                    onChange={handleThumbnailChange}
+                    onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
                   />
                   <div className="h-40 rounded-3xl border-2 border-dashed border-gray-200 group-hover:border-primary-500 group-hover:bg-primary-50/30 transition-all flex flex-col items-center justify-center p-6 text-center">
                     <ImageIcon className="h-8 w-8 text-gray-300 group-hover:text-primary-500 mb-2 transition-colors" />
-                    <p className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase group-hover:text-primary-600">
+                    <p className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase group-hover:text-primary-600 truncate max-w-full px-4">
                       {thumbnail ? thumbnail.name : 'Selecionar Capa'}
                     </p>
                   </div>
@@ -362,28 +378,28 @@ export default function UploadResourcePage() {
             </div>
 
             {preview && (
-              <div className="mt-8 rounded-3xl overflow-hidden border border-gray-100">
+              <div className="mt-8 rounded-3xl overflow-hidden border border-gray-100 shadow-sm">
                 <p className="p-4 bg-gray-50 text-[10px] font-semibold text-gray-400 tracking-widest border-b border-gray-100 uppercase">Pré-visualização</p>
-                <img src={preview} alt="Preview" className="w-full h-auto" />
+                <img src={preview} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
               </div>
             )}
           </Card>
         </div>
 
         <div className="space-y-6">
-          <Card className="bg-primary-500 border-none p-8 text-white rounded-[2rem]">
+          <Card className="bg-primary-500 border-none p-8 text-white rounded-[2rem] shadow-xl shadow-primary-500/20">
             <div className="h-12 w-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6">
               <Info className="h-6 w-6 text-white" />
             </div>
-            <h3 className="font-semibold text-xl mb-4 uppercase">Regras de Ouro</h3>
-            <ul className="space-y-4 text-sm font-medium text-primary-50/80">
+            <h3 className="font-semibold text-xl mb-4 uppercase tracking-tight">Regras de Ouro</h3>
+            <ul className="space-y-4 text-sm font-medium text-primary-50/90 leading-relaxed">
               <li className="flex items-start">
                 <span className="mr-3 mt-1 h-1.5 w-1.5 bg-white rounded-full flex-shrink-0" />
                 <span>Arquivos em PSD devem conter camadas organizadas.</span>
               </li>
               <li className="flex items-start">
                 <span className="mr-3 mt-1 h-1.5 w-1.5 bg-white rounded-full flex-shrink-0" />
-                <span>Imagens devem ter resolução mínima de 2000px.</span>
+                <span>Imagens devem ter alta resolução para boa qualidade.</span>
               </li>
               <li className="flex items-start">
                 <span className="mr-3 mt-1 h-1.5 w-1.5 bg-white rounded-full flex-shrink-0" />
@@ -393,17 +409,39 @@ export default function UploadResourcePage() {
           </Card>
 
           <div className="flex flex-col space-y-3">
+            {isUploading && (
+              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-lg space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    {uploadPhase === 'uploading' ? 'Enviando arquivos...' : 'Processando mídia...'}
+                  </span>
+                  <span className="text-[10px] font-black text-primary-500">{uploadProgress}%</span>
+                </div>
+                <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary-500 transition-all duration-500 ease-out shadow-sm"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 font-medium text-center italic">
+                  {uploadPhase === 'processing' ? 'Isso pode levar alguns segundos para arquivos grandes.' : 'Não feche esta página.'}
+                </p>
+              </div>
+            )}
+            
             <button
               type="submit"
               disabled={isUploading}
-              className="w-full py-5 bg-gray-900 hover:bg-black text-white rounded-2xl font-semibold text-xs tracking-widest transition-all disabled:opacity-50 uppercase"
+              className="w-full py-5 bg-gray-900 hover:bg-black text-white rounded-2xl font-bold text-xs tracking-widest transition-all disabled:opacity-50 uppercase shadow-xl hover:scale-[1.02] active:scale-[0.98]"
             >
-              {isUploading ? 'Processando...' : 'Finalizar e Enviar'}
+              {isUploading ? (uploadPhase === 'processing' ? 'Finalizando...' : 'Enviando...') : 'Finalizar e Enviar'}
             </button>
+            
             <button
               type="button"
               onClick={() => router.back()}
-              className="w-full py-4 text-gray-400 hover:text-gray-600 font-semibold text-[10px] tracking-[0.2em] transition-all uppercase"
+              disabled={isUploading}
+              className="w-full py-4 text-gray-400 hover:text-gray-600 font-semibold text-[10px] tracking-[0.2em] transition-all uppercase disabled:opacity-30"
             >
               Cancelar Envio
             </button>

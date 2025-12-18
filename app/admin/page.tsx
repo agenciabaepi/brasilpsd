@@ -9,6 +9,7 @@ import { Users, FileCheck, FileX, TrendingUp, DollarSign, AlertCircle } from 'lu
 import type { Profile, Resource } from '@/types/database'
 import Link from 'next/link'
 import { getS3Url } from '@/lib/aws/s3'
+import toast from 'react-hot-toast'
 
 export default function AdminDashboardPage() {
   const [user, setUser] = useState<Profile | null>(null)
@@ -28,69 +29,65 @@ export default function AdminDashboardPage() {
   }, [])
 
   async function loadData() {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    
-    if (!authUser) {
-      router.push('/login')
-      return
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !authUser) {
+        console.error('Erro de autenticação:', authError)
+        router.push('/login')
+        return
+      }
+
+      // Load profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single()
+      
+      if (profileError || !profile || !profile.is_admin) {
+        console.error('Erro de perfil ou não é admin:', profileError)
+        // Se a tabela de perfis estiver vazia ou o perfil não existir, 
+        // talvez o trigger de criação não tenha rodado.
+        toast.error('Acesso negado ou perfil não encontrado.')
+        router.push('/dashboard')
+        return
+      }
+
+      setUser(profile)
+
+      // Executar buscas em paralelo para performance
+      const [
+        { data: pendingData },
+        { count: usersCount },
+        { count: creatorsCount },
+        { count: resourcesCount },
+        { count: pendingCount },
+        { data: downloadData }
+      ] = await Promise.all([
+        supabase.from('resources').select('*, creator:profiles!creator_id(*)').eq('status', 'pending').order('created_at', { ascending: false }).limit(10),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_creator', true),
+        supabase.from('resources').select('*', { count: 'exact', head: true }),
+        supabase.from('resources').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('resources').select('download_count')
+      ])
+
+      setPendingResources(pendingData || [])
+
+      const totalDownloads = downloadData?.reduce((sum, r) => sum + (r.download_count || 0), 0) || 0
+
+      setStats({
+        totalUsers: usersCount || 0,
+        totalCreators: creatorsCount || 0,
+        totalResources: resourcesCount || 0,
+        pendingResources: pendingCount || 0,
+        totalDownloads,
+      })
+    } catch (error) {
+      console.error('Erro ao carregar dados do admin:', error)
+      toast.error('Erro ao sincronizar dados. Verifique sua conexão ou banco de dados.')
     }
-
-    // Load profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .single()
-    
-    if (!profile || !profile.is_admin) {
-      router.push('/dashboard')
-      return
-    }
-
-    setUser(profile)
-
-    // Load pending resources
-    const { data: pendingData } = await supabase
-      .from('resources')
-      .select('*, creator:profiles!creator_id(*)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(10)
-
-    setPendingResources(pendingData || [])
-
-    // Calculate stats
-    const { count: usersCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-
-    const { count: creatorsCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_creator', true)
-
-    const { count: resourcesCount } = await supabase
-      .from('resources')
-      .select('*', { count: 'exact', head: true })
-
-    const { count: pendingCount } = await supabase
-      .from('resources')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending')
-
-    const { data: allResources } = await supabase
-      .from('resources')
-      .select('download_count')
-
-    const totalDownloads = allResources?.reduce((sum, r) => sum + (r.download_count || 0), 0) || 0
-
-    setStats({
-      totalUsers: usersCount || 0,
-      totalCreators: creatorsCount || 0,
-      totalResources: resourcesCount || 0,
-      pendingResources: pendingCount || 0,
-      totalDownloads,
-    })
   }
 
   async function handleApprove(resourceId: string) {

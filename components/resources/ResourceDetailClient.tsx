@@ -87,10 +87,17 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
   }
 
   async function handleDownload() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) {
       toast.error('Você precisa estar logado para baixar')
       router.push('/login')
+      return
+    }
+
+    // Double check premium status on client side
+    if (resource.is_premium && !user?.is_premium) {
+      toast.error('Este arquivo é exclusivo para membros Premium')
+      router.push('/premium')
       return
     }
 
@@ -214,16 +221,16 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
           <div className="bg-white rounded-3xl p-10 border border-gray-100 sticky top-24 shadow-sm">
             {/* Header Sidebar */}
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-4">
-                <h1 className="text-2xl font-bold text-gray-900 leading-tight tracking-tighter">
-                  {resource.title}
-                </h1>
-                {resource.is_premium && (
-                  <span className="bg-primary-500 text-white text-[10px] font-bold px-3 py-1 rounded-full flex-shrink-0 uppercase">
-                    Exclusivo
-                  </span>
-                )}
-              </div>
+                <div className="flex items-start justify-between gap-4">
+                  <h1 className="text-2xl font-bold text-gray-900 leading-tight tracking-tighter">
+                    {resource.title}
+                  </h1>
+                  {resource.is_premium && (
+                    <span className="bg-gray-900 text-yellow-400 p-2 rounded-full flex-shrink-0 shadow-lg border border-gray-800">
+                      <Crown className="h-5 w-5 fill-yellow-400" />
+                    </span>
+                  )}
+                </div>
             </div>
 
             {/* Checklist */}
@@ -270,6 +277,13 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
                       <span>Crie uma conta para Baixar</span>
                     </>
                   )}
+                </button>
+              </Link>
+            ) : resource.is_premium && !user.is_premium ? (
+              <Link href="/premium" className="block mt-8">
+                <button className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-bold text-xs tracking-widest transition-all shadow-lg shadow-orange-500/20 uppercase">
+                  <Crown className="h-5 w-5" />
+                  <span>Assine Premium para Baixar</span>
                 </button>
               </Link>
             ) : (

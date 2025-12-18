@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { uploadFileToS3 } from '@/lib/aws/s3'
 import sharp from 'sharp'
-import AdmZip from 'adm-zip'
+import archiver from 'archiver'
+import { PassThrough } from 'stream'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +14,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    // Check if user is creator
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_creator, is_admin')
@@ -26,145 +26,91 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData()
     const file = formData.get('file') as File
-    const type = formData.get('type') as string // 'resource' or 'thumbnail'
+    const type = formData.get('type') as string
 
     if (!file) {
       return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
     }
 
-    // Convert file to buffer
     const bytes = await file.arrayBuffer()
     let buffer = Buffer.from(bytes)
     let contentType = file.type
     let fileExtension = file.name.split('.').pop()?.toLowerCase()
-
-    // 0. DETECÇÃO AUTOMÁTICA DE IA (Apenas para imagens)
     let isAiGenerated = false
+
+    // 0. AI Detection
     if (file.type.startsWith('image/')) {
       try {
         const metadata = await sharp(buffer).metadata()
         const metadataString = JSON.stringify(metadata).toLowerCase()
-        
-        // Marcadores comuns de ferramentas de IA
-        const aiMarkers = [
-          'midjourney',
-          'dall-e',
-          'stablediffusion',
-          'adobe firefly',
-          'trainedalgorithmicmedia', // Tag oficial IPTC para IA
-          'generative fill',
-          'artificial intelligence',
-          'ai generated',
-          'fotor',
-          'canva ai'
-        ]
-        
+        const aiMarkers = ['midjourney', 'dall-e', 'stablediffusion', 'adobe firefly', 'generative fill', 'artificial intelligence', 'ai generated']
         isAiGenerated = aiMarkers.some(marker => metadataString.includes(marker))
-        
-        // Verificação extra em tags específicas do XMP
-        if (metadata.xmp) {
-          const xmpString = metadata.xmp.toString().toLowerCase()
-          if (xmpString.includes('digitalsourcetype') && xmpString.includes('trainedalgorithmicmedia')) {
-            isAiGenerated = true
-          }
-        }
       } catch (err) {
-        console.warn('Falha ao analisar metadados de IA:', err)
+        console.warn('AI Analysis failed:', err)
       }
     }
 
-    // 1. OTIMIZAÇÃO DE IMAGEM E MARCA D'ÁGUA (Apenas para thumbnails)
+    // 1. Thumbnail Processing + Watermark
     if (type === 'thumbnail') {
-      // Criar a Marca D'água (Padrão repetido estilo Stock)
-      const watermarkSvg = Buffer.from(`
-        <svg width="1200" height="1200" viewBox="0 0 1200 1200" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="watermark-pattern" x="0" y="0" width="300" height="200" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)">
-              <g opacity="0.15">
-                <text 
-                  x="50%" 
-                  y="50%" 
-                  font-family="sans-serif" 
-                  font-weight="900" 
-                  font-size="24" 
-                  fill="white" 
-                  text-anchor="middle"
-                  letter-spacing="2"
-                >
-                  BRASILPSD
-                </text>
-                <text 
-                  x="50.5%" 
-                  y="50.5%" 
-                  font-family="sans-serif" 
-                  font-weight="900" 
-                  font-size="24" 
-                  fill="black" 
-                  opacity="0.2"
-                  text-anchor="middle"
-                  letter-spacing="2"
-                >
-                  BRASILPSD
-                </text>
-              </g>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#watermark-pattern)" />
+      // Criar apenas um "quadradinho" da marca d'água para repetir (Tiling)
+      const watermarkTile = Buffer.from(`
+        <svg width="300" height="200" xmlns="http://www.w3.org/2000/svg">
+          <text 
+            x="50%" 
+            y="50%" 
+            font-family="sans-serif" 
+            font-weight="900" 
+            font-size="20" 
+            fill="rgba(255,255,255,0.2)" 
+            stroke="rgba(0,0,0,0.05)" 
+            stroke-width="0.5" 
+            text-anchor="middle" 
+            transform="rotate(-30 150 100)"
+          >
+            BRASILPSD
+          </text>
         </svg>
       `)
 
-      const pipeline = sharp(buffer)
-      
-      pipeline
+      // Redimensionar e aplicar a marca d'água repetida (tile: true resolve o erro de dimensões)
+      buffer = await sharp(buffer)
         .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-        .composite([
-          { 
-            input: watermarkSvg, 
-            gravity: 'center',
-            blend: 'over' 
-          }
-        ])
-        .webp({ quality: 85 })
-      
-      buffer = await pipeline.toBuffer()
+        .composite([{ 
+          input: watermarkTile, 
+          tile: true, // Isso faz a marca d'água repetir e se ajustar a qualquer tamanho
+          blend: 'over' 
+        }])
+        .webp({ quality: 80 })
+        .toBuffer()
+
       contentType = 'image/webp'
       fileExtension = 'webp'
     }
 
-    // 2. COMPACTAÇÃO EM ZIP (Para o recurso principal)
+    // 2. ZIP Compression
     if (type === 'resource' && fileExtension !== 'zip') {
-      const zip = new AdmZip()
+      const archive = archiver('zip', { zlib: { level: 5 } })
+      const passThrough = new PassThrough()
+      const chunks: Buffer[] = []
       
-      // Adiciona o arquivo original ao ZIP
-      zip.addFile(file.name, buffer)
-      
-      // Adiciona um arquivo de licença padrão (Opcional, mas profissional)
-      const licenseText = `
-BRASIL PSD - LICENÇA DE USO
----------------------------
-Este arquivo foi baixado em BrasilPSD.com.br.
+      passThrough.on('data', (chunk) => chunks.push(chunk))
+      const zipPromise = new Promise<Buffer>((resolve, reject) => {
+        passThrough.on('end', () => resolve(Buffer.concat(chunks)))
+        passThrough.on('error', (err) => reject(err))
+      })
 
-Ao baixar este recurso, você concorda que:
-1. Pode ser usado para projetos pessoais e comerciais.
-2. Não é permitida a redistribuição ou venda do arquivo fonte original.
-3. A BrasilPSD não se responsabiliza por problemas técnicos após a edição.
-
-Obrigado por usar nossa plataforma!
-      `
-      zip.addFile('LICENSE.txt', Buffer.from(licenseText, 'utf8'))
-      
-      buffer = zip.toBuffer()
+      archive.pipe(passThrough)
+      archive.append(buffer, { name: file.name })
+      archive.append(`Este arquivo foi baixado em BrasilPSD.com.br.`, { name: 'LICENSE.txt' })
+      await archive.finalize()
+      buffer = await zipPromise
       contentType = 'application/zip'
       fileExtension = 'zip'
     }
 
-    // Generate file key
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`
-    const fileKey = type === 'thumbnail' 
-      ? `thumbnails/${user.id}/${fileName}`
-      : `resources/${user.id}/${fileName}`
+    const fileKey = type === 'thumbnail' ? `thumbnails/${user.id}/${fileName}` : `resources/${user.id}/${fileName}`
 
-    // Upload to S3
     const fileUrl = await uploadFileToS3({
       file: buffer,
       key: fileKey,
@@ -172,8 +118,6 @@ Obrigado por usar nossa plataforma!
       metadata: {
         userId: user.id,
         originalName: file.name,
-        optimized: 'true',
-        isZip: type === 'resource' ? 'true' : 'false',
         isAiGenerated: isAiGenerated.toString()
       },
     })
@@ -181,9 +125,6 @@ Obrigado por usar nossa plataforma!
     return NextResponse.json({ url: fileUrl, key: fileKey, isAiGenerated })
   } catch (error: any) {
     console.error('Upload error:', error)
-    return NextResponse.json(
-      { error: error.message || 'Falha ao enviar arquivo' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message || 'Falha ao enviar arquivo' }, { status: 500 })
   }
 }
