@@ -19,6 +19,7 @@ export default function AdminDashboardPage() {
     totalCreators: 0,
     totalResources: 0,
     pendingResources: 0,
+    pendingCollections: 0,
     totalDownloads: 0,
   })
   const router = useRouter()
@@ -63,6 +64,7 @@ export default function AdminDashboardPage() {
         { count: creatorsCount },
         { count: resourcesCount },
         { count: pendingCount },
+        { count: pendingCollectionsCount },
         { data: downloadData }
       ] = await Promise.all([
         supabase.from('resources').select('*, creator:profiles!creator_id(*)').eq('status', 'pending').order('created_at', { ascending: false }).limit(10),
@@ -70,6 +72,7 @@ export default function AdminDashboardPage() {
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_creator', true),
         supabase.from('resources').select('*', { count: 'exact', head: true }),
         supabase.from('resources').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('collections').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('resources').select('download_count')
       ])
 
@@ -82,6 +85,7 @@ export default function AdminDashboardPage() {
         totalCreators: creatorsCount || 0,
         totalResources: resourcesCount || 0,
         pendingResources: pendingCount || 0,
+        pendingCollections: pendingCollectionsCount || 0,
         totalDownloads,
       })
     } catch (error) {
@@ -149,11 +153,12 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <StatCard title="Total de Usuários" value={stats.totalUsers} icon={Users} color="blue" />
         <StatCard title="Criadores" value={stats.totalCreators} icon={Users} color="purple" />
         <StatCard title="Total de Recursos" value={stats.totalResources} icon={FileCheck} color="green" />
-        <StatCard title="Aguardando" value={stats.pendingResources} icon={AlertCircle} color="orange" />
+        <StatCard title="Recursos Pendentes" value={stats.pendingResources} icon={AlertCircle} color="orange" />
+        <StatCard title="Coleções Pendentes" value={stats.pendingCollections} icon={FileCheck} color="orange" />
         <StatCard title="Total Downloads" value={stats.totalDownloads} icon={TrendingUp} color="primary" />
       </div>
 

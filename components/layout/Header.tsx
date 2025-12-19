@@ -48,6 +48,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
 
   const menuItems = [
     { name: 'Home', href: '/' },
+    { name: 'Coleções', href: '/collections' },
     ...categories
       .filter(c => !c.parent_id)
       .map(parent => ({

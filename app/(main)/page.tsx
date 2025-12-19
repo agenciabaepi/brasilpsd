@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import HomeClient from '@/components/home/HomeClient'
 import Image from 'next/image'
 import SearchBar from '@/components/home/SearchBar'
+import { getS3Url } from '@/lib/aws/s3'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,45 @@ export default async function HomePage() {
     .order('created_at', { ascending: false })
     .limit(15)
 
-  // 5. Categorias Dinâmicas
+  // 5. Coleções (com últimos 4 recursos)
+  const { data: collections } = await supabase
+    .from('collections')
+    .select('*')
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+    .limit(12)
+
+  // Buscar últimos 4 recursos de cada coleção
+  const collectionsWithResources = await Promise.all(
+    (collections || []).map(async (collection: any) => {
+      const { data: collectionResources } = await supabase
+        .from('collection_resources')
+        .select(`
+          *,
+          resource:resources!resource_id(*, creator:profiles!creator_id(*))
+        `)
+        .eq('collection_id', collection.id)
+        .order('order_index', { ascending: true })
+        .limit(4)
+
+      const resources = (collectionResources || [])
+        .map((cr: any) => cr.resource)
+        .filter((r: any) => r && r.status === 'approved')
+
+      const { count } = await supabase
+        .from('collection_resources')
+        .select('*', { count: 'exact', head: true })
+        .eq('collection_id', collection.id)
+
+      return {
+        ...collection,
+        preview_resources: resources,
+        resources_count: count || 0
+      }
+    })
+  )
+
+  // 6. Categorias Dinâmicas
   const { data: categories } = await supabase
     .from('categories')
     .select('*')
@@ -102,6 +141,71 @@ export default async function HomePage() {
         latestResources={latestResources || []}
         freeResources={freeResources || []}
       />
+
+      {/* Collections Section */}
+      {collectionsWithResources && collectionsWithResources.length > 0 && (
+        <section className="py-20 bg-white border-t border-gray-50">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-between mb-10">
+              <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">Coleções</h2>
+              <Link href="/collections" className="text-primary-500 text-xs font-bold uppercase tracking-widest hover:underline">
+                Ver todas
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {collectionsWithResources.map((collection: any) => (
+                <Link key={collection.id} href={`/collections/${collection.id}`} className="group">
+                  <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:border-primary-200 hover:shadow-lg transition-all">
+                    {/* Grid 2x2 de recursos */}
+                    {collection.preview_resources && collection.preview_resources.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-0">
+                        {collection.preview_resources.map((resource: any, index: number) => (
+                          <div key={resource.id} className="aspect-square relative overflow-hidden bg-gray-100">
+                            {resource.thumbnail_url ? (
+                              <Image
+                                src={getS3Url(resource.thumbnail_url)}
+                                alt={resource.title}
+                                fill
+                                className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                sizes="(max-width: 640px) 50vw, 25vw"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                <span className="text-gray-300 text-xs">Sem prévia</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {/* Preencher espaços vazios se tiver menos de 4 recursos */}
+                        {collection.preview_resources.length < 4 && (
+                          Array.from({ length: 4 - collection.preview_resources.length }).map((_, i) => (
+                            <div key={`empty-${i}`} className="aspect-square bg-gray-50" />
+                          ))
+                        )}
+                      </div>
+                    ) : (
+                      <div className="aspect-square bg-gray-100 flex items-center justify-center">
+                        <span className="text-gray-400 text-sm">Sem recursos</span>
+                      </div>
+                    )}
+                    
+                    {/* Footer com título e info */}
+                    <div className="p-4 border-t border-gray-50">
+                      <h3 className="text-base font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-primary-600 transition-colors">
+                        {collection.title}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>{collection.resources_count || 0} arquivos</span>
+                        <span>Formato {collection.preview_resources?.[0]?.file_format?.toUpperCase() || 'PSD'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Categories Bar */}
       {categories && categories.length > 0 && (

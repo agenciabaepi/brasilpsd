@@ -30,6 +30,14 @@ export default function UploadResourcePage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'processing'>('idle')
+  const [uploadStats, setUploadStats] = useState({
+    bytesUploaded: 0,
+    totalBytes: 0,
+    speed: 0, // bytes por segundo
+    elapsedTime: 0, // segundos
+    remainingTime: 0, // segundos
+    startTime: 0,
+  })
   
   const router = useRouter()
   const supabase = createSupabaseClient()
@@ -68,6 +76,31 @@ export default function UploadResourcePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  function formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 MB'
+    const mb = bytes / (1024 * 1024)
+    return `${mb.toFixed(2)} MB`
+  }
+
+  function formatSpeed(bytesPerSecond: number): string {
+    if (bytesPerSecond === 0) return '0 MB/s'
+    const mbps = bytesPerSecond / (1024 * 1024)
+    if (mbps >= 1) {
+      return `${mbps.toFixed(2)} MB/s`
+    }
+    const kbps = bytesPerSecond / 1024
+    return `${kbps.toFixed(2)} KB/s`
+  }
+
+  function formatTime(seconds: number): string {
+    if (seconds < 60) {
+      return `${Math.round(seconds)}s`
+    }
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.round(seconds % 60)
+    return `${mins}m ${secs}s`
+  }
+
   function uploadWithProgress(file: File, type: 'resource' | 'thumbnail'): Promise<any> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
@@ -75,10 +108,53 @@ export default function UploadResourcePage() {
       fd.append('file', file)
       fd.append('type', type)
 
+      const startTime = Date.now()
+      let lastLoaded = 0
+      let lastTime = startTime
+      let speed = 0
+
+      // Inicializar estatísticas
+      setUploadStats({
+        bytesUploaded: 0,
+        totalBytes: file.size,
+        speed: 0,
+        elapsedTime: 0,
+        remainingTime: 0,
+        startTime: startTime,
+      })
+
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
+          const currentTime = Date.now()
+          const timeDelta = (currentTime - lastTime) / 1000 // segundos
+          const bytesDelta = e.loaded - lastLoaded
+
+          // Calcular velocidade (média móvel simples)
+          if (timeDelta > 0) {
+            const instantSpeed = bytesDelta / timeDelta
+            // Suavizar a velocidade com média móvel
+            speed = speed === 0 ? instantSpeed : (speed * 0.7 + instantSpeed * 0.3)
+          }
+
+          const elapsedTime = (currentTime - startTime) / 1000
+          const remainingBytes = e.total - e.loaded
+          const remainingTime = speed > 0 ? remainingBytes / speed : 0
+
           const percent = Math.round((e.loaded / e.total) * 100)
+          
           setUploadProgress(percent)
+          setUploadStats({
+            bytesUploaded: e.loaded,
+            totalBytes: e.total,
+            speed: speed,
+            elapsedTime: elapsedTime,
+            remainingTime: remainingTime,
+            startTime: startTime,
+          })
+
+          lastLoaded = e.loaded
+          lastTime = currentTime
+
           if (percent === 100) {
             setUploadPhase('processing')
           }
@@ -121,6 +197,14 @@ export default function UploadResourcePage() {
     setIsUploading(true)
     setUploadProgress(0)
     setUploadPhase('uploading')
+    setUploadStats({
+      bytesUploaded: 0,
+      totalBytes: file.size,
+      speed: 0,
+      elapsedTime: 0,
+      remainingTime: 0,
+      startTime: Date.now(),
+    })
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -137,6 +221,14 @@ export default function UploadResourcePage() {
       if (thumbnail) {
         setUploadProgress(0)
         setUploadPhase('uploading')
+        setUploadStats({
+          bytesUploaded: 0,
+          totalBytes: thumbnail.size,
+          speed: 0,
+          elapsedTime: 0,
+          remainingTime: 0,
+          startTime: Date.now(),
+        })
         const thumbData = await uploadWithProgress(thumbnail, 'thumbnail')
         thumbnailUrl = thumbData.url
         thumbAiDetected = thumbData.isAiGenerated
@@ -423,11 +515,45 @@ export default function UploadResourcePage() {
                 </div>
                 <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-primary-500 transition-all duration-500 ease-out shadow-sm"
+                    className="h-full bg-primary-500 transition-all duration-300 ease-out shadow-sm"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 font-medium text-center italic">
+                {uploadPhase === 'uploading' && uploadStats.totalBytes > 0 && (
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Enviado</span>
+                        <span className="text-xs font-bold text-gray-900">
+                          {formatBytes(uploadStats.bytesUploaded)} / {formatBytes(uploadStats.totalBytes)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Velocidade</span>
+                        <span className="text-xs font-bold text-primary-600">{formatSpeed(uploadStats.speed)}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo decorrido</span>
+                        <span className="text-xs font-bold text-gray-700">{formatTime(uploadStats.elapsedTime)}</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo restante</span>
+                        <span className="text-xs font-bold text-gray-700">
+                          {uploadStats.speed > 0 && uploadStats.remainingTime > 0 
+                            ? formatTime(uploadStats.remainingTime) 
+                            : 'Calculando...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-400 font-medium text-center italic pt-2">
                   {uploadPhase === 'processing' ? 'Isso pode levar alguns segundos para arquivos grandes.' : 'Não feche esta página.'}
                 </p>
               </div>

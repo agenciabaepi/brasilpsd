@@ -18,9 +18,11 @@ import {
   Sparkles,
   Crown,
   UserPlus,
-  Check
+  Check,
+  Grid3x3
 } from 'lucide-react'
-import type { Resource, Profile } from '@/types/database'
+import type { Resource, Profile, Collection } from '@/types/database'
+import ResourceCard from '@/components/resources/ResourceCard'
 import { formatFileSize } from '@/lib/utils/format'
 import toast from 'react-hot-toast'
 import { getS3Url } from '@/lib/aws/s3'
@@ -30,9 +32,12 @@ import { isSystemProfileSync } from '@/lib/utils/system'
 interface ResourceDetailClientProps {
   resource: Resource
   initialIsFavorited: boolean
+  collection?: Collection | null
+  collectionResources?: Resource[]
+  relatedResources?: Resource[]
 }
 
-export default function ResourceDetailClient({ resource, initialIsFavorited }: ResourceDetailClientProps) {
+export default function ResourceDetailClient({ resource, initialIsFavorited, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
   const router = useRouter()
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited)
   const [downloading, setDownloading] = useState(false)
@@ -277,20 +282,20 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
               <Link href={resource.is_premium ? "/premium" : "/signup"} className="block mt-8">
                 <button
                   className={cn(
-                    "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg uppercase",
+                    "w-full h-16 rounded-2xl flex items-center justify-center px-6 space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg uppercase",
                     resource.is_premium 
-                      ? "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20" 
+                      ? "bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20" 
                       : "bg-gray-900 hover:bg-black text-white shadow-gray-900/20"
                   )}
                 >
                   {resource.is_premium ? (
                     <>
-                      <Crown className="h-5 w-5" />
-                      <span>Quero ser Premium para Baixar</span>
+                      <Crown className="h-5 w-5 flex-shrink-0" />
+                      <span>Assinar Premium para Baixar</span>
                     </>
                   ) : (
                     <>
-                      <User className="h-5 w-5" />
+                      <User className="h-5 w-5 flex-shrink-0" />
                       <span>Crie uma conta para Baixar</span>
                     </>
                   )}
@@ -298,9 +303,9 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
               </Link>
             ) : resource.is_premium && !user.is_premium ? (
               <Link href="/premium" className="block mt-8">
-                <button className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg shadow-orange-500/20 uppercase">
-                  <Crown className="h-5 w-5" />
-                  <span>Assine Premium para Baixar</span>
+                <button className="w-full h-16 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl flex items-center justify-center px-6 space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg shadow-blue-500/20 uppercase">
+                  <Crown className="h-5 w-5 flex-shrink-0" />
+                  <span>Assinar Premium para Baixar</span>
                 </button>
               </Link>
             ) : (
@@ -318,10 +323,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
             <div className="pt-8 border-t border-gray-100 flex items-center justify-between mt-8">
               {isOfficial || !resource.creator_id || isSystemProfileSync(resource.creator_id) ? (
                 <div className="flex items-center space-x-4">
-                  <div className="h-14 w-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
-                    {resource.is_official ? (
-                      <Image src="/images/verificado.svg" alt="Verificado" width={32} height={32} />
-                    ) : resource.creator?.avatar_url ? (
+                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden">
+                    {resource.creator?.avatar_url ? (
                       <Image 
                         src={resource.creator.avatar_url} 
                         alt={authorName} 
@@ -329,6 +332,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
                         height={56}
                         className="w-full h-full object-cover"
                       />
+                    ) : resource.is_official ? (
+                      <Image src="/images/verificado.svg" alt="Verificado" width={32} height={32} />
                     ) : (
                       <User className="h-8 w-8 text-gray-700" />
                     )}
@@ -350,7 +355,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
                   href={`/creator/${resource.creator_id}`}
                   className="flex items-center space-x-4 hover:opacity-80 transition-opacity"
                 >
-                  <div className="h-14 w-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
+                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden">
                     {resource.creator?.avatar_url ? (
                       <Image 
                         src={resource.creator.avatar_url} 
@@ -418,9 +423,88 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
                 </button>
               )}
             </div>
+
+            {/* Collection Section */}
+            {collection && collectionResources.length > 0 && (
+              <div className="pt-8 border-t border-gray-100 mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-semibold text-gray-900 tracking-tighter">
+                    Da mesma coleção:
+                  </h2>
+                  <Link 
+                    href={`/collections/${collection.id}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200"
+                  >
+                    <Grid3x3 className="h-3.5 w-3.5" />
+                    Ver coleção
+                  </Link>
+                </div>
+                
+                {/* Carrossel horizontal */}
+                <div className="relative">
+                  <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+                    <div className="flex gap-3" style={{ width: 'max-content' }}>
+                      {collectionResources.map((collectionResource) => (
+                        <Link
+                          key={collectionResource.id}
+                          href={`/resources/${collectionResource.id}`}
+                          className="group block flex-shrink-0"
+                          style={{ width: '120px' }}
+                        >
+                          <div className="relative overflow-hidden rounded-lg bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md">
+                            <div className="relative w-full aspect-square overflow-hidden">
+                              {collectionResource.thumbnail_url ? (
+                                <Image
+                                  src={getS3Url(collectionResource.thumbnail_url)}
+                                  alt={collectionResource.title}
+                                  fill
+                                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                  sizes="120px"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                  <FileText className="h-8 w-8 text-gray-300" />
+                                </div>
+                              )}
+                              {collectionResource.is_premium && (
+                                <div className="absolute top-1.5 right-1.5 bg-gray-900/80 backdrop-blur-sm p-1 rounded-md shadow-lg border border-white/10">
+                                  <Crown className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Arquivos Relacionados */}
+      {relatedResources.length > 0 && (
+        <div className="mt-12 pt-12 border-t border-gray-100">
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center">
+              <span className="h-7 w-1.5 bg-primary-500 mr-3 rounded-full" />
+              Arquivos Relacionados
+            </h2>
+            <p className="text-gray-600 mt-2">Outros recursos que podem interessar você</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {relatedResources.map((relatedResource) => (
+              <ResourceCard
+                key={relatedResource.id}
+                resource={relatedResource}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

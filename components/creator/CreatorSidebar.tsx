@@ -11,7 +11,8 @@ import {
   User, 
   ExternalLink, 
   LogOut,
-  ChevronRight
+  ChevronRight,
+  FolderOpen
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -19,6 +20,7 @@ const menuItems = [
   { name: 'Painel', href: '/creator', icon: LayoutDashboard },
   { name: 'Meus Arquivos', href: '/creator/resources', icon: Files },
   { name: 'Fazer Upload', href: '/creator/upload', icon: UploadCloud },
+  { name: 'Coleções', href: '/creator/collections', icon: FolderOpen },
   { name: 'Minhas Comissões', href: '/creator/earnings', icon: DollarSign },
   { name: 'Perfil Criador', href: '/creator/profile', icon: User },
 ]

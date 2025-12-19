@@ -99,3 +99,35 @@ export interface CreatorEarning {
   paid_at: string | null
 }
 
+export interface Collection {
+  id: string
+  creator_id: string
+  title: string
+  description: string | null
+  cover_image: string | null
+  slug: string
+  is_featured: boolean
+  status: ResourceStatus
+  view_count: number
+  rejected_reason: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
+  updated_at: string
+  // Relations
+  creator?: Profile
+  resources?: Resource[]
+  resources_count?: number
+}
+
+export interface CollectionResource {
+  id: string
+  collection_id: string
+  resource_id: string
+  order_index: number
+  created_at: string
+  // Relations
+  resource?: Resource
+  collection?: Collection
+}
+

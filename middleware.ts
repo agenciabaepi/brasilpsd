@@ -37,6 +37,7 @@ export async function middleware(req: NextRequest) {
     creatorPath === '/creator' || // Exact match for dashboard
     creatorPath.startsWith('/creator/upload') ||
     creatorPath.startsWith('/creator/resources') ||
+    creatorPath.startsWith('/creator/collections') ||
     creatorPath.startsWith('/creator/earnings') ||
     creatorPath.startsWith('/creator/profile')
   
@@ -80,6 +81,7 @@ export const config = {
     '/creator/:path*',
     '/dashboard/:path*',
     '/favorites/:path*',
+    '/collections/:path*',
   ],
 }
 

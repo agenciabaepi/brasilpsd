@@ -46,5 +46,109 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
     initialIsFavorited = !!favorite
   }
 
-  return <ResourceDetailClient resource={resource} initialIsFavorited={initialIsFavorited} />
+  // Buscar coleções que contêm este recurso
+  let collection = null
+  let collectionResources = []
+  
+  // Buscar qual coleção este recurso pertence
+  const { data: collectionResourceList, error: collectionResourceError } = await supabase
+    .from('collection_resources')
+    .select('collection_id')
+    .eq('resource_id', params.id)
+    .limit(1)
+
+  const collectionResourceData = collectionResourceList?.[0]
+
+  if (collectionResourceData?.collection_id) {
+    // Buscar dados da coleção (apenas se estiver aprovada)
+    const { data: collectionData, error: collectionError } = await supabase
+      .from('collections')
+      .select('*, creator:profiles!creator_id(*)')
+      .eq('id', collectionResourceData.collection_id)
+      .eq('status', 'approved')
+      .maybeSingle()
+
+    if (collectionData && !collectionError) {
+      collection = collectionData
+      
+      // Buscar os outros recursos da mesma coleção
+      const { data: otherCollectionResources, error: otherResourcesError } = await supabase
+        .from('collection_resources')
+        .select('resource_id, order_index')
+        .eq('collection_id', collection.id)
+        .neq('resource_id', params.id) // Excluir o recurso atual
+        .order('order_index', { ascending: true })
+        .limit(6) // Limitar a 6 recursos para exibição
+
+      if (otherCollectionResources && otherCollectionResources.length > 0 && !otherResourcesError) {
+        // Buscar os recursos em uma query separada
+        const resourceIds = otherCollectionResources.map((cr: any) => cr.resource_id)
+        
+        const { data: resourcesData, error: resourcesError } = await supabase
+          .from('resources')
+          .select('*, creator:profiles!creator_id(*)')
+          .in('id', resourceIds)
+          .eq('status', 'approved')
+
+        if (resourcesData && !resourcesError) {
+          // Manter a ordem baseada em order_index
+          const resourceMap = new Map(resourcesData.map((r: any) => [r.id, r]))
+          collectionResources = otherCollectionResources
+            .map((cr: any) => resourceMap.get(cr.resource_id))
+            .filter(Boolean)
+        }
+      }
+    }
+  }
+
+  // Buscar recursos relacionados (mesma categoria primeiro, depois mesmo tipo)
+  let relatedResources = []
+  
+  // Tentar buscar por categoria primeiro
+  if (resource.category_id) {
+    const { data: categoryResources } = await supabase
+      .from('resources')
+      .select('*, creator:profiles!creator_id(*)')
+      .eq('status', 'approved')
+      .eq('category_id', resource.category_id)
+      .neq('id', params.id)
+      .order('view_count', { ascending: false })
+      .limit(8)
+
+    if (categoryResources && categoryResources.length > 0) {
+      relatedResources = categoryResources
+    }
+  }
+
+  // Se não encontrou recursos suficientes por categoria, buscar por tipo
+  if (relatedResources.length < 8 && resource.resource_type) {
+    const remaining = 8 - relatedResources.length
+    const existingIds = relatedResources.map(r => r.id).concat(params.id)
+    
+    // Buscar por tipo, excluindo os que já foram encontrados
+    const { data: typeResources } = await supabase
+      .from('resources')
+      .select('*, creator:profiles!creator_id(*)')
+      .eq('status', 'approved')
+      .eq('resource_type', resource.resource_type)
+      .neq('id', params.id)
+      .order('view_count', { ascending: false })
+      .limit(remaining + existingIds.length) // Buscar um pouco mais para filtrar
+
+    if (typeResources && typeResources.length > 0) {
+      // Filtrar recursos que já estão na lista
+      const newResources = typeResources.filter((r: any) => !existingIds.includes(r.id))
+      relatedResources = [...relatedResources, ...newResources].slice(0, 8)
+    }
+  }
+
+  return (
+    <ResourceDetailClient 
+      resource={resource} 
+      initialIsFavorited={initialIsFavorited}
+      collection={collection}
+      collectionResources={collectionResources}
+      relatedResources={relatedResources}
+    />
+  )
 }
