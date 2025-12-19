@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Facebook, Twitter, Instagram, Linkedin, Crown } from 'lucide-react'
+import Logo from '@/components/ui/Logo'
 
 export default function Footer() {
   return (
@@ -8,13 +9,10 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           {/* Brand */}
           <div className="space-y-6">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500 text-white">
-                <Crown className="h-4 w-4 fill-current" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">BrasilPSD</span>
+            <Link href="/" className="flex items-center">
+              <Logo variant="dark" />
             </Link>
-            <p className="text-sm text-gray-500 leading-relaxed">
+            <p className="text-base text-gray-500 leading-relaxed">
               A maior comunidade de recursos criativos do Brasil. Baixe PSDs, vetores e fotos de alta qualidade para seus projetos.
             </p>
             <div className="flex space-x-4">
@@ -52,7 +50,7 @@ export default function Footer() {
           <p className="text-sm text-gray-400">
             © {new Date().getFullYear()} BrasilPSD. Todos os direitos reservados.
           </p>
-          <div className="flex items-center space-x-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+          <div className="flex items-center space-x-6 text-xs font-bold text-gray-400 uppercase tracking-widest">
             <span>Brasil</span>
             <span>Seguro</span>
             <span>100% Digital</span>
@@ -66,7 +64,7 @@ export default function Footer() {
 function FooterSection({ title, children }: { title: string, children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest mb-6">{title}</h3>
+      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6">{title}</h3>
       <ul className="space-y-4">
         {children}
       </ul>
@@ -77,7 +75,7 @@ function FooterSection({ title, children }: { title: string, children: React.Rea
 function FooterLink({ href, children }: { href: string, children: React.ReactNode }) {
   return (
     <li>
-      <Link href={href} className="text-sm text-gray-500 hover:text-primary-500 transition-colors">
+      <Link href={href} className="text-base text-gray-500 hover:text-secondary-500 transition-colors">
         {children}
       </Link>
     </li>
@@ -86,7 +84,7 @@ function FooterLink({ href, children }: { href: string, children: React.ReactNod
 
 function SocialLink({ href, icon: Icon }: { href: string, icon: any }) {
   return (
-    <a href={href} className="h-9 w-9 flex items-center justify-center rounded-xl bg-gray-50 text-gray-400 hover:bg-primary-50 hover:text-primary-500 transition-all">
+    <a href={href} className="h-9 w-9 flex items-center justify-center rounded-xl bg-gray-50 text-gray-400 hover:bg-secondary-50 hover:text-secondary-500 transition-all">
       <Icon className="h-4 w-4" />
     </a>
   )

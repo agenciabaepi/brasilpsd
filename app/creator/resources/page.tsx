@@ -156,7 +156,7 @@ export default function CreatorResourcesPage() {
                     </td>
                     <td className="px-6 py-5">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-tight ${
-                        resource.status === 'approved' ? 'bg-green-50 text-green-600' :
+                        resource.status === 'approved' ? 'bg-green-50 text-gray-900' :
                         resource.status === 'pending' ? 'bg-orange-50 text-orange-600' :
                         'bg-red-50 text-red-600'
                       }`}>

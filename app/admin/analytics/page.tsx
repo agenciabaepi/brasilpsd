@@ -107,7 +107,7 @@ export default function AdminAnalyticsPage() {
 function AnalyticCard({ title, value, icon: Icon, color }: any) {
   const colors: any = {
     blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-green-50 text-green-600',
+    green: 'bg-green-50 text-gray-900',
     purple: 'bg-purple-50 text-purple-600',
     primary: 'bg-primary-50 text-primary-600',
   }

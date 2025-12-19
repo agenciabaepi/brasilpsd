@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import Logo from '@/components/ui/Logo'
 import { 
   LayoutDashboard, 
   UploadCloud, 
@@ -28,13 +29,8 @@ export default function CreatorSidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 border-r border-gray-100 bg-white p-4 flex flex-col z-20">
       <div className="mb-10 px-4 py-2">
-        <Link href="/" className="flex items-center space-x-2">
-          <div className="h-9 w-9 rounded-xl bg-primary-500 flex items-center justify-center text-white">
-            <UploadCloud className="h-5 w-5" />
-          </div>
-          <span className="text-xl font-semibold tracking-tight text-gray-900">
-            Brasil<span className="text-primary-500">Creator</span>
-          </span>
+        <Link href="/" className="flex items-center">
+          <Logo variant="dark" className="h-6" width={100} height={32} />
         </Link>
       </div>
 

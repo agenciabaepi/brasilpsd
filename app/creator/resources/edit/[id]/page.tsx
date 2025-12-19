@@ -10,6 +10,7 @@ import { Upload as UploadIcon, Image as ImageIcon, Info, ChevronLeft, Save, Shie
 import toast from 'react-hot-toast'
 import type { ResourceType, Resource, Profile } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
+import { getSystemProfileIdSync } from '@/lib/utils/system'
 
 export default function EditResourcePage() {
   const params = useParams()
@@ -139,6 +140,8 @@ export default function EditResourcePage() {
         setUploadPhase('processing')
       }
 
+      // Se for oficial, usar o perfil do sistema como criador
+      const systemProfileId = getSystemProfileIdSync()
       const updateData: any = {
         title: formData.title,
         description: formData.description,
@@ -147,6 +150,11 @@ export default function EditResourcePage() {
         keywords: formData.keywords.split(',').map(k => k.trim()).filter(Boolean),
         is_premium: formData.is_premium,
         is_official: formData.is_official,
+      }
+
+      // Se mudou para oficial, atualizar creator_id para o perfil do sistema
+      if (formData.is_official) {
+        updateData.creator_id = systemProfileId
       }
 
       if (thumbnailUrl) {

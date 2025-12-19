@@ -47,9 +47,12 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [categories, setCategories] = useState<any[]>([])
   
+  // Ler o tipo da query string
+  const typeFromQuery = searchParams.get('type') || 'all'
+  
   // FILTERS STATE
   const [filters, setFilters] = useState({
-    format: 'all',
+    format: typeFromQuery !== 'all' ? typeFromQuery : 'all',
     license: 'all', // all, premium, free
     orientation: 'all', // all, horizontal, vertical, square
     color: 'all',
@@ -63,6 +66,12 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
   useEffect(() => {
     loadCategories()
     loadFavorites()
+    
+    // Aplicar tipo da query string se existir
+    const typeParam = searchParams.get('type')
+    if (typeParam && typeParam !== 'all') {
+      setFilters(prev => ({ ...prev, format: typeParam }))
+    }
     
     if (searchParams.get('q')) {
       handleSearch(searchParams.get('q') || '')
@@ -208,13 +217,20 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
 
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('resources')
-        .select('*, creator:profiles(*)')
+        .select('*, creator:profiles!creator_id(*)')
         .eq('status', 'approved')
         .or(`title.ilike.%${q}%,description.ilike.%${q}%`)
         .order('created_at', { ascending: false })
         .limit(50)
+
+      // Aplicar filtro de tipo se existir
+      if (filters.format !== 'all') {
+        query = query.eq('resource_type', filters.format)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
       setResources(data || [])
@@ -264,9 +280,9 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-900" />
-              <h2 className="text-sm font-bold text-gray-900 tracking-tight">Filtros</h2>
+              <h2 className="text-base font-bold text-gray-900 tracking-tight">Filtros</h2>
             </div>
-            <span className="bg-primary-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
               {Object.values(filters).filter(v => v !== 'all').length} aplicados
             </span>
           </div>
@@ -373,31 +389,31 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
               <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
                 {categoryName || (filters.format === 'all' ? 'Todos os Recursos' : formats.find(f => f.id === filters.format)?.label)}
               </h1>
-              <p className="text-gray-500 text-sm mt-1">
+              <p className="text-gray-700 text-base mt-1">
                 Encontramos aproximadamente {resources.length} resultados{categoryName ? ` em ${categoryName}` : ''}.
               </p>
             </div>
 
             <div className="flex items-center space-x-4">
               <div className="relative">
-                <select className="appearance-none bg-gray-50 border border-gray-100 rounded-xl px-6 py-3 pr-12 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/10 transition-all">
+                <select className="appearance-none bg-gray-50 border border-gray-100 rounded-xl px-6 py-3 pr-12 text-base font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500/10 transition-all">
                   <option>Destaques</option>
                   <option>Mais recentes</option>
                   <option>Mais baixados</option>
                 </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 pointer-events-none" />
               </div>
               
               <div className="hidden sm:flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
                 <button 
                   onClick={() => setViewMode('grid')}
-                  className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-white shadow-sm text-primary-500" : "text-gray-400")}
+                  className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-white shadow-sm text-secondary-600" : "text-gray-600")}
                 >
                   <Grid className="h-4 w-4" />
                 </button>
                 <button 
                   onClick={() => setViewMode('list')}
-                  className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-white shadow-sm text-primary-500" : "text-gray-400")}
+                  className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-white shadow-sm text-secondary-600" : "text-gray-600")}
                 >
                   <List className="h-4 w-4" />
                 </button>
@@ -438,7 +454,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
               })}
               <button 
                 onClick={() => setFilters({format: 'all', license: 'all', orientation: 'all', color: 'all', category: initialCategoryId || 'all'})}
-                className="text-primary-500 text-[10px] font-bold hover:underline ml-2"
+                className="text-secondary-600 text-[10px] font-bold hover:underline ml-2"
               >
                 Limpar todos
               </button>
@@ -449,7 +465,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
           {loading ? (
             <div className="flex flex-col items-center justify-center py-32 space-y-4">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
-              <p className="text-gray-400 text-sm font-medium">Buscando os melhores recursos...</p>
+              <p className="text-gray-600 text-sm font-medium">Buscando os melhores recursos...</p>
             </div>
           ) : resources.length > 0 ? (
             <div className={cn(
@@ -492,7 +508,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
 function FilterSection({ title, children }: { title: string, children: React.ReactNode }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-[10px] font-bold text-gray-400 tracking-tight border-b border-gray-50 pb-2">
+      <h3 className="text-xs font-bold text-gray-700 tracking-tight border-b border-gray-50 pb-2">
         {title}
       </h3>
       {children}
@@ -505,9 +521,9 @@ function FilterItem({ label, active, onClick, isSubItem }: { label: string, acti
     <button 
       onClick={onClick}
       className={cn(
-        "flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm transition-all group",
-        active ? "bg-primary-50 text-primary-600 font-bold" : "text-gray-500 hover:bg-gray-50",
-        isSubItem && "pl-8 text-xs"
+        "flex items-center justify-between w-full px-3 py-2 rounded-lg text-base transition-all group",
+        active ? "bg-primary-50 text-gray-900 font-bold" : "text-gray-700 hover:bg-gray-50",
+        isSubItem && "pl-8 text-sm"
       )}
     >
       <div className="flex items-center">

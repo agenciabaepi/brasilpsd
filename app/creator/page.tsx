@@ -130,7 +130,7 @@ export default function CreatorDashboardPage() {
                       <p className="text-sm font-semibold text-gray-900 truncate tracking-tight">{resource.title}</p>
                       <div className="flex items-center space-x-3 mt-1">
                         <span className={`text-[9px] font-semibold px-2 py-0.5 rounded uppercase ${
-                          resource.status === 'approved' ? 'bg-green-50 text-green-600' :
+                          resource.status === 'approved' ? 'bg-green-50 text-gray-900' :
                           resource.status === 'pending' ? 'bg-primary-50 text-primary-600' :
                           'bg-red-50 text-red-600'
                         }`}>
@@ -175,7 +175,7 @@ function CreatorStatCard({ title, value, icon: Icon, color }: any) {
   const colors: any = {
     primary: 'bg-primary-50 text-primary-600',
     blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-green-50 text-green-600',
+    green: 'bg-green-50 text-gray-900',
     orange: 'bg-orange-50 text-orange-600',
     purple: 'bg-purple-50 text-purple-600',
   }

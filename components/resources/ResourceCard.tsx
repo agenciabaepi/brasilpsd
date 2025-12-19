@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { Heart, Sparkles, Crown } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
+import { isSystemProfile } from '@/lib/utils/system'
 
 interface ResourceCardProps {
   resource: Resource
@@ -11,7 +13,11 @@ interface ResourceCardProps {
 }
 
 export default function ResourceCard({ resource, onFavorite, isFavorited }: ResourceCardProps) {
-  const authorName = resource.is_official ? 'BrasilPSD' : (resource.creator?.full_name || 'BrasilPSD');
+  const router = useRouter()
+  // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
+  const isOfficial = resource.is_official || isSystemProfile(resource.creator_id)
+  const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
+  const canLinkToProfile = !isOfficial && resource.creator_id && !isSystemProfile(resource.creator_id)
 
   return (
     <Link href={`/resources/${resource.id}`} className="break-inside-avoid mb-6 block group">
@@ -29,7 +35,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
               priority={false}
             />
           ) : (
-            <div className="aspect-square w-full flex items-center justify-center bg-gray-50 text-gray-400 text-[10px] font-bold tracking-widest uppercase">
+            <div className="aspect-square w-full flex items-center justify-center bg-gray-50 text-gray-400 text-xs font-bold tracking-widest uppercase">
               Sem prévia
             </div>
           )}
@@ -58,7 +64,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
 
           {resource.is_ai_generated && (
             <div className="absolute bottom-2 left-2 z-10 bg-black/40 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-white/10 flex items-center gap-1 uppercase">
-              <Sparkles className="h-2.5 w-2.5 text-primary-400" />
+              <Sparkles className="h-2.5 w-2.5 text-secondary-400" />
               IA Gerada
             </div>
           )}
@@ -67,20 +73,36 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
           <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-[10px] font-semibold text-white drop-shadow-md truncate max-w-[150px] tracking-tight">
+                <span className="text-xs font-semibold text-white drop-shadow-md truncate max-w-[150px] tracking-tight">
                   {resource.title}
                 </span>
-                <span className="text-[8px] font-semibold text-primary-400 drop-shadow-md flex items-center gap-1.5 tracking-tight mt-0.5">
-                  {authorName}
-                  {resource.is_official && (
-                    <Image src="/images/verificado.svg" alt="Verificado" width={10} height={10} className="w-2.5 h-2.5" />
-                  )}
-                </span>
+                {canLinkToProfile ? (
+                  <span 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (resource.creator_id) {
+                        router.push(`/creator/${resource.creator_id}`);
+                      }
+                    }}
+                    className="text-[10px] font-semibold text-secondary-400 drop-shadow-md flex items-center gap-1.5 tracking-tight mt-0.5 hover:text-secondary-300 transition-colors cursor-pointer"
+                  >
+                    {authorName}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold text-secondary-400 drop-shadow-md flex items-center gap-1.5 tracking-tight mt-0.5">
+                    {authorName}
+                    {isOfficial && (
+                      <Image src="/images/verificado.svg" alt="Verificado" width={10} height={10} className="w-2.5 h-2.5" />
+                    )}
+                  </span>
+                )}
               </div>
               <div 
-                className="h-8 w-8 bg-white/90 rounded-full flex items-center justify-center shadow-sm"
+                className="h-8 w-8 bg-white/90 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
                 onClick={(e) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   onFavorite?.(resource.id);
                 }}
               >

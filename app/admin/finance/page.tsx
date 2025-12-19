@@ -161,7 +161,7 @@ export default function AdminFinancePage() {
                     <td className="px-8 py-5">
                       <span className={cn(
                         "text-[9px] font-black px-2 py-1 rounded-md uppercase tracking-widest",
-                        t.status === 'paid' ? "bg-green-100 text-green-600" :
+                        t.status === 'paid' ? "bg-green-100 text-gray-900" :
                         t.status === 'pending' ? "bg-orange-100 text-orange-600" :
                         "bg-red-100 text-red-600"
                       )}>
@@ -198,7 +198,7 @@ export default function AdminFinancePage() {
 
 function FinanceStatCard({ title, value, icon: Icon, color }: any) {
   const colors: any = {
-    green: 'bg-green-50 text-green-600',
+    green: 'bg-green-50 text-gray-900',
     blue: 'bg-blue-50 text-blue-600',
     orange: 'bg-orange-50 text-orange-600',
     purple: 'bg-purple-50 text-purple-600',

@@ -4,6 +4,8 @@ import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import HomeClient from '@/components/home/HomeClient'
+import Image from 'next/image'
+import SearchBar from '@/components/home/SearchBar'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,28 +58,34 @@ export default async function HomePage() {
   return (
     <div className="bg-white">
       {/* Hero Section Simplificada (Estilo Designi) */}
-      <section className="bg-white border-b border-gray-50 py-16">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
+      <section className="relative bg-gradient-to-br from-primary-50 via-white to-primary-50/30 border-b border-gray-50 py-16 overflow-visible">
+        {/* SVG Banner Lines com opacidade aumentada */}
+        <div className="absolute inset-0 opacity-[0.18] overflow-hidden">
+          <Image
+            src="/images/bannerlines.svg"
+            alt=""
+            fill
+            className="object-cover"
+            priority
+            aria-hidden="true"
+          />
+        </div>
+        
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="max-w-4xl mx-auto text-center space-y-8 relative">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-gray-900 tracking-tight">
               Recursos para sua <span className="text-primary-500 font-bold">criatividade.</span>
             </h1>
             
-            {/* Search Bar - Centralizada e Limpa */}
-            <form action="/explore" className="relative max-w-2xl mx-auto group">
-              <Search className="absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 transition-colors" />
-              <input
-                name="q"
-                type="search"
-                placeholder="Pesquise por PSD, PNG, Mockups..."
-                className="w-full h-16 rounded-full border border-gray-100 bg-gray-50/50 pl-16 pr-8 text-base focus:bg-white focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/5 transition-all"
-              />
-            </form>
+            {/* Search Bar com tipo de arquivo e botão integrado */}
+            <div className="relative" style={{ zIndex: 100 }}>
+              <SearchBar />
+            </div>
 
             <div className="flex flex-wrap justify-center gap-3">
               {['Social Media', 'Mockups', 'Flyers', 'Logotipos'].map(tag => (
                 <Link key={tag} href={`/explore?q=${tag}`}>
-                  <span className="px-4 py-1.5 bg-gray-50 text-gray-500 rounded-full text-xs font-medium hover:bg-primary-50 hover:text-primary-600 transition-all border border-gray-100">
+                  <span className="px-4 py-1.5 bg-white/90 backdrop-blur-sm text-gray-700 rounded-full text-xs font-medium hover:bg-primary-50 hover:text-primary-600 transition-all border border-gray-200 shadow-sm">
                     {tag}
                   </span>
                 </Link>

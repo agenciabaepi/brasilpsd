@@ -7,6 +7,7 @@ export interface Profile {
   email: string
   full_name: string | null
   avatar_url: string | null
+  cover_image: string | null
   role: UserRole
   is_creator: boolean
   is_admin: boolean

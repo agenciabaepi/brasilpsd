@@ -178,7 +178,7 @@ export default function CheckoutPage() {
                   <span className="font-semibold text-gray-500">Subtotal</span>
                   <span className="font-bold text-gray-900">R$ {currentPlan.price.toFixed(2).replace('.', ',')}</span>
                 </div>
-                <div className="flex justify-between text-sm text-green-600">
+                <div className="flex justify-between text-sm text-gray-700">
                   <span className="font-semibold">Taxas</span>
                   <span className="font-bold">R$ 0,00</span>
                 </div>

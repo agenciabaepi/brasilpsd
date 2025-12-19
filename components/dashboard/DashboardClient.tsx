@@ -21,11 +21,18 @@ export default function DashboardClient({ user, downloads, favorites, stats }: D
   return (
     <div className="py-8">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Olá, {user.full_name || 'Usuário'}!
-          </h1>
-          <p className="text-gray-600">Bem-vindo ao seu painel pessoal</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Olá, {user.full_name || 'Usuário'}!
+            </h1>
+            <p className="text-gray-600">Bem-vindo ao seu painel pessoal</p>
+          </div>
+          <Link href="/settings">
+            <button className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold">
+              Configurações
+            </button>
+          </Link>
         </div>
 
         {/* Stats */}

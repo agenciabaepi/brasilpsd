@@ -69,7 +69,7 @@ export default function PremiumPage() {
                 </div>
                 <div className="space-y-4 text-left">
                   {plan.features.map(f => (
-                    <div key={f} className="flex items-center space-x-3 text-sm font-medium text-gray-600"><Check className="h-4 w-4 text-green-500" /><span>{f}</span></div>
+                    <div key={f} className="flex items-center space-x-3 text-sm font-medium text-gray-600"><Check className="h-4 w-4 text-primary-500" /><span>{f}</span></div>
                   ))}
                 </div>
               </div>

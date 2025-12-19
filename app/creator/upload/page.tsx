@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase/client'
 import { Upload as UploadIcon, X, Image as ImageIcon, Info, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { ResourceType, Profile } from '@/types/database'
+import { getSystemProfileIdSync } from '@/lib/utils/system'
 
 export default function UploadResourcePage() {
   const [userProfile, setUserProfile] = useState<Profile | null>(null)
@@ -145,6 +146,9 @@ export default function UploadResourcePage() {
       setUploadProgress(100)
 
       // 3. Salvar no Banco
+      // Se for oficial, usar o perfil do sistema como criador
+      const creatorId = formData.is_official ? getSystemProfileIdSync() : user.id
+      
       const { error } = await supabase
         .from('resources')
         .insert({
@@ -152,7 +156,7 @@ export default function UploadResourcePage() {
           description: formData.description,
           resource_type: formData.resource_type,
           category_id: formData.category_id || null,
-          creator_id: user.id,
+          creator_id: creatorId,
           file_url: fileUrl,
           thumbnail_url: thumbnailUrl,
           file_size: file.size,

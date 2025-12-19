@@ -248,7 +248,7 @@ export default function AdminSubscriptionsPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: any = {
-      ACTIVE: 'bg-green-100 text-green-700',
+      ACTIVE: 'bg-green-100 text-gray-900',
       INACTIVE: 'bg-gray-100 text-gray-700',
       EXPIRED: 'bg-orange-100 text-orange-700',
       CANCELED: 'bg-red-100 text-red-700',
@@ -426,7 +426,7 @@ export default function AdminSubscriptionsPage() {
                           ) : (
                             <button
                               onClick={() => handleReactivateSubscription(sub.id, sub.asaasId)}
-                              className="w-full px-4 py-3 text-left text-sm font-semibold text-green-600 hover:bg-green-50 flex items-center space-x-2"
+                              className="w-full px-4 py-3 text-left text-sm font-semibold text-gray-900 hover:bg-green-50 flex items-center space-x-2"
                             >
                               <RotateCcw className="h-4 w-4" />
                               <span>Reativar</span>
@@ -493,7 +493,7 @@ export default function AdminSubscriptionsPage() {
                         </div>
                         <span className={cn(
                           "text-[9px] font-black px-2 py-1 rounded-md uppercase",
-                          payment.status === 'CONFIRMED' ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+                          payment.status === 'CONFIRMED' ? "bg-green-100 text-gray-900" : "bg-orange-100 text-orange-700"
                         )}>
                           {payment.status === 'CONFIRMED' ? 'Pago' : 'Pendente'}
                         </span>
@@ -513,7 +513,7 @@ export default function AdminSubscriptionsPage() {
 function StatCard({ title, value, icon: Icon, color }: any) {
   const colors: any = {
     blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-green-50 text-green-600',
+    green: 'bg-green-50 text-gray-900',
     red: 'bg-red-50 text-red-600',
     purple: 'bg-purple-50 text-purple-600',
   }

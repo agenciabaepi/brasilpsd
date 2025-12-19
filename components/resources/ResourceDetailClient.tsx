@@ -16,13 +16,16 @@ import {
   FileText,
   ShieldCheck,
   Sparkles,
-  Crown
+  Crown,
+  UserPlus,
+  Check
 } from 'lucide-react'
 import type { Resource, Profile } from '@/types/database'
 import { formatFileSize } from '@/lib/utils/format'
 import toast from 'react-hot-toast'
 import { getS3Url } from '@/lib/aws/s3'
 import { cn } from '@/lib/utils/cn'
+import { isSystemProfileSync } from '@/lib/utils/system'
 
 interface ResourceDetailClientProps {
   resource: Resource
@@ -34,6 +37,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited)
   const [downloading, setDownloading] = useState(false)
   const [user, setUser] = useState<Profile | null>(null)
+  const [isFollowingCreator, setIsFollowingCreator] = useState(false)
   const supabase = createSupabaseClient()
 
   useEffect(() => {
@@ -46,12 +50,25 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
           .eq('id', authUser.id)
           .single()
         setUser(profile)
+
+        // Verificar se está seguindo o criador
+        if (resource.creator_id && authUser.id !== resource.creator_id) {
+          const { data: followData } = await supabase
+            .from('followers')
+            .select('id')
+            .eq('follower_id', authUser.id)
+            .eq('creator_id', resource.creator_id)
+            .single()
+          setIsFollowingCreator(!!followData)
+        }
       }
     }
     loadUser()
-  }, [])
+  }, [resource.creator_id])
 
-  const authorName = resource.is_official ? 'BrasilPSD' : (resource.creator?.full_name || 'BrasilPSD');
+  // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
+  const isOfficial = resource.is_official || isSystemProfileSync(resource.creator_id)
+  const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
 
   async function handleFavorite() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -157,7 +174,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
             ) : (
               <div className="aspect-video w-full flex flex-col items-center justify-center bg-gray-50">
                 <FileText className="h-16 w-16 text-gray-200 mb-4" />
-                <p className="text-gray-400 font-semibold tracking-widest text-xs uppercase">Sem Prévia</p>
+                <p className="text-gray-400 font-semibold tracking-widest text-sm uppercase">Sem Prévia</p>
               </div>
             )}
           </div>
@@ -167,11 +184,11 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
             <div className="flex items-center space-x-8">
               <button onClick={handleFavorite} className="flex items-center space-x-2 text-gray-600 hover:text-red-500 transition-colors group">
                 <Heart className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
-                <span className="text-sm font-semibold tracking-tight">{isFavorited ? 'Salvo' : 'Salvar'}</span>
+                <span className="text-base font-semibold tracking-tight">{isFavorited ? 'Salvo' : 'Salvar'}</span>
               </button>
-              <button className="flex items-center space-x-2 text-gray-600 hover:text-primary-500 transition-colors group">
+              <button className="flex items-center space-x-2 text-gray-600 hover:text-secondary-500 transition-colors group">
                 <Share2 className="h-5 w-5" />
-                <span className="text-sm font-semibold tracking-tight">Compartilhar</span>
+                <span className="text-base font-semibold tracking-tight">Compartilhar</span>
               </button>
             </div>
             <button className="text-gray-300 hover:text-gray-600 transition-colors">
@@ -193,8 +210,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
                   <InfoRow label="Licença" value={resource.is_premium ? 'Premium' : 'Gratuita'} />
                   {resource.is_ai_generated && (
                     <div className="flex items-center justify-between border-b border-gray-50 pb-2">
-                      <span className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">Origem:</span>
-                      <span className="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
+                      <span className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Origem:</span>
+                      <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
                         <Sparkles className="h-3 w-3" />
                         IA Gerada
                       </span>
@@ -209,7 +226,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
             </div>
 
             <div className="pt-10 border-t border-gray-100">
-              <p className="text-gray-500 leading-relaxed text-sm font-medium">
+              <p className="text-gray-700 leading-relaxed text-base font-medium">
                 {resource.description || 'Este recurso digital foi projetado para oferecer a máxima qualidade e facilidade de uso em seus projetos criativos. Ideal para designers que buscam agilidade e profissionalismo.'}
               </p>
             </div>
@@ -245,10 +262,10 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
             {/* Premium Highlight */}
             {resource.is_premium && (
               <div className="bg-primary-50/50 rounded-2xl p-6 border border-primary-100 flex items-start space-x-4 my-8">
-                <AlertCircle className="h-6 w-6 text-primary-500 flex-shrink-0" />
+                <AlertCircle className="h-6 w-6 text-secondary-600 flex-shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-primary-700 tracking-tighter">Recurso Assinante</p>
-                  <p className="text-[11px] text-primary-600 font-bold leading-relaxed tracking-tight">
+                  <p className="text-sm font-semibold text-gray-900 tracking-tighter">Recurso Assinante</p>
+                  <p className="text-sm text-gray-700 font-bold leading-relaxed tracking-tight">
                     Disponível apenas para membros premium. Faça o upgrade agora!
                   </p>
                 </div>
@@ -260,7 +277,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
               <Link href={resource.is_premium ? "/premium" : "/signup"} className="block mt-8">
                 <button
                   className={cn(
-                    "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-bold text-xs tracking-widest transition-all shadow-lg uppercase",
+                    "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg uppercase",
                     resource.is_premium 
                       ? "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20" 
                       : "bg-gray-900 hover:bg-black text-white shadow-gray-900/20"
@@ -281,7 +298,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
               </Link>
             ) : resource.is_premium && !user.is_premium ? (
               <Link href="/premium" className="block mt-8">
-                <button className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-bold text-xs tracking-widest transition-all shadow-lg shadow-orange-500/20 uppercase">
+                <button className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg shadow-orange-500/20 uppercase">
                   <Crown className="h-5 w-5" />
                   <span>Assine Premium para Baixar</span>
                 </button>
@@ -290,7 +307,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
               <button
                 onClick={handleDownload}
                 disabled={downloading}
-                className="w-full h-16 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-semibold text-xs tracking-widest transition-all disabled:opacity-50 group mt-8 shadow-lg shadow-primary-500/20"
+                className="w-full h-16 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group mt-8 shadow-lg shadow-primary-500/20"
               >
                 <Download className="h-5 w-5 group-hover:translate-y-1 transition-transform" />
                 <span>Baixar Agora ({formatFileSize(resource.file_size)})</span>
@@ -299,29 +316,105 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
 
             {/* Author Section */}
             <div className="pt-8 border-t border-gray-100 flex items-center justify-between mt-8">
-              <div className="flex items-center space-x-4">
-                <div className="h-14 w-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
-                  {resource.is_official ? (
-                    <Image src="/images/verificado.svg" alt="Verificado" width={32} height={32} />
-                  ) : (
-                    <User className="h-8 w-8 text-gray-700" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-bold text-gray-900">{authorName}</p>
-                    {resource.is_official && (
-                      <Image src="/images/verificado.svg" alt="Oficial" width={14} height={14} />
+              {isOfficial || !resource.creator_id || isSystemProfileSync(resource.creator_id) ? (
+                <div className="flex items-center space-x-4">
+                  <div className="h-14 w-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
+                    {resource.is_official ? (
+                      <Image src="/images/verificado.svg" alt="Verificado" width={32} height={32} />
+                    ) : resource.creator?.avatar_url ? (
+                      <Image 
+                        src={resource.creator.avatar_url} 
+                        alt={authorName} 
+                        width={56} 
+                        height={56}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User className="h-8 w-8 text-gray-700" />
                     )}
                   </div>
-                  <p className="text-[10px] text-gray-400 font-bold tracking-widest mt-0.5 uppercase">
-                    {resource.is_official ? 'Equipe Oficial' : 'Criador Verificado'}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-base font-bold text-gray-900">{authorName}</p>
+                      {isOfficial && (
+                        <Image src="/images/verificado.svg" alt="Oficial" width={14} height={14} />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600 font-bold tracking-widest mt-0.5 uppercase">
+                      {isOfficial ? 'Equipe Oficial' : 'Criador Verificado'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              {!resource.is_official && (
-                <button className="px-5 py-2.5 bg-gray-900 text-white text-[10px] font-bold rounded-xl hover:bg-black transition-colors">
-                  Seguir
+              ) : (
+                <Link 
+                  href={`/creator/${resource.creator_id}`}
+                  className="flex items-center space-x-4 hover:opacity-80 transition-opacity"
+                >
+                  <div className="h-14 w-14 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center overflow-hidden">
+                    {resource.creator?.avatar_url ? (
+                      <Image 
+                        src={resource.creator.avatar_url} 
+                        alt={authorName} 
+                        width={56} 
+                        height={56}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User className="h-8 w-8 text-gray-700" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-base font-bold text-gray-900">{authorName}</p>
+                    </div>
+                    <p className="text-xs text-gray-600 font-bold tracking-widest mt-0.5 uppercase">
+                      Criador Verificado
+                    </p>
+                  </div>
+                </Link>
+              )}
+              {!isOfficial && resource.creator_id && !isSystemProfileSync(resource.creator_id) && (
+                <button 
+                  onClick={async () => {
+                    const { data: { user: authUser } } = await supabase.auth.getUser()
+                    if (!authUser) {
+                      toast.error('Você precisa estar logado para seguir')
+                      return
+                    }
+
+                    if (isFollowingCreator) {
+                      const { error } = await supabase
+                        .from('followers')
+                        .delete()
+                        .eq('follower_id', authUser.id)
+                        .eq('creator_id', resource.creator_id)
+
+                      if (!error) {
+                        setIsFollowingCreator(false)
+                        toast.success('Você deixou de seguir')
+                      }
+                    } else {
+                      const { error } = await supabase
+                        .from('followers')
+                        .insert({
+                          follower_id: authUser.id,
+                          creator_id: resource.creator_id,
+                        })
+
+                      if (!error) {
+                        setIsFollowingCreator(true)
+                        toast.success('Você está seguindo este criador')
+                      }
+                    }
+                  }}
+                  className={cn(
+                    "px-5 py-2.5 text-xs font-bold rounded-xl transition-colors",
+                    isFollowingCreator
+                      ? "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                      : "bg-gray-900 text-white hover:bg-black"
+                  )}
+                >
+                  {isFollowingCreator ? 'Seguindo' : 'Seguir'}
                 </button>
               )}
             </div>
@@ -335,8 +428,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited }: R
 function CheckItem({ text }: { text: string }) {
   return (
     <div className="flex items-center space-x-3">
-      <CheckCircle2 className="h-5 w-5 text-primary-500 flex-shrink-0" />
-      <span className="text-[11px] font-semibold text-gray-500 tracking-tight uppercase">{text}</span>
+      <CheckCircle2 className="h-5 w-5 text-secondary-600 flex-shrink-0" />
+      <span className="text-sm font-semibold text-gray-700 tracking-tight uppercase">{text}</span>
     </div>
   )
 }
@@ -344,8 +437,8 @@ function CheckItem({ text }: { text: string }) {
 function InfoRow({ label, value }: { label: string; value: any }) {
   return (
     <div className="flex items-center justify-between border-b border-gray-50 pb-2">
-      <span className="text-[10px] font-semibold text-gray-400 tracking-widest uppercase">{label}:</span>
-      <span className="text-xs font-semibold text-gray-900 tracking-tight">{value}</span>
+      <span className="text-xs font-semibold text-gray-600 tracking-widest uppercase">{label}:</span>
+      <span className="text-sm font-semibold text-gray-900 tracking-tight">{value}</span>
     </div>
   )
 }

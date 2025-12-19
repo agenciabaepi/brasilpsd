@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import Logo from '@/components/ui/Logo'
 import { User, Heart, Upload, Menu, X, ChevronDown, Moon, Crown } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import Button from '@/components/ui/Button'
@@ -69,13 +70,8 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500 text-white">
-                <Crown className="h-5 w-5 fill-current" />
-              </div>
-              <span className="text-2xl font-bold tracking-tight text-gray-900">
-                Brasil<span className="text-primary-500">PSD</span>
-              </span>
+            <Link href="/" className="flex items-center space-x-3">
+              <Logo variant="dark" />
             </Link>
 
             {/* Top Right Actions */}
@@ -86,7 +82,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
 
               <Link 
                 href="/premium" 
-                className="hidden md:flex text-sm font-semibold text-orange-500 hover:text-orange-600 transition-colors"
+                className="hidden md:flex text-base font-semibold text-orange-500 hover:text-orange-600 transition-colors"
               >
                 Assine o premium
               </Link>
@@ -118,7 +114,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                       </Button>
                     </Link>
                     <Link href="/login">
-                      <Button size="sm" className="rounded-full px-8 font-semibold">
+                      <Button variant="secondary" size="sm" className="rounded-full px-8 font-semibold">
                         <User className="mr-2 h-4 w-4 fill-current" />
                         Entrar
                       </Button>
@@ -148,7 +144,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                 <div key={item.name} className="relative group">
                   <Link
                     href={item.href}
-                    className={`flex items-center text-[13px] font-medium transition-colors py-4 ${
+                    className={`flex items-center text-base font-medium transition-colors py-4 ${
                       isActive(item.href) ? 'text-primary-600' : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
@@ -162,7 +158,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                         <Link
                           key={sub.name}
                           href={sub.href}
-                          className="block px-4 py-2 text-[13px] font-medium text-gray-600 hover:bg-gray-50 hover:text-primary-500 transition-colors"
+                          className="block px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-secondary-600 transition-colors"
                         >
                           {sub.name}
                         </Link>
@@ -187,7 +183,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
               <Link
                 key={item.name}
                 href={item.href}
-                className="text-sm font-semibold text-gray-600"
+                className="text-base font-semibold text-gray-600"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {item.name}
