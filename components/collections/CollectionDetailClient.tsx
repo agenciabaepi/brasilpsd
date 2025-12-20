@@ -180,23 +180,25 @@ export default function CollectionDetailClient({ collection, resources }: Collec
 
       {/* Barra de Ações */}
       <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
-        <div className="container mx-auto max-w-6xl px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto max-w-6xl px-4 py-3 sm:py-4">
+          <div className="flex items-center justify-center sm:justify-start">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-center">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={handleFavorite}
                 className={isFavorited ? 'text-red-500 border-red-500' : ''}
               >
-                <Heart className={`h-4 w-4 mr-2 ${isFavorited ? 'fill-red-500' : ''}`} />
-                Favoritar
+                <Heart className={`h-4 w-4 sm:mr-2 ${isFavorited ? 'fill-red-500' : ''}`} />
+                <span className="hidden sm:inline">Favoritar</span>
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 onClick={handleShare}
               >
-                <Share2 className="h-4 w-4 mr-2" />
-                Compartilhar
+                <Share2 className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Compartilhar</span>
               </Button>
             </div>
           </div>
