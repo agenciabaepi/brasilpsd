@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Aplicar watermark e converter para webp com qualidade otimizada
-        buffer = await pipeline
+        const processedBuffer = await pipeline
           .composite([{ 
             input: watermarkTile, 
             tile: true,
@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
           }])
           .webp({ quality: 75, effort: 4 }) // Reduzir qualidade e effort para ser mais rápido
           .toBuffer()
+        buffer = Buffer.from(processedBuffer)
 
         contentType = 'image/webp'
         fileExtension = 'webp'

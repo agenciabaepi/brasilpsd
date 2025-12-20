@@ -54,8 +54,14 @@ export async function getSystemProfileId(): Promise<string> {
       return cachedSystemProfileId
     }
 
+    if (!profile?.id) {
+      console.warn('Perfil do sistema não encontrado pelo email. Usando UUID do sistema.')
+      cachedSystemProfileId = SYSTEM_PROFILE_ID
+      return SYSTEM_PROFILE_ID
+    }
+
     cachedSystemProfileId = profile.id
-    return cachedSystemProfileId
+    return profile.id
   } catch (error) {
     console.error('Erro ao buscar UUID do sistema:', error)
     // Fallback para UUID do sistema

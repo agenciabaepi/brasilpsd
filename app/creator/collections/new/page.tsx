@@ -104,13 +104,15 @@ export default function NewCollectionPage() {
             />
 
             {/* Slug */}
-            <Input
-              label="URL Amigável (Slug)"
-              value={formData.slug}
-              onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-              placeholder="templates-social-media"
-              helpText="Gerado automaticamente a partir do título. Você pode personalizar."
-            />
+            <div>
+              <Input
+                label="URL Amigável (Slug)"
+                value={formData.slug}
+                onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                placeholder="templates-social-media"
+              />
+              <p className="mt-1 text-sm text-gray-500">Gerado automaticamente a partir do título. Você pode personalizar.</p>
+            </div>
 
             {/* Descrição */}
             <div>

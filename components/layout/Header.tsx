@@ -173,12 +173,12 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                     }`}
                   >
                     {item.name}
-                    {item.hasDropdown && <ChevronDown className="ml-1 h-3 w-3 opacity-50 transition-transform group-hover:rotate-180" />}
+                    {'hasDropdown' in item && item.hasDropdown && <ChevronDown className="ml-1 h-3 w-3 opacity-50 transition-transform group-hover:rotate-180" />}
                   </Link>
 
-                  {item.hasDropdown && (
+                  {'hasDropdown' in item && item.hasDropdown && (
                     <div className="absolute left-0 top-full hidden group-hover:block w-48 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {item.subItems?.map((sub) => (
+                      {'subItems' in item && item.subItems?.map((sub: any) => (
                         <Link
                           key={sub.name}
                           href={sub.href}

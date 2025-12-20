@@ -139,6 +139,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
 
       if (downloadData.error) throw new Error(downloadData.error)
 
+      if (!user) throw new Error('Usuário não autenticado')
+
       await supabase.from('downloads').insert({
         user_id: user.id,
         resource_id: resource.id,
