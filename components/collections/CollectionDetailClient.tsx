@@ -87,17 +87,17 @@ export default function CollectionDetailClient({ collection, resources }: Collec
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-end">
               {/* Informações da coleção */}
               <div className="lg:col-span-2">
-                <h1 className="text-4xl md:text-5xl font-semibold text-white mb-4 drop-shadow-lg">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold text-white mb-3 md:mb-4 drop-shadow-lg">
                   {collection.title}
                 </h1>
                 
                 {collection.description && (
-                  <p className="text-lg text-white/90 mb-6 max-w-3xl drop-shadow">
+                  <p className="text-base sm:text-lg text-white/90 mb-4 md:mb-6 max-w-3xl drop-shadow">
                     {collection.description}
                   </p>
                 )}
 
-                <div className="flex flex-wrap items-center gap-4 md:gap-6 text-white/80">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 md:gap-6 text-white/80 text-sm sm:text-base">
                   <Link 
                     href={`/creator/${collection.creator_id}`}
                     className="flex items-center gap-2 hover:text-white transition-colors"

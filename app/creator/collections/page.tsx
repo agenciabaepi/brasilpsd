@@ -226,7 +226,7 @@ export default function CollectionsPage() {
                   <span>{collection.resources_count || 0} recursos</span>
                   <span>{collection.view_count || 0} visualizações</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -249,8 +249,10 @@ export default function CollectionsPage() {
                     variant="danger"
                     size="sm"
                     onClick={() => handleDelete(collection.id)}
+                    className="sm:w-auto"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 sm:mr-1" />
+                    <span className="sm:inline hidden">Excluir</span>
                   </Button>
                 </div>
               </div>

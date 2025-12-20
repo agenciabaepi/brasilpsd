@@ -40,6 +40,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
     })
 
     return () => subscription.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleSignOut() {
@@ -198,20 +199,97 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white py-4 px-4 space-y-4">
-          <Link href="/premium" className="block text-center font-semibold text-orange-500 py-2 bg-orange-50 rounded-lg">
+        <div className="md:hidden border-t border-gray-100 bg-white py-4 px-4 space-y-4 max-h-[calc(100vh-64px)] overflow-y-auto">
+          <Link 
+            href="/premium" 
+            className="block text-center font-semibold text-orange-500 py-2 bg-orange-50 rounded-lg mb-4"
+            onClick={() => setIsMenuOpen(false)}
+          >
             Assine o premium
           </Link>
-          <nav className="grid grid-cols-2 gap-y-4">
-            {menuItems.map((item) => (
+          
+          {/* User actions mobile */}
+          {user ? (
+            <div className="space-y-2 pb-4 border-b border-gray-100">
               <Link
-                key={item.name}
-                href={item.href}
-                className="text-base font-semibold text-gray-600"
+                href="/favorites"
+                className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
                 onClick={() => setIsMenuOpen(false)}
               >
-                {item.name}
+                <Heart className="h-5 w-5" />
+                <span>Favoritos</span>
               </Link>
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <User className="h-5 w-5" />
+                <span>Minha Conta</span>
+              </Link>
+              <button
+                onClick={() => {
+                  handleSignOut()
+                  setIsMenuOpen(false)
+                }}
+                disabled={isLoggingOut}
+                className="w-full flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-50 rounded-lg disabled:opacity-50"
+              >
+                <span>{isLoggingOut ? 'Saindo...' : 'Sair'}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2 pb-4 border-b border-gray-100">
+              <Link
+                href="/signup"
+                className="block text-center py-2 px-4 border border-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-50"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Cadastre-se
+              </Link>
+              <Link
+                href="/login"
+                className="block text-center py-2 px-4 bg-primary-500 text-white font-semibold rounded-lg hover:bg-primary-600"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Entrar
+              </Link>
+            </div>
+          )}
+          
+          <nav className="space-y-2">
+            {menuItems.map((item) => (
+              <div key={item.name}>
+                <Link
+                  href={item.href}
+                  className={`block py-2 px-2 text-base font-semibold rounded-lg ${
+                    isActive(item.href) 
+                      ? 'text-primary-600 bg-primary-50' 
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
+                {'hasDropdown' in item && item.hasDropdown && 'subItems' in item && (
+                  <div className="ml-4 mt-1 space-y-1">
+                    {item.subItems.map((sub: any) => (
+                      <Link
+                        key={sub.name}
+                        href={sub.href}
+                        className={`block py-1.5 px-2 text-sm rounded-lg ${
+                          isActive(sub.href)
+                            ? 'text-primary-600 bg-primary-50'
+                            : 'text-gray-500 hover:bg-gray-50'
+                        }`}
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        {sub.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
         </div>
