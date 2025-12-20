@@ -6,7 +6,7 @@ import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Upload as UploadIcon, X, Image as ImageIcon, Info, ShieldCheck } from 'lucide-react'
+import { Upload as UploadIcon, X, Image as ImageIcon, Info, ShieldCheck, FolderPlus, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { ResourceType, Profile } from '@/types/database'
 import { getSystemProfileIdSync } from '@/lib/utils/system'
@@ -14,6 +14,9 @@ import { getSystemProfileIdSync } from '@/lib/utils/system'
 export default function UploadResourcePage() {
   const [userProfile, setUserProfile] = useState<Profile | null>(null)
   const [categories, setCategories] = useState<any[]>([])
+  const [collections, setCollections] = useState<any[]>([])
+  const [showNewCollectionForm, setShowNewCollectionForm] = useState(false)
+  const [newCollectionTitle, setNewCollectionTitle] = useState('')
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -22,6 +25,7 @@ export default function UploadResourcePage() {
     keywords: '',
     is_premium: false,
     is_official: false,
+    collection_id: '',
   })
 
   const [file, setFile] = useState<File | null>(null)
@@ -67,6 +71,19 @@ export default function UploadResourcePage() {
         
         console.log('Categorias carregadas:', cats?.length || 0)
         setCategories(cats || [])
+
+        // Carregar coleções do usuário (com is_premium)
+        if (user) {
+          const { data: userCollections, error: collectionsError } = await supabase
+            .from('collections')
+            .select('id, title, is_premium')
+            .eq('creator_id', user.id)
+            .order('created_at', { ascending: false })
+          
+          if (!collectionsError) {
+            setCollections(userCollections || [])
+          }
+        }
       } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error)
       }
@@ -75,6 +92,28 @@ export default function UploadResourcePage() {
     loadInitialData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Quando uma coleção for selecionada, buscar se ela é premium e marcar automaticamente
+  useEffect(() => {
+    if (!formData.collection_id || collections.length === 0) {
+      return
+    }
+
+    const selectedCollection = collections.find(c => c.id === formData.collection_id)
+    if (selectedCollection) {
+      // Se a coleção é premium, marcar automaticamente e não permitir alteração
+      if (selectedCollection.is_premium) {
+        setFormData(prev => ({ ...prev, is_premium: true }))
+      }
+      // Se a coleção não for premium, manter o valor atual (permitir que o usuário escolha)
+    }
+  }, [formData.collection_id, collections])
+
+  // Verificar se a coleção selecionada é premium ou se é oficial para desabilitar o checkbox
+  const selectedCollection = collections.find(c => c.id === formData.collection_id)
+  const isPremiumCollection = selectedCollection?.is_premium || false
+  const isOfficial = formData.is_official
+  const isPremiumLocked = isPremiumCollection || isOfficial
 
   function formatBytes(bytes: number): string {
     if (bytes === 0) return '0 MB'
@@ -237,11 +276,41 @@ export default function UploadResourcePage() {
       setUploadPhase('processing')
       setUploadProgress(100)
 
-      // 3. Salvar no Banco
+      // 3. Criar coleção se necessário (se foi preenchido o título da nova coleção)
+      let collectionId = formData.collection_id
+      if (newCollectionTitle.trim()) {
+        const slug = newCollectionTitle
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '')
+
+        const { data: newCollection, error: collectionError } = await supabase
+          .from('collections')
+          .insert({
+            creator_id: user.id,
+            title: newCollectionTitle.trim(),
+            slug: slug,
+            is_premium: false,
+            is_featured: false,
+            status: 'pending'
+          })
+          .select()
+          .single()
+
+        if (collectionError) throw collectionError
+        collectionId = newCollection.id
+        setCollections([newCollection, ...collections])
+        setShowNewCollectionForm(false)
+        setNewCollectionTitle('')
+      }
+
+      // 4. Salvar no Banco
       // Se for oficial, usar o perfil do sistema como criador
       const creatorId = formData.is_official ? getSystemProfileIdSync() : user.id
       
-      const { error } = await supabase
+      const { data: resource, error } = await supabase
         .from('resources')
         .insert({
           title: formData.title,
@@ -259,8 +328,38 @@ export default function UploadResourcePage() {
           is_ai_generated: detectedAi || thumbAiDetected,
           status: userProfile?.is_admin ? 'approved' : 'pending',
         })
+        .select()
+        .single()
 
       if (error) throw error
+
+      // 5. Adicionar à coleção se selecionada
+      if (collectionId && resource) {
+        // Buscar o maior order_index da coleção para adicionar no final
+        const { data: existingResources } = await supabase
+          .from('collection_resources')
+          .select('order_index')
+          .eq('collection_id', collectionId)
+          .order('order_index', { ascending: false })
+          .limit(1)
+        
+        const nextOrderIndex = existingResources && existingResources.length > 0 
+          ? (existingResources[0].order_index || 0) + 1 
+          : 0
+
+        const { error: collectionResourceError } = await supabase
+          .from('collection_resources')
+          .insert({
+            collection_id: collectionId,
+            resource_id: resource.id,
+            order_index: nextOrderIndex
+          })
+
+        if (collectionResourceError) {
+          console.error('Erro ao adicionar à coleção:', collectionResourceError)
+          // Não falhar o upload se houver erro ao adicionar à coleção
+        }
+      }
 
       toast.success('Arquivo enviado com sucesso!')
       router.push('/creator')
@@ -378,22 +477,156 @@ export default function UploadResourcePage() {
                 onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
               />
 
+              {/* Campo de Coleção */}
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                  Coleção (Opcional)
+                </label>
+                <div className="space-y-3">
+                  {!showNewCollectionForm ? (
+                    <>
+                      {newCollectionTitle.trim() && (
+                        <div className="p-3 bg-primary-50 border border-primary-200 rounded-xl mb-3">
+                          <p className="text-xs font-semibold text-primary-700 mb-1">Nova coleção será criada:</p>
+                          <p className="text-sm font-bold text-primary-900">{newCollectionTitle}</p>
+                          <button
+                            type="button"
+                          onClick={() => {
+                            setNewCollectionTitle('')
+                            // Quando remover a nova coleção, manter o is_premium atual
+                            setFormData({ ...formData, collection_id: '' })
+                          }}
+                            className="mt-2 text-xs text-primary-600 hover:text-primary-700 underline"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      )}
+                      <select
+                        className="flex h-14 w-full rounded-2xl border border-gray-100 bg-gray-50/50 px-5 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-4 focus:ring-primary-500/5 focus:border-primary-500/20 transition-all appearance-none"
+                        value={formData.collection_id}
+                        onChange={(e) => {
+                          const selectedCollectionId = e.target.value
+                          const selectedCollection = collections.find(c => c.id === selectedCollectionId)
+                          
+                          // Se selecionar uma coleção premium, marcar is_premium automaticamente
+                          // Se selecionar uma coleção não premium, manter true se is_official estiver marcado, senão manter valor atual
+                          const newIsPremium = selectedCollection?.is_premium 
+                            ? true 
+                            : (formData.is_official ? true : formData.is_premium)
+                          
+                          setFormData({ 
+                            ...formData, 
+                            collection_id: selectedCollectionId,
+                            is_premium: newIsPremium
+                          })
+                          
+                          // Limpar título da nova coleção se selecionar uma existente
+                          if (selectedCollectionId) {
+                            setNewCollectionTitle('')
+                            setShowNewCollectionForm(false)
+                          }
+                        }}
+                        disabled={!!newCollectionTitle.trim()}
+                      >
+                        <option value="">Nenhuma coleção</option>
+                        {collections.map((collection) => (
+                          <option key={collection.id} value={collection.id}>
+                            {collection.title}
+                          </option>
+                        ))}
+                      </select>
+                      {!newCollectionTitle.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewCollectionForm(true)}
+                          className="flex items-center gap-2 text-sm font-semibold text-primary-500 hover:text-primary-600 transition-colors"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Criar nova coleção
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-3 p-4 bg-primary-50/30 rounded-2xl border border-primary-100">
+                      <Input
+                        label="Título da Nova Coleção"
+                        placeholder="Ex: Templates de Social Media"
+                        value={newCollectionTitle}
+                        onChange={(e) => setNewCollectionTitle(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewCollectionForm(false)
+                          setNewCollectionTitle('')
+                          setFormData({ ...formData, collection_id: '' })
+                        }}
+                        className="flex-1 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newCollectionTitle.trim()) {
+                            toast.error('Digite um título para a coleção')
+                            return
+                          }
+                          setShowNewCollectionForm(false)
+                          // Manter o título para criar no submit
+                        }}
+                        className="flex-1 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-sm font-semibold transition-colors"
+                      >
+                        Confirmar
+                      </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="pt-4 space-y-4">
-                <div className="flex items-center space-x-8 p-6 bg-gray-50 rounded-3xl border border-gray-100 shadow-sm">
-                  <label className="flex items-center cursor-pointer group">
+                <div className={`flex items-center space-x-8 p-6 rounded-3xl border shadow-sm ${
+                  isPremiumLocked 
+                    ? 'bg-primary-50/30 border-primary-200' 
+                    : 'bg-gray-50 border-gray-100'
+                }`}>
+                  <label className={`flex items-center ${isPremiumLocked ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} group`}>
                     <div className="relative">
                       <input
                         type="checkbox"
                         className="sr-only"
                         checked={formData.is_premium}
-                        onChange={(e) => setFormData({ ...formData, is_premium: e.target.checked })}
+                        disabled={isPremiumLocked}
+                        onChange={(e) => !isPremiumLocked && setFormData({ ...formData, is_premium: e.target.checked })}
                       />
-                      <div className={`block w-14 h-8 rounded-full transition-all ${formData.is_premium ? 'bg-primary-500' : 'bg-gray-300'}`} />
+                      <div className={`block w-14 h-8 rounded-full transition-all ${formData.is_premium ? 'bg-primary-500' : 'bg-gray-300'} ${isPremiumLocked ? 'opacity-75' : ''}`} />
                       <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-all transform ${formData.is_premium ? 'translate-x-6' : 'translate-x-0'}`} />
                     </div>
                     <div className="ml-4 flex flex-col">
-                      <span className="text-xs font-semibold text-gray-700 tracking-tighter uppercase">Este recurso é Premium</span>
-                      <span className="text-[10px] text-gray-400 font-medium tracking-tight">Disponível apenas para assinantes do site</span>
+                      <span className="text-xs font-semibold text-gray-700 tracking-tighter uppercase">
+                        Este recurso é Premium
+                        {isPremiumCollection && (
+                          <span className="ml-2 text-primary-600 text-[10px] font-normal">
+                            (Definido pela coleção)
+                          </span>
+                        )}
+                        {isOfficial && (
+                          <span className="ml-2 text-primary-600 text-[10px] font-normal">
+                            (Definido por ser oficial)
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-medium tracking-tight">
+                        {isPremiumCollection 
+                          ? 'A coleção selecionada é premium, este arquivo também será premium'
+                          : isOfficial
+                          ? 'Arquivos oficiais do sistema são automaticamente premium'
+                          : 'Disponível apenas para assinantes do site'
+                        }
+                      </span>
                     </div>
                   </label>
                 </div>
@@ -406,7 +639,19 @@ export default function UploadResourcePage() {
                           type="checkbox"
                           className="sr-only"
                           checked={formData.is_official}
-                          onChange={(e) => setFormData({ ...formData, is_official: e.target.checked })}
+                        onChange={(e) => {
+                          const newIsOfficial = e.target.checked
+                          const selectedCollection = collections.find(c => c.id === formData.collection_id)
+                          const collectionIsPremium = selectedCollection?.is_premium || false
+                          
+                          setFormData({ 
+                            ...formData, 
+                            is_official: newIsOfficial,
+                            // Se marcar como oficial, também marcar como premium automaticamente
+                            // Se desmarcar, manter true se a coleção for premium, senão deixar o usuário escolher
+                            is_premium: newIsOfficial ? true : (collectionIsPremium ? true : formData.is_premium)
+                          })
+                        }}
                         />
                         <div className={`block w-14 h-8 rounded-full transition-all ${formData.is_official ? 'bg-primary-500' : 'bg-gray-700'}`} />
                         <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-all transform ${formData.is_official ? 'translate-x-6' : 'translate-x-0'}`} />
@@ -416,7 +661,7 @@ export default function UploadResourcePage() {
                           <ShieldCheck className="h-3 w-3 text-primary-500" />
                           Arquivo Oficial BrasilPSD
                         </span>
-                        <span className="text-[10px] text-gray-500 font-medium">O sistema aparecerá como autor oficial</span>
+                        <span className="text-[10px] text-gray-500 font-medium">O sistema aparecerá como autor oficial (será premium automaticamente)</span>
                       </div>
                     </label>
                   </div>

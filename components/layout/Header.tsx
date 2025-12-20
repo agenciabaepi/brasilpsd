@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Logo from '@/components/ui/Logo'
 import { User, Heart, Upload, Menu, X, ChevronDown, Moon, Crown } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types/database'
+import toast from 'react-hot-toast'
 
 interface HeaderProps {
   initialUser?: Profile | null
@@ -18,7 +19,9 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [user, setUser] = useState<Profile | null>(initialUser || null)
   const [categories, setCategories] = useState<any[]>(initialCategories)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const supabase = createSupabaseClient()
 
   useEffect(() => {
@@ -40,8 +43,22 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
   }, [])
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
-    setUser(null)
+    if (isLoggingOut) return
+    
+    setIsLoggingOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      
+      setUser(null)
+      toast.success('Logout realizado com sucesso')
+      router.push('/')
+      router.refresh()
+    } catch (error: any) {
+      console.error('Erro ao fazer logout:', error)
+      toast.error('Erro ao fazer logout. Tente novamente.')
+      setIsLoggingOut(false)
+    }
   }
 
   const isActive = (path: string) => pathname === path
@@ -103,8 +120,14 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                         Minha Conta
                       </Button>
                     </Link>
-                    <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-gray-500">
-                      Sair
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleSignOut} 
+                      disabled={isLoggingOut}
+                      className="text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isLoggingOut ? 'Saindo...' : 'Sair'}
                     </Button>
                   </>
                 ) : (

@@ -51,64 +51,128 @@ export default function CollectionDetailClient({ collection, resources }: Collec
   return (
     <div className="min-h-screen bg-white">
       {/* Banner da Coleção */}
-      <div className="relative h-64 md:h-96 bg-gradient-to-br from-primary-50 to-gray-50">
-        <div className="w-full h-full bg-gradient-to-br from-primary-100 to-gray-100" />
-        <div className="absolute inset-0 bg-black/10" />
+      <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 border-b border-gray-800">
+        {/* Preview de recursos no background */}
+        {resources.length > 0 && (
+          <div className="absolute inset-0 opacity-20 overflow-hidden">
+            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 h-full p-4">
+              {resources.slice(0, 16).map((resource, index) => (
+                resource.thumbnail_url ? (
+                  <div key={resource.id || index} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                    <Image
+                      src={getS3Url(resource.thumbnail_url)}
+                      alt={resource.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 25vw, 12.5vw"
+                    />
+                  </div>
+                ) : null
+              ))}
+            </div>
+          </div>
+        )}
         
-        <div className="absolute bottom-0 left-0 right-0 p-8">
-          <div className="container mx-auto max-w-6xl">
+        <div className="relative z-10">
+          <div className="container mx-auto max-w-6xl px-4 pt-8 pb-12">
             <Button
               variant="ghost"
               onClick={() => router.back()}
-              className="mb-4 text-white hover:bg-white/20"
+              className="mb-6 text-white/80 hover:text-white hover:bg-white/10"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
             
-            <h1 className="text-4xl md:text-5xl font-semibold text-white mb-4 drop-shadow-lg">
-              {collection.title}
-            </h1>
-            
-            {collection.description && (
-              <p className="text-lg text-white/90 mb-6 max-w-3xl drop-shadow">
-                {collection.description}
-              </p>
-            )}
-
-            <div className="flex items-center gap-6 text-white/90">
-              <Link 
-                href={`/creator/${collection.creator_id}`}
-                className="flex items-center gap-2 hover:text-white transition-colors"
-              >
-                {collection.creator?.avatar_url ? (
-                  <Image
-                    src={getS3Url(collection.creator.avatar_url)}
-                    alt={collection.creator.full_name || ''}
-                    width={32}
-                    height={32}
-                    className="rounded-full"
-                  />
-                ) : (
-                  <User className="h-8 w-8" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-end">
+              {/* Informações da coleção */}
+              <div className="lg:col-span-2">
+                <h1 className="text-4xl md:text-5xl font-semibold text-white mb-4 drop-shadow-lg">
+                  {collection.title}
+                </h1>
+                
+                {collection.description && (
+                  <p className="text-lg text-white/90 mb-6 max-w-3xl drop-shadow">
+                    {collection.description}
+                  </p>
                 )}
-                <span className="font-medium">{collection.creator?.full_name || 'Criador'}</span>
-              </Link>
-              
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm">
-                  {format(new Date(collection.created_at), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </span>
+
+                <div className="flex flex-wrap items-center gap-4 md:gap-6 text-white/80">
+                  <Link 
+                    href={`/creator/${collection.creator_id}`}
+                    className="flex items-center gap-2 hover:text-white transition-colors"
+                  >
+                    {collection.creator?.avatar_url ? (
+                      <Image
+                        src={getS3Url(collection.creator.avatar_url)}
+                        alt={collection.creator.full_name || ''}
+                        width={32}
+                        height={32}
+                        className="rounded-full"
+                      />
+                    ) : (
+                      <User className="h-6 w-6" />
+                    )}
+                    <span className="font-medium">{collection.creator?.full_name || 'Criador'}</span>
+                  </Link>
+                  
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    <span className="text-sm">
+                      {format(new Date(collection.created_at), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{resources.length} recursos</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{collection.view_count || 0} visualizações</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm">{resources.length} recursos</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm">{collection.view_count || 0} visualizações</span>
-              </div>
+              {/* Preview grid dos recursos */}
+              {resources.length > 0 && (
+                <div className="lg:col-span-1">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 p-4 shadow-lg">
+                    <div className="grid grid-cols-2 gap-2">
+                      {resources.slice(0, 4).map((resource, index) => (
+                        resource.thumbnail_url ? (
+                          <Link
+                            key={resource.id || index}
+                            href={`/resources/${resource.id}`}
+                            className="aspect-square relative rounded-lg overflow-hidden bg-gray-100 hover:ring-2 hover:ring-primary-500 transition-all group"
+                          >
+                            <Image
+                              src={getS3Url(resource.thumbnail_url)}
+                              alt={resource.title}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-300"
+                              sizes="(max-width: 1024px) 50vw, 25vw"
+                            />
+                          </Link>
+                        ) : (
+                          <div key={index} className="aspect-square rounded-lg bg-gray-50 flex items-center justify-center">
+                            <span className="text-gray-300 text-xs">Sem prévia</span>
+                          </div>
+                        )
+                      ))}
+                      {resources.length < 4 && (
+                        Array.from({ length: 4 - resources.length }).map((_, i) => (
+                          <div key={`empty-${i}`} className="aspect-square rounded-lg bg-white/10" />
+                        ))
+                      )}
+                    </div>
+                    {resources.length > 4 && (
+                      <p className="text-xs text-white/70 text-center mt-3">
+                        +{resources.length - 4} mais recursos
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

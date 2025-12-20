@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { uploadFileToS3 } from '@/lib/aws/s3'
 import sharp from 'sharp'
-import archiver from 'archiver'
-import { PassThrough } from 'stream'
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,75 +36,79 @@ export async function POST(request: NextRequest) {
     let fileExtension = file.name.split('.').pop()?.toLowerCase()
     let isAiGenerated = false
 
-    // 0. AI Detection
-    if (file.type.startsWith('image/')) {
+    // 0. AI Detection - apenas para recursos (não para thumbnails)
+    if (type === 'resource' && file.type.startsWith('image/')) {
       try {
+        // Processar apenas metadados sem carregar toda a imagem na memória
         const metadata = await sharp(buffer).metadata()
         const metadataString = JSON.stringify(metadata).toLowerCase()
         const aiMarkers = ['midjourney', 'dall-e', 'stablediffusion', 'adobe firefly', 'generative fill', 'artificial intelligence', 'ai generated']
         isAiGenerated = aiMarkers.some(marker => metadataString.includes(marker))
       } catch (err) {
         console.warn('AI Analysis failed:', err)
+        // Não bloquear upload se falhar
       }
     }
 
-    // 1. Thumbnail Processing + Watermark
+    // 1. Thumbnail Processing + Watermark (otimizado)
     if (type === 'thumbnail') {
-      // Criar apenas um "quadradinho" da marca d'água para repetir (Tiling)
-      const watermarkTile = Buffer.from(`
-        <svg width="300" height="200" xmlns="http://www.w3.org/2000/svg">
-          <text 
-            x="50%" 
-            y="50%" 
-            font-family="sans-serif" 
-            font-weight="900" 
-            font-size="20" 
-            fill="rgba(255,255,255,0.2)" 
-            stroke="rgba(0,0,0,0.05)" 
-            stroke-width="0.5" 
-            text-anchor="middle" 
-            transform="rotate(-30 150 100)"
-          >
-            BRASILPSD
-          </text>
-        </svg>
-      `)
+      try {
+        // Criar apenas um "quadradinho" da marca d'água para repetir (Tiling)
+        const watermarkTile = Buffer.from(`
+          <svg width="300" height="200" xmlns="http://www.w3.org/2000/svg">
+            <text 
+              x="50%" 
+              y="50%" 
+              font-family="sans-serif" 
+              font-weight="900" 
+              font-size="20" 
+              fill="rgba(255,255,255,0.2)" 
+              stroke="rgba(0,0,0,0.05)" 
+              stroke-width="0.5" 
+              text-anchor="middle" 
+              transform="rotate(-30 150 100)"
+            >
+              BRASILPSD
+            </text>
+          </svg>
+        `)
 
-      // Redimensionar e aplicar a marca d'água repetida (tile: true resolve o erro de dimensões)
-      buffer = await sharp(buffer)
-        .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-        .composite([{ 
-          input: watermarkTile, 
-          tile: true, // Isso faz a marca d'água repetir e se ajustar a qualquer tamanho
-          blend: 'over' 
-        }])
-        .webp({ quality: 80 })
-        .toBuffer()
+        // Otimizar: verificar dimensões antes de processar
+        const image = sharp(buffer)
+        const metadata = await image.metadata()
+        
+        // Se a imagem já for pequena (menos de 1200px), não redimensionar
+        const needsResize = (metadata.width && metadata.width > 1200) || (metadata.height && metadata.height > 1200)
+        
+        let pipeline = image
+        if (needsResize) {
+          pipeline = pipeline.resize(1200, 1200, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+        }
+        
+        // Aplicar watermark e converter para webp com qualidade otimizada
+        buffer = await pipeline
+          .composite([{ 
+            input: watermarkTile, 
+            tile: true,
+            blend: 'over' 
+          }])
+          .webp({ quality: 75, effort: 4 }) // Reduzir qualidade e effort para ser mais rápido
+          .toBuffer()
 
-      contentType = 'image/webp'
-      fileExtension = 'webp'
+        contentType = 'image/webp'
+        fileExtension = 'webp'
+      } catch (err) {
+        console.warn('Thumbnail processing failed, using original:', err)
+        // Se falhar, usar o arquivo original
+      }
     }
 
-    // 2. ZIP Compression
-    if (type === 'resource' && fileExtension !== 'zip') {
-      const archive = archiver('zip', { zlib: { level: 5 } })
-      const passThrough = new PassThrough()
-      const chunks: Buffer[] = []
-      
-      passThrough.on('data', (chunk) => chunks.push(chunk))
-      const zipPromise = new Promise<Buffer>((resolve, reject) => {
-        passThrough.on('end', () => resolve(Buffer.concat(chunks)))
-        passThrough.on('error', (err) => reject(err))
-      })
-
-      archive.pipe(passThrough)
-      archive.append(buffer, { name: file.name })
-      archive.append(`Este arquivo foi baixado em BrasilPSD.com.br.`, { name: 'LICENSE.txt' })
-      await archive.finalize()
-      buffer = await zipPromise
-      contentType = 'application/zip'
-      fileExtension = 'zip'
-    }
+    // 2. ZIP Compression - REMOVIDO para melhorar performance
+    // Arquivos serão armazenados como original no S3
+    // A compressão pode ser feita no cliente se necessário
 
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`
     const fileKey = type === 'thumbnail' ? `thumbnails/${user.id}/${fileName}` : `resources/${user.id}/${fileName}`

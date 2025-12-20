@@ -20,6 +20,7 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function loadData() {
@@ -57,9 +58,10 @@ export default function CollectionsPage() {
 
       if (error) throw error
 
-      // Processar contagem de recursos
+      // Processar contagem de recursos e buscar preview de 4 recursos
       const collectionsWithCount = await Promise.all(
         (collectionsData || []).map(async (collection: any) => {
+          // Contar recursos
           const { count, error: countError } = await supabase
             .from('collection_resources')
             .select('*', { count: 'exact', head: true })
@@ -67,15 +69,27 @@ export default function CollectionsPage() {
 
           if (countError) {
             console.error('Erro ao contar recursos:', countError)
-            return {
-              ...collection,
-              resources_count: 0
-            }
           }
+
+          // Buscar 4 recursos aleatórios para preview
+          const { data: collectionResources } = await supabase
+            .from('collection_resources')
+            .select(`
+              *,
+              resource:resources!resource_id(*, creator:profiles!creator_id(*))
+            `)
+            .eq('collection_id', collection.id)
+            .order('order_index', { ascending: true })
+            .limit(4)
+
+          const previewResources = (collectionResources || [])
+            .map((cr: any) => cr.resource)
+            .filter((r: any) => r && r.thumbnail_url) // Apenas recursos com thumbnail
 
           return {
             ...collection,
-            resources_count: count || 0
+            resources_count: count || 0,
+            preview_resources: previewResources
           }
         })
       )
@@ -149,10 +163,45 @@ export default function CollectionsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {collections.map((collection) => (
+          {collections.map((collection: any) => (
             <Card key={collection.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="relative h-48 bg-gradient-to-br from-primary-100 to-gray-100 flex items-center justify-center">
-                <ImageIcon className="h-12 w-12 text-primary-300" />
+              <div className="relative h-48 bg-gray-100">
+                {/* Grid 2x2 de recursos preview */}
+                {collection.preview_resources && collection.preview_resources.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-0 h-full">
+                    {collection.preview_resources.map((resource: any, index: number) => (
+                      <div key={resource.id || index} className="aspect-square relative overflow-hidden bg-gray-50">
+                        {resource.thumbnail_url ? (
+                          <Image
+                            src={getS3Url(resource.thumbnail_url)}
+                            alt={resource.title || 'Preview'}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 50vw, 33vw"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                            <ImageIcon className="h-6 w-6 text-gray-300" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {/* Preencher espaços vazios se tiver menos de 4 recursos */}
+                    {collection.preview_resources.length < 4 && (
+                      Array.from({ length: 4 - collection.preview_resources.length }).map((_, i) => (
+                        <div key={`empty-${i}`} className="aspect-square bg-gray-50 flex items-center justify-center">
+                          <ImageIcon className="h-6 w-6 text-gray-300" />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-full bg-gradient-to-br from-primary-100 to-gray-100 flex items-center justify-center">
+                    <ImageIcon className="h-12 w-12 text-primary-300" />
+                  </div>
+                )}
+                
+                {/* Badges de status */}
                 {collection.status === 'pending' && (
                   <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
                     Pendente

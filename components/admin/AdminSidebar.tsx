@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Logo from '@/components/ui/Logo'
 import { 
   LayoutDashboard, 
@@ -17,6 +17,9 @@ import {
   Repeat
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { createSupabaseClient } from '@/lib/supabase/client'
+import { useState } from 'react'
+import toast from 'react-hot-toast'
 
 const menuItems = [
   { name: 'Painel', href: '/admin', icon: LayoutDashboard },
@@ -31,6 +34,27 @@ const menuItems = [
 
 export default function AdminSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createSupabaseClient()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  async function handleSignOut() {
+    if (isLoggingOut) return
+    
+    setIsLoggingOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      
+      toast.success('Logout realizado com sucesso')
+      router.push('/')
+      router.refresh()
+    } catch (error: any) {
+      console.error('Erro ao fazer logout:', error)
+      toast.error('Erro ao fazer logout. Tente novamente.')
+      setIsLoggingOut(false)
+    }
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 border-r border-gray-200 bg-white p-4 flex flex-col z-20">
@@ -70,10 +94,12 @@ export default function AdminSidebar() {
           <span>Voltar ao Site</span>
         </Link>
         <button
-          className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-semibold text-red-500 hover:bg-red-50 transition-all"
+          onClick={handleSignOut}
+          disabled={isLoggingOut}
+          className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-semibold text-red-500 hover:bg-red-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <LogOut className="h-5 w-5 text-red-400" />
-          <span>Sair do Painel</span>
+          <span>{isLoggingOut ? 'Saindo...' : 'Sair do Painel'}</span>
         </button>
       </div>
     </aside>

@@ -107,6 +107,7 @@ export interface Collection {
   cover_image: string | null
   slug: string
   is_featured: boolean
+  is_premium: boolean
   status: ResourceStatus
   view_count: number
   rejected_reason: string | null

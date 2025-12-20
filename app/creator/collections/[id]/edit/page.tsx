@@ -30,7 +30,9 @@ export default function EditCollectionPage() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    slug: ''
+    slug: '',
+    is_premium: false,
+    is_featured: false
   })
 
   useEffect(() => {
@@ -70,7 +72,9 @@ export default function EditCollectionPage() {
       setFormData({
         title: collectionData.title,
         description: collectionData.description || '',
-        slug: collectionData.slug
+        slug: collectionData.slug,
+        is_premium: collectionData.is_premium || false,
+        is_featured: collectionData.is_featured || false
       })
 
       // Carregar recursos da coleção
@@ -131,7 +135,9 @@ export default function EditCollectionPage() {
         .update({
           title: formData.title.trim(),
           description: formData.description.trim() || null,
-          slug: formData.slug.trim()
+          slug: formData.slug.trim(),
+          is_premium: formData.is_premium,
+          is_featured: formData.is_featured
         })
         .eq('id', collectionId)
 
@@ -289,6 +295,51 @@ export default function EditCollectionPage() {
                 rows={4}
                 className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
+            </div>
+
+            {/* Opções Premium e Exclusivo */}
+            <div className="space-y-4 p-6 bg-gray-50 rounded-3xl border border-gray-100 shadow-sm">
+              <label className="flex items-center cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_premium}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_premium: e.target.checked }))}
+                    className="sr-only"
+                  />
+                  <div className={`block w-14 h-8 rounded-full transition-colors duration-200 ease-in-out ${
+                    formData.is_premium ? 'bg-primary-500' : 'bg-gray-300'
+                  }`}></div>
+                  <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transform transition-transform duration-200 ease-in-out ${
+                    formData.is_premium ? 'translate-x-6' : 'translate-x-0'
+                  }`}></div>
+                </div>
+                <div className="ml-4">
+                  <div className="font-semibold text-gray-900">Premium</div>
+                  <div className="text-sm text-gray-500">Coleção premium requer assinatura</div>
+                </div>
+              </label>
+
+              <label className="flex items-center cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_featured}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_featured: e.target.checked }))}
+                    className="sr-only"
+                  />
+                  <div className={`block w-14 h-8 rounded-full transition-colors duration-200 ease-in-out ${
+                    formData.is_featured ? 'bg-primary-500' : 'bg-gray-300'
+                  }`}></div>
+                  <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transform transition-transform duration-200 ease-in-out ${
+                    formData.is_featured ? 'translate-x-6' : 'translate-x-0'
+                  }`}></div>
+                </div>
+                <div className="ml-4">
+                  <div className="font-semibold text-gray-900">Exclusivo</div>
+                  <div className="text-sm text-gray-500">Destacar esta coleção como exclusiva</div>
+                </div>
+              </label>
             </div>
 
             <Button
