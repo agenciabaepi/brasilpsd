@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { PutObjectCommandInput } from '@aws-sdk/client-s3'
 
 // Garantindo Ohio us-east-2 como padrão absoluto
 const REGION = process.env.AWS_REGION || 'us-east-2'
@@ -27,6 +28,14 @@ export async function uploadFileToS3({
   contentType,
   metadata,
 }: UploadFileParams): Promise<string> {
+  console.log('S3 Upload:', {
+    bucket: BUCKET_NAME,
+    key: key,
+    contentType: contentType,
+    size: file.length,
+    region: REGION
+  })
+
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
@@ -36,7 +45,13 @@ export async function uploadFileToS3({
     // Removendo ACL pública explícita para evitar erros se o bucket não permitir ACLs
   })
 
-  await s3Client.send(command)
+  try {
+    await s3Client.send(command)
+    console.log('S3 Upload successful for key:', key)
+  } catch (error) {
+    console.error('S3 Upload error:', error)
+    throw error
+  }
 
   // PRIORIDADE 1: CloudFront (Ignora se for o link de exemplo ou undefined)
   const isDummyCloudfront = CLOUDFRONT_DOMAIN?.includes('seu-cloudfront-domain') || CLOUDFRONT_DOMAIN === 'undefined' || !CLOUDFRONT_DOMAIN;
@@ -73,11 +88,49 @@ export async function getSignedDownloadUrl(key: string, expiresIn: number = 3600
   return await getSignedUrl(s3Client, command, { expiresIn })
 }
 
+/**
+ * Gera uma presigned URL para upload direto do cliente para S3
+ * Isso permite uploads grandes sem passar pelo servidor Next.js
+ */
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn: number = 3600,
+  metadata?: Record<string, string>
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+    Metadata: metadata,
+  })
+
+  return await getSignedUrl(s3Client, command, { expiresIn })
+}
+
 export async function deleteFileFromS3(key: string): Promise<void> {
+  console.log('S3 Delete:', {
+    bucket: BUCKET_NAME,
+    key: key,
+    region: REGION
+  })
+
   const command = new DeleteObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
   })
 
-  await s3Client.send(command)
+  try {
+    const response = await s3Client.send(command)
+    console.log('S3 Delete successful for key:', key, 'Response:', response)
+  } catch (error: any) {
+    console.error('S3 Delete error:', {
+      key: key,
+      error: error.message,
+      code: error.Code,
+      name: error.name,
+      bucket: BUCKET_NAME
+    })
+    throw error
+  }
 }

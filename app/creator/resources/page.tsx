@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -13,26 +13,26 @@ import {
   Eye, 
   Download,
   Filter,
+  Upload,
   MoreVertical,
-  Plus
+  Plus,
+  Play
 } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import Link from 'next/link'
 import { getS3Url } from '@/lib/aws/s3'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 
 export default function CreatorResourcesPage() {
   const [resources, setResources] = useState<Resource[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createSupabaseClient()
 
-  useEffect(() => {
-    loadResources()
-  }, [])
-
-  async function loadResources() {
+  const loadResources = useCallback(async () => {
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -54,25 +54,50 @@ export default function CreatorResourcesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase, router])
+
+  useEffect(() => {
+    loadResources()
+  }, [loadResources])
 
   async function handleDelete(id: string) {
-    if (!confirm('Tem certeza que deseja excluir este arquivo? Esta ação não pode ser desfeita.')) {
+    if (!confirm('Tem certeza que deseja excluir este arquivo permanentemente?\n\nEsta ação irá:\n- Deletar o arquivo do banco de dados\n- Deletar o arquivo da Amazon S3\n- Deletar o thumbnail e preview (se existirem)\n\nEsta ação NÃO pode ser desfeita!')) {
       return
     }
 
     try {
-      const { error } = await supabase
-        .from('resources')
-        .delete()
-        .eq('id', id)
+      const response = await fetch(`/api/creator/resources/${id}`, {
+        method: 'DELETE',
+      })
 
-      if (error) throw error
+      const data = await response.json()
 
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir recurso')
+      }
+
+      // Mostrar mensagem de sucesso
+      if (data.warnings && data.warnings.length > 0) {
+        console.warn('Alguns arquivos não foram deletados do S3:', data.warnings)
+        toast.error(
+          `Recurso deletado do banco, mas alguns arquivos do S3 não foram removidos:\n${data.warnings.join('\n')}`,
+          { duration: 6000 }
+        )
+      } else {
+        toast.success(data.message || 'Recurso excluído com sucesso (banco e S3)')
+      }
+      
+      // Log detalhado no console
+      console.log('Delete response:', {
+        deletedFiles: data.deletedFiles,
+        warnings: data.warnings,
+        errors: data.errors
+      })
+      
       setResources(resources.filter(r => r.id !== id))
-      toast.success('Arquivo excluído com sucesso')
     } catch (error: any) {
-      toast.error('Erro ao excluir arquivo')
+      console.error('Delete error:', error)
+      toast.error(error.message || 'Erro ao excluir arquivo')
     }
   }
 
@@ -87,12 +112,20 @@ export default function CreatorResourcesPage() {
           <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Meus Arquivos</h1>
           <p className="text-gray-500 font-medium">Gerencie e edite seus recursos enviados.</p>
         </div>
-        <Link href="/creator/upload">
-          <Button className="bg-primary-500 hover:bg-primary-600 h-12 px-6 rounded-xl font-semibold space-x-2">
-            <Plus className="h-5 w-5" />
-            <span>Novo Upload</span>
-          </Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/creator/upload">
+            <Button className="bg-primary-500 hover:bg-primary-600 h-12 px-6 rounded-xl font-semibold space-x-2">
+              <Plus className="h-5 w-5" />
+              <span>Novo Upload</span>
+            </Button>
+          </Link>
+          <Link href="/creator/upload/batch">
+            <Button variant="outline" className="h-12 px-6 rounded-xl font-semibold space-x-2">
+              <Upload className="h-5 w-5" />
+              <span>Upload em Lote</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card className="border-none p-0 overflow-hidden">
@@ -139,9 +172,105 @@ export default function CreatorResourcesPage() {
                   <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-8 py-5">
                       <div className="flex items-center space-x-4">
-                        <div className="h-12 w-12 rounded-lg bg-gray-100 border border-gray-100 overflow-hidden flex-shrink-0">
-                          {resource.thumbnail_url ? (
-                            <img src={getS3Url(resource.thumbnail_url)} alt="" className="h-full w-full object-cover" />
+                        <div 
+                          className="h-12 w-12 rounded-lg bg-gray-100 border border-gray-100 overflow-hidden flex-shrink-0 relative"
+                          onMouseEnter={() => {
+                            if (resource.resource_type === 'video') {
+                              setHoveredVideoId(resource.id)
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (resource.resource_type === 'video') {
+                              setHoveredVideoId(null)
+                            }
+                          }}
+                        >
+                          {resource.resource_type === 'video' && (resource.preview_url || resource.file_url) ? (
+                            <>
+                              {/* Thumbnail - sempre visível quando não está em hover */}
+                              {resource.thumbnail_url ? (
+                                <Image
+                                  src={getS3Url(resource.thumbnail_url)}
+                                  alt={resource.title}
+                                  width={48}
+                                  height={48}
+                                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                    hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
+                                  }`}
+                                  unoptimized
+                                />
+                              ) : (
+                                <video
+                                  src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=0.001'}
+                                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                    hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
+                                  }`}
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                  onLoadedData={(e) => {
+                                    e.currentTarget.currentTime = 0.001
+                                    e.currentTarget.pause()
+                                  }}
+                                  onContextMenu={(e) => e.preventDefault()}
+                                  onDragStart={(e) => e.preventDefault()}
+                                  draggable={false}
+                                />
+                              )}
+                              {/* Vídeo - aparece apenas no hover */}
+                              <video
+                                src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=0.001'}
+                                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                  hoveredVideoId === resource.id ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                                }`}
+                                muted
+                                loop
+                                playsInline
+                                preload="none"
+                                controlsList="nodownload noplaybackrate nofullscreen"
+                                disablePictureInPicture
+                                disableRemotePlayback
+                                onContextMenu={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  return false
+                                }}
+                                onDragStart={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  return false
+                                }}
+                                style={{
+                                  userSelect: 'none',
+                                  WebkitUserSelect: 'none',
+                                  pointerEvents: hoveredVideoId === resource.id ? 'auto' : 'none'
+                                }}
+                                ref={(video) => {
+                                  if (video && hoveredVideoId === resource.id) {
+                                    video.play().catch(() => {})
+                                  } else if (video && hoveredVideoId !== resource.id) {
+                                    video.pause()
+                                    video.currentTime = 0
+                                  }
+                                }}
+                              />
+                              {hoveredVideoId !== resource.id && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-20 pointer-events-none">
+                                  <div className="bg-white/90 rounded-full p-1.5 shadow-lg">
+                                    <Play className="h-3 w-3 text-gray-900 fill-gray-900 ml-0.5" />
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : resource.thumbnail_url ? (
+                            <Image
+                              src={getS3Url(resource.thumbnail_url)}
+                              alt={resource.title}
+                              width={48}
+                              height={48}
+                              className="h-full w-full object-cover"
+                              unoptimized
+                            />
                           ) : (
                             <div className="h-full w-full flex items-center justify-center text-gray-300">
                               <Files className="h-5 w-5" />

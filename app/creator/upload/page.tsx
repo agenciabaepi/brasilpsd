@@ -31,6 +31,22 @@ export default function UploadResourcePage() {
   const [file, setFile] = useState<File | null>(null)
   const [thumbnail, setThumbnail] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [videoPreview, setVideoPreview] = useState<string | null>(null)
+  const [videoMetadata, setVideoMetadata] = useState<{ 
+    width?: number
+    height?: number
+    duration?: number
+    frameRate?: number
+    hasAlpha?: boolean
+    hasLoop?: boolean
+    encoding?: string
+    orientation?: string
+    codec?: string
+    codecName?: string
+    colorSpace?: string
+    hasTimecode?: boolean
+    audioCodec?: string
+  } | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadPhase, setUploadPhase] = useState<'idle' | 'uploading' | 'processing'>('idle')
@@ -46,6 +62,20 @@ export default function UploadResourcePage() {
   const router = useRouter()
   const supabase = createSupabaseClient()
 
+  // Função para carregar categorias baseado no tipo de recurso
+  async function loadCategoriesForType(resourceType: ResourceType) {
+    if (resourceType === 'image') {
+    } else {
+      // Para outros tipos, buscar todas as categorias
+      const { data: cats } = await supabase
+        .from('categories')
+        .select('id, name, parent_id')
+        .order('name')
+      
+      setCategories(cats || [])
+    }
+  }
+
   useEffect(() => {
     async function loadInitialData() {
       try {
@@ -59,18 +89,8 @@ export default function UploadResourcePage() {
           setUserProfile(data)
         }
 
-        const { data: cats, error: catsError } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .order('name')
-        
-        if (catsError) {
-          console.error('Erro Supabase Categorias:', catsError)
-          toast.error('Erro ao carregar categorias do banco')
-        }
-        
-        console.log('Categorias carregadas:', cats?.length || 0)
-        setCategories(cats || [])
+        // Carregar categorias baseado no tipo inicial (image)
+        await loadCategoriesForType('image')
 
         // Carregar coleções do usuário (com is_premium)
         if (user) {
@@ -115,6 +135,20 @@ export default function UploadResourcePage() {
   const isOfficial = formData.is_official
   const isPremiumLocked = isPremiumCollection || isOfficial
 
+  // Atualizar tempo decorrido durante o processamento
+  useEffect(() => {
+    if (uploadPhase === 'processing' && uploadStats.startTime > 0) {
+      const interval = setInterval(() => {
+        setUploadStats(prev => ({
+          ...prev,
+          elapsedTime: (Date.now() - prev.startTime) / 1000,
+        }))
+      }, 500) // Atualizar a cada 500ms
+
+      return () => clearInterval(interval)
+    }
+  }, [uploadPhase, uploadStats.startTime])
+
   function formatBytes(bytes: number): string {
     if (bytes === 0) return '0 MB'
     const mb = bytes / (1024 * 1024)
@@ -140,7 +174,139 @@ export default function UploadResourcePage() {
     return `${mins}m ${secs}s`
   }
 
+  // Upload direto para S3 usando presigned URL (para arquivos grandes)
+  async function uploadDirectToS3(file: File, type: 'resource' | 'thumbnail'): Promise<any> {
+    const startTime = Date.now()
+    let lastLoaded = 0
+    let lastTime = startTime
+    let speed = 0
+
+    // 1. Obter presigned URL
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Usuário não autenticado')
+
+    const presignedResponse = await fetch('/api/upload/presigned', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type,
+        fileSize: file.size,
+        type: type
+      })
+    })
+
+    if (!presignedResponse.ok) {
+      const error = await presignedResponse.json()
+      throw new Error(error.error || 'Erro ao gerar URL de upload')
+    }
+
+    const { presignedUrl, key, url } = await presignedResponse.json()
+
+    // 2. Upload direto para S3
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const currentTime = Date.now()
+          const timeDelta = (currentTime - lastTime) / 1000
+          const bytesDelta = e.loaded - lastLoaded
+
+          if (timeDelta > 0 && bytesDelta > 0) {
+            const instantSpeed = bytesDelta / timeDelta
+            speed = speed === 0 ? instantSpeed : (speed * 0.7 + instantSpeed * 0.3)
+          }
+
+          const elapsedTime = (currentTime - startTime) / 1000
+          const remainingBytes = e.total - e.loaded
+          const remainingTime = speed > 0 ? remainingBytes / speed : 0
+
+          const uploadPercent = (e.loaded / e.total) * 100
+          const displayPercent = Math.min(95, Math.round(uploadPercent))
+
+          setUploadProgress(displayPercent)
+          setUploadStats({
+            bytesUploaded: e.loaded,
+            totalBytes: e.total,
+            speed: speed,
+            elapsedTime: elapsedTime,
+            remainingTime: remainingTime,
+            startTime: startTime,
+          })
+
+          lastLoaded = e.loaded
+          lastTime = currentTime
+        }
+      })
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // Upload direto concluído, agora processar no servidor
+          setUploadPhase('processing')
+          setUploadProgress(96)
+          
+          // Notificar servidor para processar o arquivo
+          fetch('/api/upload/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key,
+              url,
+              fileName: file.name,
+              contentType: file.type,
+              fileSize: file.size,
+              type: type
+            })
+          })
+            .then(async res => {
+              if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.error || 'Erro ao processar arquivo')
+              }
+              return res.json()
+            })
+            .then(data => {
+              setUploadProgress(100)
+              resolve({ ...data, url, key })
+            })
+            .catch(err => {
+              console.error('Processing error:', err)
+              // Mesmo se processar falhar, o arquivo foi enviado
+              // Retornar dados básicos para permitir continuar
+              resolve({ 
+                url, 
+                key, 
+                previewUrl: null, 
+                thumbnailUrl: null, 
+                videoMetadata: null,
+                isAiGenerated: false
+              })
+            })
+        } else {
+          reject(new Error(`Erro ${xhr.status} no upload`))
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('Erro de conexão'))
+      xhr.ontimeout = () => reject(new Error('Tempo de upload excedido'))
+
+      xhr.timeout = 1800000 // 30 minutos para arquivos grandes
+      xhr.open('PUT', presignedUrl)
+      xhr.setRequestHeader('Content-Type', file.type)
+      xhr.send(file)
+    })
+  }
+
   function uploadWithProgress(file: File, type: 'resource' | 'thumbnail'): Promise<any> {
+    // Para arquivos grandes (>100MB), usar upload direto para S3
+    const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
+    if (file.size > LARGE_FILE_THRESHOLD) {
+      console.log('📦 Arquivo grande detectado, usando upload direto para S3')
+      return uploadDirectToS3(file, type)
+    }
+
+    // Para arquivos menores, usar o fluxo atual (processamento no servidor)
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       const fd = new FormData()
@@ -151,6 +317,8 @@ export default function UploadResourcePage() {
       let lastLoaded = 0
       let lastTime = startTime
       let speed = 0
+      let processingInterval: NodeJS.Timeout | null = null
+      let bytesUploadComplete = false
 
       // Inicializar estatísticas
       setUploadStats({
@@ -169,7 +337,7 @@ export default function UploadResourcePage() {
           const bytesDelta = e.loaded - lastLoaded
 
           // Calcular velocidade (média móvel simples)
-          if (timeDelta > 0) {
+          if (timeDelta > 0 && bytesDelta > 0) {
             const instantSpeed = bytesDelta / timeDelta
             // Suavizar a velocidade com média móvel
             speed = speed === 0 ? instantSpeed : (speed * 0.7 + instantSpeed * 0.3)
@@ -179,47 +347,134 @@ export default function UploadResourcePage() {
           const remainingBytes = e.total - e.loaded
           const remainingTime = speed > 0 ? remainingBytes / speed : 0
 
-          const percent = Math.round((e.loaded / e.total) * 100)
+          // Mostrar apenas até 90% durante o upload dos bytes
+          // Os outros 10% serão durante o processamento no servidor
+          const uploadPercent = (e.loaded / e.total) * 100
+          const displayPercent = Math.min(90, Math.round(uploadPercent))
           
-          setUploadProgress(percent)
-          setUploadStats({
+          // Forçar atualização imediata do estado
+          setUploadProgress(displayPercent)
+          setUploadStats(prev => ({
             bytesUploaded: e.loaded,
             totalBytes: e.total,
             speed: speed,
             elapsedTime: elapsedTime,
             remainingTime: remainingTime,
-            startTime: startTime,
-          })
+            startTime: prev.startTime || startTime,
+          }))
 
           lastLoaded = e.loaded
           lastTime = currentTime
+          
+          // Log para debug
+          if (e.loaded % (1024 * 1024) < 10000 || e.loaded === e.total) {
+            console.log('📊 Upload progress:', {
+              loaded: `${(e.loaded / (1024 * 1024)).toFixed(2)} MB`,
+              total: `${(e.total / (1024 * 1024)).toFixed(2)} MB`,
+              percent: `${uploadPercent.toFixed(1)}%`,
+              speed: `${(speed / (1024 * 1024)).toFixed(2)} MB/s`
+            })
+          }
 
-          if (percent === 100) {
+          // Quando terminar de enviar os bytes, mudar para processing
+          if (uploadPercent >= 99.9 && !bytesUploadComplete) {
+            bytesUploadComplete = true
             setUploadPhase('processing')
+            setUploadProgress(88) // Mostrar 88% quando começar processamento
+            
+            // Iniciar progresso simulado durante processamento
+            const processingStartTime = Date.now()
+            let lastProgress = 90
+            
+            processingInterval = setInterval(() => {
+              const processingElapsed = (Date.now() - processingStartTime) / 1000
+              
+              // Simular progresso gradual de 90% a 99%
+              // Para vídeos grandes, pode levar mais tempo
+              const estimatedProcessingTime = Math.max(5, Math.min(30, file.size / (30 * 1024 * 1024))) // 5-30s dependendo do tamanho
+              const processingProgress = Math.min(99, 90 + (processingElapsed / estimatedProcessingTime) * 9)
+              
+              // Só atualizar se o progresso aumentou (evitar regressão)
+              if (processingProgress > lastProgress) {
+                setUploadProgress(Math.round(processingProgress))
+                lastProgress = processingProgress
+              }
+              
+              // Limpar intervalo quando a requisição terminar
+              if (xhr.readyState === 4) {
+                if (processingInterval) {
+                  clearInterval(processingInterval)
+                  processingInterval = null
+                }
+              }
+            }, 300) // Atualizar a cada 300ms
+            
+            // Limpar intervalo após 60 segundos (timeout de segurança para arquivos muito grandes)
+            setTimeout(() => {
+              if (processingInterval) {
+                clearInterval(processingInterval)
+                processingInterval = null
+              }
+            }, 60000)
           }
         }
       })
 
       xhr.onreadystatechange = () => {
         if (xhr.readyState === 4) {
+          console.log('XHR request completed, status:', xhr.status)
+          
+          // Limpar intervalo de processamento se ainda estiver rodando
+          if (processingInterval) {
+            clearInterval(processingInterval)
+            processingInterval = null
+          }
+          
+          // Quando a requisição realmente terminar, mostrar 100%
+          setUploadProgress(100)
+          setUploadPhase('processing')
+          
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
-              resolve(JSON.parse(xhr.responseText))
+              const response = JSON.parse(xhr.responseText)
+              console.log('Upload response received:', response)
+              resolve(response)
             } catch (err) {
+              console.error('Error parsing response:', err)
               reject(new Error('Resposta inválida do servidor'))
             }
           } else {
             try {
               const errorData = JSON.parse(xhr.responseText)
+              console.error('Upload error response:', errorData)
               reject(new Error(errorData.error || 'Erro no upload'))
             } catch (err) {
+              console.error('Error parsing error response:', err)
               reject(new Error(`Erro ${xhr.status} no servidor`))
             }
           }
         }
       }
 
-      xhr.onerror = () => reject(new Error('Erro de conexão'))
+      xhr.onerror = () => {
+        console.error('XHR network error')
+        reject(new Error('Erro de conexão'))
+      }
+      
+      xhr.ontimeout = () => {
+        console.error('XHR timeout')
+        reject(new Error('Tempo de upload excedido. Tente novamente.'))
+      }
+      
+      // Timeout de 10 minutos para arquivos grandes
+      xhr.timeout = 600000 // 10 minutos
+      
+      console.log('Starting XHR upload...', {
+        fileSize: file.size,
+        fileName: file.name,
+        type: type
+      })
+      
       xhr.open('POST', '/api/upload')
       xhr.send(fd)
     })
@@ -252,12 +507,43 @@ export default function UploadResourcePage() {
       // 1. Upload do Arquivo Principal
       const fileData = await uploadWithProgress(file, 'resource')
       const fileUrl = fileData.url
+      const previewUrl = fileData.previewUrl // URL da versão com marca d'água (se vídeo)
+      // Thumbnail: usar o extraído automaticamente do vídeo se disponível, senão usar o upload manual
+      let finalThumbnailUrl: string | null = fileData.thumbnailUrl || null
       const detectedAi = fileData.isAiGenerated
+      
+      // Usar metadados do servidor se disponíveis (mais confiável, especialmente após conversão)
+      if (fileData.videoMetadata) {
+        console.log('✅ Using server-extracted video metadata:', fileData.videoMetadata)
+        setVideoMetadata(prev => ({
+          ...prev,
+          width: fileData.videoMetadata.width,
+          height: fileData.videoMetadata.height,
+          duration: fileData.videoMetadata.duration,
+          frameRate: fileData.videoMetadata.frameRate,
+          codec: fileData.videoMetadata.codec,
+          codecName: fileData.videoMetadata.codecName,
+          colorSpace: fileData.videoMetadata.colorSpace,
+          hasTimecode: fileData.videoMetadata.hasTimecode,
+          audioCodec: fileData.videoMetadata.audioCodec
+        }))
+      } else if (videoMetadata) {
+        console.log('ℹ️ Using client-extracted video metadata:', videoMetadata)
+      }
+      
+      console.log('File uploaded successfully:', {
+        url: fileUrl,
+        key: fileData.key,
+        type: file.type,
+        size: file.size,
+        hasServerMetadata: !!fileData.videoMetadata,
+        hasClientMetadata: !!videoMetadata
+      })
 
-      // 2. Upload da Capa (se houver)
-      let thumbnailUrl = null
+      // 2. Upload da Capa (se houver e não foi extraída automaticamente do vídeo)
       let thumbAiDetected = false
-      if (thumbnail) {
+      if (thumbnail && !finalThumbnailUrl) {
+        console.log('📸 Uploading manual thumbnail (auto-extracted thumbnail not available)...')
         setUploadProgress(0)
         setUploadPhase('uploading')
         setUploadStats({
@@ -269,8 +555,10 @@ export default function UploadResourcePage() {
           startTime: Date.now(),
         })
         const thumbData = await uploadWithProgress(thumbnail, 'thumbnail')
-        thumbnailUrl = thumbData.url
+        finalThumbnailUrl = thumbData.url
         thumbAiDetected = thumbData.isAiGenerated
+      } else if (finalThumbnailUrl) {
+        console.log('✅ Using auto-extracted thumbnail from video')
       }
 
       setUploadPhase('processing')
@@ -310,28 +598,93 @@ export default function UploadResourcePage() {
       // Se for oficial, usar o perfil do sistema como criador
       const creatorId = formData.is_official ? getSystemProfileIdSync() : user.id
       
-      const { data: resource, error } = await supabase
+      // Dados básicos do recurso (campos que sempre existem)
+      const basicResourceData: any = {
+        title: formData.title,
+        description: formData.description || null,
+        resource_type: formData.resource_type,
+        category_id: formData.category_id || null,
+        creator_id: creatorId,
+        file_url: fileUrl,
+        preview_url: previewUrl || null, // Versão com marca d'água para preview
+        thumbnail_url: finalThumbnailUrl || null, // Thumbnail extraído automaticamente ou upload manual
+        file_size: file.size,
+        file_format: file.name.split('.').pop() || '',
+        width: videoMetadata?.width ? Number(videoMetadata.width) : null,
+        height: videoMetadata?.height ? Number(videoMetadata.height) : null,
+        duration: videoMetadata?.duration ? Math.round(Number(videoMetadata.duration)) : null,
+        keywords: formData.keywords ? formData.keywords.split(',').map(k => k.trim()).filter(Boolean) : [],
+        is_premium: formData.is_premium || false,
+        is_official: formData.is_official || false,
+        is_ai_generated: detectedAi || thumbAiDetected || false,
+        status: userProfile?.is_admin ? 'approved' : 'pending',
+      }
+      
+      console.log('💾 Saving resource to database:', {
+        title: basicResourceData.title,
+        resource_type: basicResourceData.resource_type,
+        file_size: basicResourceData.file_size,
+        file_url: basicResourceData.file_url?.substring(0, 50) + '...',
+        has_video_metadata: !!videoMetadata
+      })
+      
+      // Tentar inserir primeiro sem campos de vídeo extras (caso a migração não tenha sido aplicada)
+      let resource, error
+      const { data, error: insertError } = await supabase
         .from('resources')
-        .insert({
-          title: formData.title,
-          description: formData.description,
-          resource_type: formData.resource_type,
-          category_id: formData.category_id || null,
-          creator_id: creatorId,
-          file_url: fileUrl,
-          thumbnail_url: thumbnailUrl,
-          file_size: file.size,
-          file_format: file.name.split('.').pop() || '',
-          keywords: formData.keywords.split(',').map(k => k.trim()).filter(Boolean),
-          is_premium: formData.is_premium,
-          is_official: formData.is_official,
-          is_ai_generated: detectedAi || thumbAiDetected,
-          status: userProfile?.is_admin ? 'approved' : 'pending',
-        })
+        .insert(basicResourceData)
         .select()
         .single()
+      
+      resource = data
+      error = insertError
 
-      if (error) throw error
+      // Se deu certo, tentar atualizar com campos de vídeo se for vídeo
+      if (!error && resource && formData.resource_type === 'video' && videoMetadata) {
+        const videoUpdateData: any = {}
+        
+        if (videoMetadata.frameRate) videoUpdateData.frame_rate = Number(videoMetadata.frameRate)
+        if (videoMetadata.hasAlpha !== undefined) videoUpdateData.has_alpha_channel = videoMetadata.hasAlpha
+        if (videoMetadata.hasLoop !== undefined) videoUpdateData.has_loop = videoMetadata.hasLoop
+        // Usar codec se disponível, senão usar encoding (para compatibilidade)
+        if (videoMetadata.codec) {
+          videoUpdateData.video_encoding = videoMetadata.codec
+          videoUpdateData.video_codec = videoMetadata.codec // Campo adicional para codec formatado
+        } else if (videoMetadata.encoding) {
+          videoUpdateData.video_encoding = videoMetadata.encoding
+        }
+        if (videoMetadata.orientation) videoUpdateData.orientation = videoMetadata.orientation
+        if (videoMetadata.colorSpace) videoUpdateData.video_color_space = videoMetadata.colorSpace
+        if (videoMetadata.hasTimecode !== undefined) videoUpdateData.video_has_timecode = videoMetadata.hasTimecode
+        if (videoMetadata.audioCodec) videoUpdateData.video_audio_codec = videoMetadata.audioCodec
+        
+        // Tentar atualizar com campos de vídeo (pode falhar se a migração não foi aplicada)
+        if (Object.keys(videoUpdateData).length > 0) {
+          const { error: updateError } = await supabase
+            .from('resources')
+            .update(videoUpdateData)
+            .eq('id', resource.id)
+          
+          if (updateError) {
+            console.warn('⚠️ Could not update video metadata fields (migration may not be applied):', updateError.message)
+            // Não falhar o upload por isso, apenas logar o aviso
+          } else {
+            console.log('✅ Video metadata fields updated successfully')
+          }
+        }
+      }
+
+      if (error) {
+        console.error('❌ Database insert error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(`Erro ao salvar no banco: ${error.message}${error.details ? ` (${error.details})` : ''}${error.hint ? ` - ${error.hint}` : ''}`)
+      }
+      
+      console.log('✅ Resource saved successfully:', resource?.id)
 
       // 5. Adicionar à coleção se selecionada
       if (collectionId && resource) {
@@ -361,24 +714,112 @@ export default function UploadResourcePage() {
         }
       }
 
+      console.log('✅ All upload steps completed successfully')
       toast.success('Arquivo enviado com sucesso!')
       router.push('/creator')
     } catch (error: any) {
-      console.error(error)
+      console.error('❌ Upload failed:', error)
       toast.error(error.message || 'Erro ao enviar recurso')
       setUploadPhase('idle')
+      setUploadProgress(0)
+      setIsUploading(false)
       setIsUploading(false)
     }
+  }
+
+  // Função para extrair título do nome do arquivo
+  function extractTitleFromFilename(filename: string): string {
+    // Remove a extensão
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '')
+    // Remove caracteres especiais e substitui por espaços
+    const cleaned = nameWithoutExt
+      .replace(/[-_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    // Capitaliza primeira letra de cada palavra
+    return cleaned
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+  }
+
+  // Função para extrair metadados de vídeo
+  async function extractVideoMetadata(videoFile: File): Promise<{ width: number; height: number; duration: number } | null> {
+    return new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.preload = 'metadata'
+      
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src)
+        resolve({
+          width: video.videoWidth,
+          height: video.videoHeight,
+          duration: video.duration
+        })
+      }
+      
+      video.onerror = () => {
+        window.URL.revokeObjectURL(video.src)
+        resolve(null)
+      }
+      
+      video.src = URL.createObjectURL(videoFile)
+    })
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
+      
+      // Detectar tipo e criar preview
       if (selectedFile.type.startsWith('image/')) {
         const reader = new FileReader()
-        reader.onloadend = () => setPreview(reader.result as string)
+        reader.onloadend = () => {
+          setPreview(reader.result as string)
+          setVideoPreview(null)
+        }
         reader.readAsDataURL(selectedFile)
+      } else if (selectedFile.type.startsWith('video/')) {
+        // Criar preview de vídeo
+        const videoUrl = URL.createObjectURL(selectedFile)
+        setVideoPreview(videoUrl)
+        setPreview(null)
+        
+        // Inicializar videoMetadata se não existir
+        if (!videoMetadata) {
+          setVideoMetadata({})
+        }
+        
+        // Inicializar videoMetadata se não existir
+        if (!videoMetadata) {
+          setVideoMetadata({})
+        }
+        
+        // Extrair metadados do vídeo
+        extractVideoMetadata(selectedFile).then(metadata => {
+          if (metadata) {
+            setVideoMetadata(prev => ({ ...prev, ...metadata }))
+          }
+        })
+        
+        // Auto-detectar título do nome do arquivo
+        const autoTitle = extractTitleFromFilename(selectedFile.name)
+        if (autoTitle && !formData.title) {
+          setFormData(prev => ({ ...prev, title: autoTitle }))
+        }
+        
+        // Auto-selecionar tipo de recurso como vídeo
+        setFormData(prev => ({ ...prev, resource_type: 'video' }))
+      } else {
+        setPreview(null)
+        setVideoPreview(null)
+        
+        // Auto-detectar título do nome do arquivo para outros tipos
+        const autoTitle = extractTitleFromFilename(selectedFile.name)
+        if (autoTitle && !formData.title) {
+          setFormData(prev => ({ ...prev, title: autoTitle }))
+        }
       }
     }
   }
@@ -428,7 +869,16 @@ export default function UploadResourcePage() {
                   <select
                     className="flex h-14 w-full rounded-2xl border border-gray-100 bg-gray-50/50 px-5 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-4 focus:ring-primary-500/5 focus:border-primary-500/20 transition-all appearance-none"
                     value={formData.resource_type}
-                    onChange={(e) => setFormData({ ...formData, resource_type: e.target.value as ResourceType })}
+                    onChange={async (e) => {
+                      const newType = e.target.value as ResourceType
+                      setFormData({ ...formData, resource_type: newType, category_id: '' }) // Limpar categoria ao mudar tipo
+                      // Carregar categorias apropriadas para o novo tipo
+                      await loadCategoriesForType(newType)
+                      // Inicializar videoMetadata se mudar para vídeo
+                      if (newType === 'video' && !videoMetadata) {
+                        setVideoMetadata({})
+                      }
+                    }}
                     required
                   >
                     <option value="image">Imagem</option>
@@ -469,6 +919,156 @@ export default function UploadResourcePage() {
                   </select>
                 </div>
               </div>
+
+              {/* Configurações de Vídeo */}
+              {formData.resource_type === 'video' && (
+                <div className="space-y-4 p-5 bg-gray-50/50 rounded-2xl border border-gray-100">
+                  <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-4">
+                    Configurações do Vídeo
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Largura (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.width || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, width: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="1920"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Altura (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.height || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, height: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="1080"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Duração (segundos)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.duration || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, duration: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="60"
+                        min="0"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Frame Rate (fps)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.frameRate || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, frameRate: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="30"
+                        min="1"
+                        step="0.01"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Codec / Codificação
+                      </label>
+                      <input
+                        type="text"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.codec || videoMetadata?.encoding || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, codec: e.target.value || undefined, encoding: e.target.value || undefined }))}
+                        placeholder="Ex: Apple ProRes 422, H.264"
+                      />
+                      {videoMetadata?.codecName && videoMetadata.codecName !== videoMetadata.codec && (
+                        <p className="text-[9px] text-gray-400 mt-1">Detectado: {videoMetadata.codecName}</p>
+                      )}
+                    </div>
+                    {videoMetadata?.colorSpace && (
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                          Espaço de Cor
+                        </label>
+                        <input
+                          type="text"
+                          className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                          value={videoMetadata.colorSpace || ''}
+                          onChange={(e) => setVideoMetadata(prev => ({ ...prev, colorSpace: e.target.value || undefined }))}
+                          placeholder="Ex: bt709, smpte170m"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Orientação
+                      </label>
+                      <select
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.orientation || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, orientation: e.target.value || undefined }))}
+                      >
+                        <option value="">Selecionar...</option>
+                        <option value="Horizontal">Horizontal</option>
+                        <option value="Vertical">Vertical</option>
+                        <option value="Quadrado">Quadrado</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={videoMetadata?.hasAlpha || false}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, hasAlpha: e.target.checked }))}
+                      />
+                      <span className="text-sm font-semibold text-gray-700">Canal Alfa (Transparência)</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={videoMetadata?.hasLoop || false}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, hasLoop: e.target.checked }))}
+                      />
+                      <span className="text-sm font-semibold text-gray-700">Com Loop</span>
+                    </label>
+                  </div>
+                  {videoMetadata && (videoMetadata.width || videoMetadata.height) && (
+                    <div className="mt-3 p-3 bg-primary-50 border border-primary-200 rounded-xl space-y-1">
+                      <p className="text-xs font-semibold text-primary-700">
+                        Resolução: {videoMetadata.width} × {videoMetadata.height}
+                        {videoMetadata.duration && ` • ${Math.round(videoMetadata.duration)}s`}
+                        {videoMetadata.frameRate && ` • ${videoMetadata.frameRate.toFixed(2)} fps`}
+                      </p>
+                      {videoMetadata.codec && (
+                        <p className="text-xs text-primary-600">
+                          Codec: {videoMetadata.codec}
+                          {videoMetadata.audioCodec && ` • Áudio: ${videoMetadata.audioCodec.toUpperCase()}`}
+                        </p>
+                      )}
+                      {videoMetadata.colorSpace && (
+                        <p className="text-xs text-primary-600">
+                          Espaço de Cor: {videoMetadata.colorSpace}
+                          {videoMetadata.hasTimecode && ` • Com Timecode`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <Input
                 label="Tags (Vírgulas)"
@@ -686,6 +1286,7 @@ export default function UploadResourcePage() {
                     type="file"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     onChange={handleFileChange}
+                    accept="image/*,video/*,.psd,.ai,.zip,.rar,.7z"
                     required
                   />
                   <div className="h-40 rounded-3xl border-2 border-dashed border-gray-200 group-hover:border-primary-500 group-hover:bg-primary-50/30 transition-all flex flex-col items-center justify-center p-6 text-center">
@@ -718,10 +1319,48 @@ export default function UploadResourcePage() {
               </div>
             </div>
 
-            {preview && (
+            {(preview || videoPreview) && (
               <div className="mt-8 rounded-3xl overflow-hidden border border-gray-100 shadow-sm">
                 <p className="p-4 bg-gray-50 text-[10px] font-semibold text-gray-400 tracking-widest border-b border-gray-100 uppercase">Pré-visualização</p>
-                <img src={preview} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
+                {preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={preview} alt="Preview" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
+                ) : videoPreview ? (
+                  <div className="relative w-full bg-black group">
+                    <video
+                      src={videoPreview}
+                      className="w-full h-auto max-h-[400px] object-contain mx-auto"
+                      muted
+                      loop
+                      playsInline
+                      onMouseEnter={(e) => {
+                        e.currentTarget.play()
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.pause()
+                        e.currentTarget.currentTime = 0
+                      }}
+                    />
+                    {videoMetadata && (
+                      <div className="absolute bottom-4 left-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-lg backdrop-blur-sm space-y-1">
+                        <div>
+                          {videoMetadata.width} × {videoMetadata.height}
+                          {videoMetadata.duration && (
+                            <span className="ml-2">
+                              • {Math.round(videoMetadata.duration)}s
+                            </span>
+                          )}
+                        </div>
+                        {videoMetadata.frameRate && (
+                          <div className="text-[10px] opacity-90">
+                            {videoMetadata.frameRate.toFixed(2)} fps
+                            {videoMetadata.encoding && ` • ${videoMetadata.encoding}`}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             )}
           </Card>
@@ -765,41 +1404,64 @@ export default function UploadResourcePage() {
                   />
                 </div>
                 {uploadPhase === 'uploading' && uploadStats.totalBytes > 0 && (
-                  <div className="grid grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Enviado</span>
-                        <span className="text-xs font-bold text-gray-900">
-                          {formatBytes(uploadStats.bytesUploaded)} / {formatBytes(uploadStats.totalBytes)}
-                        </span>
+                  <div className="space-y-3 pt-2">
+                    {/* Informações principais em destaque */}
+                    <div className="flex items-center justify-between p-3 bg-primary-50 rounded-xl border border-primary-100">
+                      <div className="flex-1">
+                        <div className="text-[9px] font-semibold text-primary-600 uppercase tracking-wider mb-1">Enviado</div>
+                        <div className="text-base font-black text-primary-700">
+                          {formatBytes(uploadStats.bytesUploaded)} <span className="text-xs font-semibold text-primary-500">/ {formatBytes(uploadStats.totalBytes)}</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 text-right">
+                        <div className="text-[9px] font-semibold text-primary-600 uppercase tracking-wider mb-1">Velocidade</div>
+                        <div className="text-base font-black text-primary-700">{formatSpeed(uploadStats.speed)}</div>
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Velocidade</span>
-                        <span className="text-xs font-bold text-primary-600">{formatSpeed(uploadStats.speed)}</span>
+                    
+                    {/* Informações secundárias */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo decorrido</span>
+                          <span className="text-xs font-bold text-gray-700">{formatTime(uploadStats.elapsedTime)}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo decorrido</span>
-                        <span className="text-xs font-bold text-gray-700">{formatTime(uploadStats.elapsedTime)}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo restante</span>
-                        <span className="text-xs font-bold text-gray-700">
-                          {uploadStats.speed > 0 && uploadStats.remainingTime > 0 
-                            ? formatTime(uploadStats.remainingTime) 
-                            : 'Calculando...'}
-                        </span>
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo restante</span>
+                          <span className="text-xs font-bold text-gray-700">
+                            {uploadStats.speed > 0 && uploadStats.remainingTime > 0 
+                              ? formatTime(uploadStats.remainingTime) 
+                              : 'Calculando...'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
+                {uploadPhase === 'processing' && (
+                  <div className="pt-2 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Arquivo enviado</span>
+                      <span className="text-xs font-bold text-gray-900">
+                        {formatBytes(uploadStats.totalBytes)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Processando no servidor</span>
+                      <span className="text-xs font-bold text-primary-600 animate-pulse">Em andamento...</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Tempo total</span>
+                      <span className="text-xs font-bold text-gray-700">
+                        {formatTime((Date.now() - uploadStats.startTime) / 1000)}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <p className="text-[10px] text-gray-400 font-medium text-center italic pt-2">
-                  {uploadPhase === 'processing' ? 'Isso pode levar alguns segundos para arquivos grandes.' : 'Não feche esta página.'}
+                  {uploadPhase === 'processing' ? 'Processando e otimizando arquivo no servidor...' : 'Não feche esta página.'}
                 </p>
               </div>
             )}

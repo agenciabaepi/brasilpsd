@@ -26,3 +26,7 @@ export default function Logo({ variant = 'auto', className, width = 120, height 
   )
 }
 
+
+
+
+

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Search, Filter, Trash2, Edit, ExternalLink, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react'
+import { Search, Filter, Trash2, Edit, ExternalLink, CheckCircle2, AlertCircle, ShieldCheck, Image as ImageIcon } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { formatFileSize } from '@/lib/utils/format'
@@ -17,6 +17,7 @@ export default function AdminResourcesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [generatingThumbnails, setGeneratingThumbnails] = useState(false)
   const supabase = createSupabaseClient()
   const router = useRouter()
 
@@ -51,15 +52,41 @@ export default function AdminResourcesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Tem certeza que deseja excluir este recurso permanentemente?')) return
+    if (!confirm('Tem certeza que deseja excluir este recurso permanentemente?\n\nEsta ação irá:\n- Deletar o arquivo do banco de dados\n- Deletar o arquivo da Amazon S3\n- Deletar o thumbnail (se existir)\n\nEsta ação NÃO pode ser desfeita!')) return
 
     try {
-      const { error } = await supabase.from('resources').delete().eq('id', id)
-      if (error) throw error
-      toast.success('Recurso excluído com sucesso')
+      const response = await fetch(`/api/admin/resources/${id}`, {
+        method: 'DELETE',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir recurso')
+      }
+
+      // Mostrar mensagem de sucesso
+      if (data.warnings && data.warnings.length > 0) {
+        console.warn('Alguns arquivos não foram deletados do S3:', data.warnings)
+        toast.error(
+          `Recurso deletado do banco, mas alguns arquivos do S3 não foram removidos:\n${data.warnings.join('\n')}`,
+          { duration: 6000 }
+        )
+      } else {
+        toast.success(data.message || 'Recurso excluído com sucesso (banco e S3)')
+      }
+      
+      // Log detalhado no console
+      console.log('Delete response:', {
+        deletedFiles: data.deletedFiles,
+        warnings: data.warnings,
+        errors: data.errors
+      })
+      
       setResources(resources.filter(r => r.id !== id))
     } catch (error: any) {
-      toast.error('Erro ao excluir recurso')
+      console.error('Delete error:', error)
+      toast.error(error.message || 'Erro ao excluir recurso')
     }
   }
 
@@ -78,6 +105,44 @@ export default function AdminResourcesPage() {
     }
   }
 
+  async function handleGenerateThumbnails() {
+    if (!confirm('Isso irá gerar thumbnails para todas as imagens que não têm thumbnail. Deseja continuar?')) {
+      return
+    }
+
+    setGeneratingThumbnails(true)
+    try {
+      const response = await fetch('/api/admin/generate-thumbnails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 50, offset: 0 })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao gerar thumbnails')
+      }
+
+      toast.success(
+        `Thumbnails gerados: ${data.processed} processados, ${data.failed} falharam`,
+        { duration: 5000 }
+      )
+
+      if (data.failed > 0 && data.errors && data.errors.length > 0) {
+        console.warn('Erros ao gerar thumbnails:', data.errors)
+      }
+
+      // Recarregar recursos para mostrar os novos thumbnails
+      loadResources()
+    } catch (error: any) {
+      console.error('Erro ao gerar thumbnails:', error)
+      toast.error(error.message || 'Erro ao gerar thumbnails')
+    } finally {
+      setGeneratingThumbnails(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -85,11 +150,21 @@ export default function AdminResourcesPage() {
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Biblioteca de Arquivos</h1>
           <p className="text-gray-500 text-sm mt-1">Gerencie todos os recursos enviados para a plataforma.</p>
         </div>
-        <Link href="/creator/upload">
-          <Button className="bg-primary-500 hover:bg-primary-600 rounded-xl font-bold uppercase text-[10px] tracking-widest">
-            Subir Novo Arquivo
+        <div className="flex items-center gap-3">
+          <Button 
+            onClick={handleGenerateThumbnails}
+            disabled={generatingThumbnails}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold uppercase text-[10px] tracking-widest flex items-center gap-2"
+          >
+            <ImageIcon className="h-3 w-3" />
+            {generatingThumbnails ? 'Gerando...' : 'Gerar Thumbnails'}
           </Button>
-        </Link>
+          <Link href="/creator/upload">
+            <Button className="bg-primary-500 hover:bg-primary-600 rounded-xl font-bold uppercase text-[10px] tracking-widest">
+              Subir Novo Arquivo
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Card className="border-none p-0 overflow-hidden">

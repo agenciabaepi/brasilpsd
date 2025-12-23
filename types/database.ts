@@ -51,6 +51,15 @@ export interface Resource {
   width: number | null
   height: number | null
   duration: number | null
+  frame_rate: number | null
+  has_alpha_channel: boolean
+  has_loop: boolean
+  video_encoding: string | null
+  video_codec: string | null
+  video_color_space: string | null
+  video_has_timecode: boolean
+  video_audio_codec: string | null
+  orientation: string | null
   keywords: string[] | null
   color_palette: string[] | null
   is_premium: boolean

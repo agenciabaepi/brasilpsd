@@ -51,3 +51,7 @@ export default async function CollectionDetailPage({ params }: { params: { id: s
   return <CollectionDetailClient collection={collection as Collection} resources={resources} />
 }
 
+
+
+
+

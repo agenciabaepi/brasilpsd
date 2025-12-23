@@ -216,7 +216,7 @@ export default function CollectionDetailClient({ collection, resources }: Collec
             <p className="text-gray-500 text-lg">Esta coleção ainda não possui recursos</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-6">
             {resources.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} />
             ))}

@@ -58,11 +58,20 @@ export default function HomeClient({
         </div>
 
         {/* Content Grid */}
-        <div className="columns-1 sm:columns-2 lg:columns-4 xl:columns-5 2xl:columns-6 gap-6 min-h-[600px]">
-          {currentData.map((resource) => (
-            <ResourceCard key={resource.id} resource={resource} />
-          ))}
-        </div>
+        <>
+          {/* Mobile: Grid 2 colunas */}
+          <div className="grid grid-cols-2 gap-6 min-h-[600px] lg:hidden">
+            {currentData.map((resource) => (
+              <ResourceCard key={resource.id} resource={resource} />
+            ))}
+          </div>
+          {/* Desktop: Columns masonry */}
+          <div className="hidden lg:block columns-4 xl:columns-5 2xl:columns-6 gap-6 min-h-[600px]">
+            {currentData.map((resource) => (
+              <ResourceCard key={resource.id} resource={resource} />
+            ))}
+          </div>
+        </>
 
         {/* View More Button */}
         <div className="mt-16 text-center">

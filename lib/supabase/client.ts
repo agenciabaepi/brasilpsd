@@ -1,6 +1,9 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 
+// Cache do cliente para evitar recriações
+let cachedClient: ReturnType<typeof createClientComponentClient> | null = null
+
 export const createSupabaseClient = () => {
   // Verificar se as variáveis de ambiente estão configuradas
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -13,7 +16,14 @@ export const createSupabaseClient = () => {
     )
   }
   
-  return createClientComponentClient()
+  // Retornar cliente em cache se existir (mas createClientComponentClient já gerencia isso)
+  // Apenas garantir que não há erro
+  try {
+    return createClientComponentClient()
+  } catch (error) {
+    console.error('Error creating Supabase client:', error)
+    throw error
+  }
 }
 
 export const createSupabaseAdmin = () => {

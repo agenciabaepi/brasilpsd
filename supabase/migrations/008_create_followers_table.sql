@@ -28,3 +28,7 @@ CREATE POLICY "Users can unfollow" ON public.followers
 
 COMMENT ON TABLE public.followers IS 'Relação de seguidores e criadores';
 
+
+
+
+

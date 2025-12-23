@@ -108,7 +108,7 @@ export default function CollectionsListClient({ collections: initialCollections 
 
                   {/* Recursos da Coleção */}
                   {collection.preview_resources && collection.preview_resources.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {collection.preview_resources.map((resource) => (
                         <Link key={resource.id} href={`/resources/${resource.id}`}>
                           <div className="group relative overflow-hidden rounded-xl bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md cursor-pointer">

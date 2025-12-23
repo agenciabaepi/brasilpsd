@@ -23,6 +23,16 @@ export default function EditResourcePage() {
   const [categories, setCategories] = useState<any[]>([])
   const [thumbnail, setThumbnail] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [videoMetadata, setVideoMetadata] = useState<{ 
+    width?: number
+    height?: number
+    duration?: number
+    frameRate?: number
+    hasAlpha?: boolean
+    hasLoop?: boolean
+    encoding?: string
+    orientation?: string
+  } | null>(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -52,12 +62,7 @@ export default function EditResourcePage() {
           .single()
         setUserProfile(profile)
 
-        const { data: cats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .order('name')
-        setCategories(cats || [])
-
+        // Buscar o recurso primeiro para saber o tipo
         const { data: resource, error } = await supabase
           .from('resources')
           .select('*')
@@ -72,6 +77,54 @@ export default function EditResourcePage() {
           return
         }
 
+        // Buscar categorias baseado no tipo de recurso
+        // Se for imagem, buscar apenas categorias de imagens
+        let imageCategories: any[] = []
+        
+        if (resource.resource_type === 'image') {
+          // Buscar categoria "Imagens" e suas subcategorias
+          const { data: imagensCategory } = await supabase
+            .from('categories')
+            .select('id')
+            .eq('slug', 'imagens')
+            .is('parent_id', null)
+            .maybeSingle()
+          
+          if (imagensCategory) {
+            // Buscar a categoria principal
+            const { data: mainCat } = await supabase
+              .from('categories')
+              .select('id, name, parent_id')
+              .eq('id', imagensCategory.id)
+              .single()
+            
+            // Buscar subcategorias
+            const { data: subCats } = await supabase
+              .from('categories')
+              .select('id, name, parent_id')
+              .eq('parent_id', imagensCategory.id)
+              .order('order_index', { ascending: true })
+              .order('name', { ascending: true })
+            
+            // Combinar categoria principal e subcategorias
+            imageCategories = [
+              ...(mainCat ? [mainCat] : []),
+              ...(subCats || [])
+            ]
+          }
+        }
+        
+        // Se não encontrou categorias de imagens ou não é imagem, buscar todas
+        if (imageCategories.length === 0) {
+          const { data: cats } = await supabase
+            .from('categories')
+            .select('id, name, parent_id')
+            .order('name')
+          imageCategories = cats || []
+        }
+        
+        setCategories(imageCategories)
+
         setFormData({
           title: resource.title || '',
           description: resource.description || '',
@@ -81,6 +134,20 @@ export default function EditResourcePage() {
           is_premium: resource.is_premium || false,
           is_official: resource.is_official || false,
         })
+
+        // Carregar metadados de vídeo se existirem
+        if (resource.resource_type === 'video') {
+          setVideoMetadata({
+            width: resource.width || undefined,
+            height: resource.height || undefined,
+            duration: resource.duration || undefined,
+            frameRate: resource.frame_rate || undefined,
+            hasAlpha: resource.has_alpha_channel || false,
+            hasLoop: resource.has_loop || false,
+            encoding: resource.video_encoding || undefined,
+            orientation: resource.orientation || undefined,
+          })
+        }
 
         if (resource.thumbnail_url) {
           setPreview(getS3Url(resource.thumbnail_url))
@@ -150,6 +217,18 @@ export default function EditResourcePage() {
         keywords: formData.keywords.split(',').map(k => k.trim()).filter(Boolean),
         is_premium: formData.is_premium,
         is_official: formData.is_official,
+      }
+
+      // Adicionar metadados de vídeo se for vídeo
+      if (formData.resource_type === 'video' && videoMetadata) {
+        updateData.width = videoMetadata.width ? Number(videoMetadata.width) : null
+        updateData.height = videoMetadata.height ? Number(videoMetadata.height) : null
+        updateData.duration = videoMetadata.duration ? Math.round(Number(videoMetadata.duration)) : null
+        updateData.frame_rate = videoMetadata.frameRate ? Number(videoMetadata.frameRate) : null
+        updateData.has_alpha_channel = videoMetadata.hasAlpha || false
+        updateData.has_loop = videoMetadata.hasLoop || false
+        updateData.video_encoding = videoMetadata.encoding || null
+        updateData.orientation = videoMetadata.orientation || null
       }
 
       // Se mudou para oficial, atualizar creator_id para o perfil do sistema
@@ -266,6 +345,133 @@ export default function EditResourcePage() {
                   ))}
                 </select>
               </div>
+
+              {/* Configurações de Vídeo */}
+              {formData.resource_type === 'video' && (
+                <div className="space-y-4 p-5 bg-gray-50/50 rounded-2xl border border-gray-100">
+                  <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-4">
+                    Configurações do Vídeo
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Largura (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.width || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, width: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="1920"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Altura (px)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.height || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, height: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="1080"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Duração (segundos)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.duration || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, duration: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="60"
+                        min="0"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Frame Rate (fps)
+                      </label>
+                      <input
+                        type="number"
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.frameRate || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, frameRate: e.target.value ? Number(e.target.value) : undefined }))}
+                        placeholder="30"
+                        min="1"
+                        step="0.01"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Codificação
+                      </label>
+                      <select
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.encoding || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, encoding: e.target.value || undefined }))}
+                      >
+                        <option value="">Selecionar...</option>
+                        <option value="H.264">H.264</option>
+                        <option value="H.265">H.265</option>
+                        <option value="VP9">VP9</option>
+                        <option value="AV1">AV1</option>
+                        <option value="ProRes">ProRes</option>
+                        <option value="DNxHD">DNxHD</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 tracking-widest mb-2 uppercase">
+                        Orientação
+                      </label>
+                      <select
+                        className="flex h-12 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500/40 transition-all"
+                        value={videoMetadata?.orientation || ''}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, orientation: e.target.value || undefined }))}
+                      >
+                        <option value="">Selecionar...</option>
+                        <option value="Horizontal">Horizontal</option>
+                        <option value="Vertical">Vertical</option>
+                        <option value="Quadrado">Quadrado</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={videoMetadata?.hasAlpha || false}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, hasAlpha: e.target.checked }))}
+                      />
+                      <span className="text-sm font-semibold text-gray-700">Canal Alfa (Transparência)</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={videoMetadata?.hasLoop || false}
+                        onChange={(e) => setVideoMetadata(prev => ({ ...prev, hasLoop: e.target.checked }))}
+                      />
+                      <span className="text-sm font-semibold text-gray-700">Com Loop</span>
+                    </label>
+                  </div>
+                  {videoMetadata && (videoMetadata.width || videoMetadata.height) && (
+                    <div className="mt-3 p-3 bg-primary-50 border border-primary-200 rounded-xl">
+                      <p className="text-xs font-semibold text-primary-700">
+                        Resolução: {videoMetadata.width} × {videoMetadata.height}
+                        {videoMetadata.duration && ` • ${Math.round(videoMetadata.duration)}s`}
+                        {videoMetadata.frameRate && ` • ${videoMetadata.frameRate.toFixed(2)} fps`}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="pt-4 space-y-4">
                 <div className="flex items-center space-x-8 p-6 bg-gray-50 rounded-3xl border border-gray-100 shadow-sm">

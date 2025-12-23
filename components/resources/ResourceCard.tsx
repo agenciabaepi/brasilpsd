@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { Heart, Sparkles, Crown } from 'lucide-react'
+import { useState } from 'react'
+import { Heart, Sparkles, Crown, Play } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { isSystemProfile } from '@/lib/utils/system'
@@ -14,17 +15,136 @@ interface ResourceCardProps {
 
 export default function ResourceCard({ resource, onFavorite, isFavorited }: ResourceCardProps) {
   const router = useRouter()
+  const [isVideoHovered, setIsVideoHovered] = useState(false)
+  const [videoRef, setVideoRef] = useState<HTMLVideoElement | null>(null)
+  
   // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
   const isOfficial = resource.is_official || isSystemProfile(resource.creator_id)
   const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
   const canLinkToProfile = !isOfficial && resource.creator_id && !isSystemProfile(resource.creator_id)
+  const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
 
   return (
     <Link href={`/resources/${resource.id}`} className="break-inside-avoid mb-6 block group">
       <div className="relative overflow-hidden rounded-2xl bg-gray-100 transition-all border border-gray-50 hover:border-primary-100 shadow-sm hover:shadow-md transition-all duration-300">
-        {/* Image Container */}
-        <div className="relative w-full overflow-hidden flex items-center justify-center min-h-[150px]">
-          {resource.thumbnail_url ? (
+        {/* Image/Video Container */}
+        <div 
+          className="relative w-full overflow-hidden flex items-center justify-center min-h-[150px]"
+          onMouseEnter={() => {
+            setIsVideoHovered(true)
+            if (videoRef && isVideo) {
+              videoRef.play().catch(() => {})
+            }
+          }}
+          onMouseLeave={() => {
+            setIsVideoHovered(false)
+            if (videoRef && isVideo) {
+              videoRef.pause()
+              videoRef.currentTime = 0
+            }
+          }}
+        >
+          {isVideo && resource.file_url ? (
+            <div 
+              className="relative w-full aspect-square bg-black select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+            >
+              {/* Thumbnail - sempre visível quando não está em hover */}
+              {resource.thumbnail_url ? (
+                <Image
+                  src={getS3Url(resource.thumbnail_url)}
+                  alt={resource.title}
+                  width={500}
+                  height={500}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                    isVideoHovered ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  priority={false}
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+              ) : (
+                // Fallback: mostrar primeiro frame do vídeo como thumbnail
+                <video
+                  src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=2'}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                    isVideoHovered ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                  onLoadedData={(e) => {
+                    // Pausar em 2 segundos para usar como thumbnail (evita frames pretos)
+                    e.currentTarget.currentTime = 2
+                    e.currentTarget.pause()
+                  }}
+                />
+              )}
+              {/* Vídeo - aparece apenas no hover - SEMPRE usar preview_url se disponível (com marca d'água) */}
+              <video
+                ref={setVideoRef}
+                src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=2'}
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                  isVideoHovered ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                }`}
+                muted
+                loop
+                playsInline
+                preload="none"
+                controlsList="nodownload noplaybackrate nofullscreen"
+                disablePictureInPicture
+                disableRemotePlayback
+                onAuxClick={(e) => {
+                  e.preventDefault()
+                  return false
+                }}
+                onDoubleClick={(e) => {
+                  e.preventDefault()
+                  return false
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                onDragStart={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                style={{
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  pointerEvents: isVideoHovered ? 'auto' : 'none'
+                }}
+              />
+              {/* Ícone de play - aparece apenas quando não está em hover */}
+              {!isVideoHovered && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-20 pointer-events-none">
+                  <div className="bg-white/95 rounded-full p-4 shadow-xl">
+                    <Play className="h-8 w-8 text-gray-900 fill-gray-900 ml-1" />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : resource.preview_url ? (
+            // Usar preview_url (com marca d'água) se disponível
+            <Image
+              src={getS3Url(resource.preview_url)}
+              alt={resource.title}
+              width={500}
+              height={500}
+              className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              priority={false}
+            />
+          ) : resource.thumbnail_url ? (
             <Image
               src={getS3Url(resource.thumbnail_url)}
               alt={resource.title}

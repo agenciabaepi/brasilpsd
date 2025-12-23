@@ -5,14 +5,18 @@ import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Upload, FileCheck, FileX, TrendingUp, DollarSign, Eye, Clock, Files } from 'lucide-react'
+import { Upload, FileCheck, FileX, TrendingUp, DollarSign, Eye, Clock, Files, AlertCircle, Play } from 'lucide-react'
 import type { Profile, Resource } from '@/types/database'
 import Link from 'next/link'
 import { getS3Url } from '@/lib/aws/s3'
+import Image from 'next/image'
 
 export default function CreatorDashboardPage() {
   const [user, setUser] = useState<Profile | null>(null)
   const [resources, setResources] = useState<Resource[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null)
   const [stats, setStats] = useState({
     totalResources: 0,
     pending: 0,
@@ -25,65 +29,158 @@ export default function CreatorDashboardPage() {
   const supabase = createSupabaseClient()
 
   useEffect(() => {
+    let mounted = true
+    let timeoutId: NodeJS.Timeout | null = null
+
+    async function loadData() {
+      if (!mounted) return
+      
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Timeout de segurança (15 segundos)
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.error('⏱️ Timeout loading dashboard')
+            setError('Tempo de carregamento excedido. Tente recarregar a página.')
+            setLoading(false)
+          }
+        }, 15000)
+
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+        
+        if (!mounted) return
+        
+        if (authError || !authUser) {
+          router.push('/login')
+          return
+        }
+
+        // Load profile
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single()
+        
+        if (!mounted) return
+        
+        if (profileError || !profile || (!profile.is_creator && !profile.is_admin)) {
+          router.push('/dashboard')
+          return
+        }
+
+        setUser(profile)
+
+        // Load resources em paralelo com stats
+        const [resourcesResult, statsResult] = await Promise.allSettled([
+          supabase
+            .from('resources')
+            .select('*')
+            .eq('creator_id', authUser.id)
+            .order('created_at', { ascending: false })
+            .limit(10),
+          supabase
+            .from('resources')
+            .select('status, download_count, view_count')
+            .eq('creator_id', authUser.id)
+        ])
+
+        if (!mounted) return
+
+        // Processar recursos
+        if (resourcesResult.status === 'fulfilled' && resourcesResult.value.data) {
+          setResources(resourcesResult.value.data)
+        }
+
+        // Processar stats
+        if (statsResult.status === 'fulfilled' && statsResult.value.data) {
+          const allResources = statsResult.value.data
+          setStats({
+            totalResources: allResources.length || 0,
+            pending: allResources.filter(r => r.status === 'pending').length || 0,
+            approved: allResources.filter(r => r.status === 'approved').length || 0,
+            rejected: allResources.filter(r => r.status === 'rejected').length || 0,
+            totalDownloads: allResources.reduce((sum, r) => sum + (r.download_count || 0), 0) || 0,
+            totalViews: allResources.reduce((sum, r) => sum + (r.view_count || 0), 0) || 0,
+          })
+        }
+
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        setLoading(false)
+      } catch (err: any) {
+        console.error('❌ Error loading dashboard:', err)
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+        }
+        if (mounted) {
+          setError(err.message || 'Erro ao carregar painel')
+          setLoading(false)
+        }
+      }
+    }
+
     loadData()
+
+    return () => {
+      mounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function loadData() {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    
-    if (!authUser) {
-      router.push('/login')
-      return
-    }
-
-    // Load profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .single()
-    
-    if (!profile || (!profile.is_creator && !profile.is_admin)) {
-      router.push('/dashboard')
-      return
-    }
-
-    setUser(profile)
-
-    // Load resources
-    const { data: resourcesData } = await supabase
-      .from('resources')
-      .select('*')
-      .eq('creator_id', authUser.id)
-      .order('created_at', { ascending: false })
-      .limit(10)
-
-    setResources(resourcesData || [])
-
-    // Calculate stats
-    const { data: allResources } = await supabase
-      .from('resources')
-      .select('status, download_count, view_count')
-      .eq('creator_id', authUser.id)
-
-    const statsData = {
-      totalResources: allResources?.length || 0,
-      pending: allResources?.filter(r => r.status === 'pending').length || 0,
-      approved: allResources?.filter(r => r.status === 'approved').length || 0,
-      rejected: allResources?.filter(r => r.status === 'rejected').length || 0,
-      totalDownloads: allResources?.reduce((sum, r) => sum + (r.download_count || 0), 0) || 0,
-      totalViews: allResources?.reduce((sum, r) => sum + (r.view_count || 0), 0) || 0,
-    }
-
-    setStats(statsData)
-  }
-
-  if (!user) {
+  if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
           <p className="mt-4 text-gray-500 font-semibold tracking-widest text-[10px] uppercase">Carregando Painel...</p>
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl max-w-md mx-auto">
+              <p className="text-sm text-red-700 font-semibold">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-xs text-red-600 hover:text-red-700 underline"
+              >
+                Recarregar página
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !user) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center max-w-md">
+          <div className="h-16 w-16 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Erro ao carregar painel</h2>
+          <p className="text-sm text-gray-600 mb-6">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 transition-colors"
+            >
+              Recarregar
+            </button>
+            <button
+              onClick={() => router.push('/creator/resources')}
+              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+            >
+              Meus Arquivos
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -96,12 +193,20 @@ export default function CreatorDashboardPage() {
           <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">Painel do Criador</h1>
           <p className="text-gray-400 font-medium text-sm tracking-wider">Acompanhe seu desempenho e envie novos arquivos.</p>
         </div>
-        <Link href="/creator/upload">
-          <Button className="bg-primary-500 hover:bg-primary-600 rounded-2xl px-8 h-14 border-none font-semibold tracking-tighter uppercase">
-            <Upload className="mr-3 h-5 w-5" />
-            Enviar Novo
-          </Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/creator/upload">
+            <Button className="bg-primary-500 hover:bg-primary-600 rounded-2xl px-8 h-14 border-none font-semibold tracking-tighter uppercase">
+              <Upload className="mr-3 h-5 w-5" />
+              Enviar Novo
+            </Button>
+          </Link>
+          <Link href="/creator/upload/batch">
+            <Button variant="outline" className="rounded-2xl px-8 h-14 font-semibold tracking-tighter uppercase">
+              <Upload className="mr-3 h-5 w-5" />
+              Upload em Lote
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -121,10 +226,115 @@ export default function CreatorDashboardPage() {
             </div>
             <div className="divide-y divide-gray-50">
               {resources.length > 0 ? (
-                resources.map((resource) => (
+                resources.map((resource) => {
+                  const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
+                  
+                  return (
                   <div key={resource.id} className="px-8 py-5 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
-                    <div className="h-14 w-14 rounded-xl bg-gray-50 border border-gray-100 flex-shrink-0 overflow-hidden">
-                      {resource.thumbnail_url && <img src={getS3Url(resource.thumbnail_url)} className="h-full w-full object-cover" />}
+                    <div 
+                      className="h-14 w-14 rounded-xl bg-gray-50 border border-gray-100 flex-shrink-0 overflow-hidden relative"
+                      onMouseEnter={() => {
+                        if (isVideo) {
+                          setHoveredVideoId(resource.id)
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (isVideo) {
+                          setHoveredVideoId(null)
+                        }
+                      }}
+                    >
+                      {isVideo && (resource.preview_url || resource.file_url) ? (
+                        <>
+                          {/* Thumbnail - sempre visível quando não está em hover */}
+                          {resource.thumbnail_url ? (
+                            <Image
+                              src={getS3Url(resource.thumbnail_url)}
+                              alt={resource.title}
+                              width={56}
+                              height={56}
+                              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
+                              }`}
+                              unoptimized
+                            />
+                          ) : (
+                            <video
+                              src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=0.001'}
+                              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
+                              }`}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              onLoadedData={(e) => {
+                                e.currentTarget.currentTime = 0.001
+                                e.currentTarget.pause()
+                              }}
+                              onContextMenu={(e) => e.preventDefault()}
+                              onDragStart={(e) => e.preventDefault()}
+                              draggable={false}
+                            />
+                          )}
+                          {/* Vídeo - aparece apenas no hover */}
+                          <video
+                            src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=0.001'}
+                            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                              hoveredVideoId === resource.id ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                            }`}
+                            muted
+                            loop
+                            playsInline
+                            preload="none"
+                            controlsList="nodownload noplaybackrate nofullscreen"
+                            disablePictureInPicture
+                            disableRemotePlayback
+                            onContextMenu={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              return false
+                            }}
+                            onDragStart={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              return false
+                            }}
+                            style={{
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              pointerEvents: hoveredVideoId === resource.id ? 'auto' : 'none'
+                            }}
+                            ref={(video) => {
+                              if (video && hoveredVideoId === resource.id) {
+                                video.play().catch(() => {})
+                              } else if (video && hoveredVideoId !== resource.id) {
+                                video.pause()
+                                video.currentTime = 0
+                              }
+                            }}
+                          />
+                          {hoveredVideoId !== resource.id && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-20 pointer-events-none">
+                              <div className="bg-white/90 rounded-full p-1 shadow-lg">
+                                <Play className="h-3 w-3 text-gray-900 fill-gray-900 ml-0.5" />
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : resource.thumbnail_url ? (
+                        <Image
+                          src={getS3Url(resource.thumbnail_url)}
+                          alt={resource.title}
+                          width={56}
+                          height={56}
+                          className="h-full w-full object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-gray-300">
+                          <Files className="h-5 w-5" />
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate tracking-tight">{resource.title}</p>
@@ -146,7 +356,8 @@ export default function CreatorDashboardPage() {
                       <p className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Downloads</p>
                     </div>
                   </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="p-20 text-center">
                   <p className="text-gray-300 font-medium uppercase text-xs">Nenhum arquivo enviado</p>

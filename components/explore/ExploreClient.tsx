@@ -468,19 +468,36 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
               <p className="text-gray-600 text-sm font-medium">Buscando os melhores recursos...</p>
             </div>
           ) : resources.length > 0 ? (
-            <div className={cn(
-              "gap-6",
-              viewMode === 'grid' ? "columns-1 sm:columns-2 lg:columns-3 xl:columns-5 2xl:columns-6" : "flex flex-col"
-            )}>
-              {resources.map((resource) => (
-                <ResourceCard
-                  key={resource.id}
-                  resource={resource}
-                  onFavorite={handleFavorite}
-                  isFavorited={favorites.has(resource.id)}
-                />
-              ))}
-            </div>
+            <>
+              {/* Mobile: Grid 2 colunas */}
+              <div className={cn(
+                "gap-6 lg:hidden",
+                viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
+              )}>
+                {resources.map((resource) => (
+                  <ResourceCard
+                    key={resource.id}
+                    resource={resource}
+                    onFavorite={handleFavorite}
+                    isFavorited={favorites.has(resource.id)}
+                  />
+                ))}
+              </div>
+              {/* Desktop: Columns masonry */}
+              <div className={cn(
+                "gap-6 hidden lg:block",
+                viewMode === 'grid' ? "columns-3 xl:columns-5 2xl:columns-6" : "flex flex-col"
+              )}>
+                {resources.map((resource) => (
+                  <ResourceCard
+                    key={resource.id}
+                    resource={resource}
+                    onFavorite={handleFavorite}
+                    isFavorited={favorites.has(resource.id)}
+                  />
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-center py-32 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">
               <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm mb-4">

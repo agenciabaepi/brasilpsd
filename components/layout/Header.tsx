@@ -66,6 +66,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
 
   const menuItems = [
     { name: 'Home', href: '/' },
+    { name: 'Imagens', href: '/images' },
     { name: 'Coleções', href: '/collections' },
     ...categories
       .filter(c => !c.parent_id)

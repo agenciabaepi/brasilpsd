@@ -131,3 +131,7 @@ COMMENT ON TABLE public.collections IS 'Coleções de recursos criadas por criad
 COMMENT ON TABLE public.collection_resources IS 'Relacionamento entre coleções e recursos';
 COMMENT ON COLUMN public.collections.slug IS 'URL amigável da coleção, única por criador';
 
+
+
+
+

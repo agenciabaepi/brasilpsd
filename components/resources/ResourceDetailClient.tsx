@@ -19,7 +19,8 @@ import {
   Crown,
   UserPlus,
   Check,
-  Grid3x3
+  Grid3x3,
+  RefreshCw
 } from 'lucide-react'
 import type { Resource, Profile, Collection } from '@/types/database'
 import ResourceCard from '@/components/resources/ResourceCard'
@@ -43,6 +44,10 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
   const [downloading, setDownloading] = useState(false)
   const [user, setUser] = useState<Profile | null>(null)
   const [isFollowingCreator, setIsFollowingCreator] = useState(false)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const [isExtractingMetadata, setIsExtractingMetadata] = useState(false)
+  const [resourceData, setResourceData] = useState(resource)
   const supabase = createSupabaseClient()
 
   useEffect(() => {
@@ -69,11 +74,114 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
       }
     }
     loadUser()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.creator_id])
 
+  // Carregar signed URL para vídeo (sempre usar preview_url com marca d'água se disponível)
+  useEffect(() => {
+    async function loadVideoUrl() {
+      if (resource.resource_type === 'video') {
+        // Priorizar preview_url (com marca d'água) sobre file_url
+        const videoSourceUrl = resource.preview_url || resource.file_url
+        
+        if (!videoSourceUrl) return
+        
+        console.log('🎥 Loading video URL:', {
+          preview_url: resource.preview_url,
+          file_url: resource.file_url,
+          file_format: resource.file_format,
+          file_size: resource.file_size,
+          using_preview: !!resource.preview_url
+        })
+        
+        // SEMPRE usar signed URL para segurança (nunca URL direta)
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser()
+          if (authUser) {
+            console.log('✅ User authenticated, fetching signed URL...')
+            const response = await fetch('/api/video/url', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                fileUrl: videoSourceUrl,
+                resourceId: resource.id // Passar resourceId para validação
+              }),
+            })
+
+            if (response.ok) {
+              const data = await response.json()
+              console.log('✅ Signed URL received:', data.url?.substring(0, 100) + '...')
+              if (data.url) {
+                setVideoUrl(data.url)
+                return // Usar signed URL
+              }
+            } else {
+              const errorData = await response.json()
+              console.warn('⚠️ Failed to get signed URL:', errorData)
+              setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
+            }
+          } else {
+            console.log('ℹ️ User not authenticated')
+            setVideoError('Você precisa estar logado para visualizar o vídeo.')
+          }
+        } catch (error) {
+          console.error('❌ Error loading signed video URL:', error)
+          setVideoError('Erro ao carregar vídeo.')
+        }
+      }
+    }
+    loadVideoUrl()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource.resource_type, resource.preview_url, resource.file_url, supabase])
+
+  // Função para extrair metadados de vídeos antigos
+  async function handleExtractMetadata() {
+    if (!user) {
+      toast.error('Você precisa estar logado')
+      return
+    }
+
+    const isCreator = resourceData.creator_id === user.id
+    const isAdmin = user.is_admin || false
+
+    if (!isCreator && !isAdmin) {
+      toast.error('Apenas o criador ou administrador pode extrair metadados')
+      return
+    }
+
+    setIsExtractingMetadata(true)
+    try {
+      const response = await fetch(`/api/resources/${resourceData.id}/extract-metadata`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao extrair metadados')
+      }
+
+      // Atualizar dados do recurso
+      setResourceData(prev => ({
+        ...prev,
+        width: data.metadata.width,
+        height: data.metadata.height,
+        duration: data.metadata.duration || prev.duration,
+        frame_rate: data.metadata.frameRate || prev.frame_rate,
+      }))
+
+      toast.success('Metadados extraídos com sucesso!')
+    } catch (error: any) {
+      console.error('Error extracting metadata:', error)
+      toast.error(error.message || 'Erro ao extrair metadados')
+    } finally {
+      setIsExtractingMetadata(false)
+    }
+  }
+
   // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
-  const isOfficial = resource.is_official || isSystemProfileSync(resource.creator_id)
-  const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
+  const isOfficial = resourceData.is_official || isSystemProfileSync(resourceData.creator_id)
+  const authorName = isOfficial ? (resourceData.creator?.full_name || 'BrasilPSD') : (resourceData.creator?.full_name || 'BrasilPSD')
 
   async function handleFavorite() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -167,9 +275,177 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
         
         {/* COLUNA ESQUERDA */}
         <div className="lg:col-span-8 space-y-8">
-          {/* Preview Image */}
+          {/* Preview Image/Video */}
           <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center min-h-[400px] group relative shadow-sm">
-            {resource.thumbnail_url ? (
+            {resource.resource_type === 'video' && videoUrl ? (
+              <div 
+                className="w-full aspect-video bg-black flex items-center justify-center relative select-none"
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+                onDragStart={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return false
+                }}
+              >
+                {/* Overlay de proteção invisível - bloqueia interações indesejadas */}
+                <div 
+                  className="absolute inset-0 z-30"
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    return false
+                  }}
+                  style={{ 
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    MozUserSelect: 'none',
+                    msUserSelect: 'none'
+                  }}
+                />
+                <video
+                  key={videoUrl} // Force re-render when URL changes
+                  src={videoUrl + '#t=2'}
+                  controls
+                  className="w-full h-full max-h-[800px] object-contain relative z-20"
+                  preload="auto"
+                  crossOrigin="anonymous"
+                  playsInline
+                  muted={false}
+                  loop={false}
+                  controlsList="nodownload noplaybackrate nofullscreen"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  onAuxClick={(e) => {
+                    // Bloquear clique com botão do meio
+                    e.preventDefault()
+                    return false
+                  }}
+                  onDoubleClick={(e) => {
+                    // Bloquear double-click para fullscreen
+                    e.preventDefault()
+                    return false
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    return false
+                  }}
+                  onDragStart={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    return false
+                  }}
+                  style={{
+                    pointerEvents: 'auto',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none'
+                  }}
+                  onLoadStart={() => {
+                    console.log('🎬 Video load started:', {
+                      url: videoUrl?.substring(0, 100),
+                      format: resource.file_format,
+                      hasSignedUrl: !!videoUrl
+                    })
+                  }}
+                  onLoadedMetadata={(e) => {
+                    const video = e.currentTarget
+                    console.log('✅ Video metadata loaded:', {
+                      duration: video.duration,
+                      videoWidth: video.videoWidth,
+                      videoHeight: video.videoHeight,
+                      readyState: video.readyState,
+                      networkState: video.networkState
+                    })
+                  }}
+                  onCanPlay={() => {
+                    console.log('✅ Video can play')
+                  }}
+                  onCanPlayThrough={() => {
+                    console.log('✅ Video can play through')
+                  }}
+                  onError={(e) => {
+                    const video = e.currentTarget
+                    const error = video.error
+                    console.error('❌ Video load error:', {
+                      error: error,
+                      code: error?.code,
+                      message: error?.message,
+                      src: video.src?.substring(0, 100),
+                      networkState: video.networkState,
+                      readyState: video.readyState,
+                      format: resource.file_format
+                    })
+                    
+                    // Mensagens de erro específicas
+                    let errorMessage = 'Erro ao carregar vídeo'
+                    if (error?.code === 4) {
+                      errorMessage = `Formato ${resource.file_format?.toUpperCase()} não é suportado por este navegador. Tente usar Chrome ou Firefox.`
+                      setVideoError(errorMessage)
+                    } else if (error?.code === 2) {
+                      errorMessage = 'Erro de rede ao carregar vídeo. Verifique sua conexão.'
+                      setVideoError(errorMessage)
+                    } else if (error?.code === 3) {
+                      errorMessage = 'Erro ao decodificar vídeo. O arquivo pode estar corrompido.'
+                      setVideoError(errorMessage)
+                    } else {
+                      setVideoError(errorMessage)
+                    }
+                    
+                    // NÃO usar URL direta - sempre requerer signed URL para segurança
+                    console.error('❌ Video signed URL failed, not using direct URL for security')
+                    setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
+                  }}
+                  onWaiting={() => {
+                    console.log('⏳ Video waiting for data...')
+                  }}
+                  onStalled={() => {
+                    console.warn('⚠️ Video stalled')
+                  }}
+                >
+                  Seu navegador não suporta a tag de vídeo.
+                </video>
+                {!videoUrl && !videoError && (
+                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm bg-black/50">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                      <p>Carregando vídeo...</p>
+                    </div>
+                  </div>
+                )}
+                {videoError && (
+                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm bg-black/80 p-4">
+                    <div className="text-center max-w-md">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-400" />
+                      <p className="font-semibold mb-2">Erro ao carregar vídeo</p>
+                      <p className="text-xs text-gray-300 mb-4">{videoError}</p>
+                      <p className="text-xs text-gray-400">
+                        Formato: {resource.file_format?.toUpperCase() || 'Desconhecido'}
+                        {resource.file_format?.toLowerCase() === 'mov' && (
+                          <span className="block mt-2 text-yellow-400">
+                            💡 Dica: Arquivos MOV podem não funcionar em todos os navegadores. Tente baixar o arquivo diretamente.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : resource.preview_url ? (
+              // Usar preview_url (com marca d'água) se disponível, senão usar thumbnail_url
+              <Image
+                src={getS3Url(resource.preview_url)}
+                alt={resource.title}
+                width={1200}
+                height={800}
+                priority
+                className="max-w-full h-auto object-contain"
+              />
+            ) : resource.thumbnail_url ? (
               <Image
                 src={getS3Url(resource.thumbnail_url)}
                 alt={resource.title}
@@ -212,10 +488,31 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-16">
                 <div className="space-y-4">
-                  <InfoRow label="Formato do arquivo" value={resource.file_format?.toUpperCase()} />
-                  <InfoRow label="Tamanho" value={formatFileSize(resource.file_size)} />
-                  <InfoRow label="Licença" value={resource.is_premium ? 'Premium' : 'Gratuita'} />
-                  {resource.is_ai_generated && (
+                  <InfoRow label="Formato do arquivo" value={resourceData.file_format?.toUpperCase()} />
+                  <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                    <span className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Resolução:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-900">
+                        {resourceData.width && resourceData.height 
+                          ? `${resourceData.width} × ${resourceData.height}` 
+                          : 'N/A'
+                        }
+                      </span>
+                      {resourceData.resource_type === 'video' && (!resourceData.width || !resourceData.height) && user && (resourceData.creator_id === user.id || user.is_admin) && (
+                        <button
+                          onClick={handleExtractMetadata}
+                          disabled={isExtractingMetadata}
+                          className="text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Extrair resolução do vídeo"
+                        >
+                          <RefreshCw className={`h-3 w-3 ${isExtractingMetadata ? 'animate-spin' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <InfoRow label="Tamanho" value={formatFileSize(resourceData.file_size)} />
+                  <InfoRow label="Licença" value={resourceData.is_premium ? 'Premium' : 'Gratuita'} />
+                  {resourceData.is_ai_generated && (
                     <div className="flex items-center justify-between border-b border-gray-50 pb-2">
                       <span className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Origem:</span>
                       <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
@@ -227,10 +524,76 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                 </div>
                 <div className="space-y-4">
                   <InfoRow label="Extensão de download" value="zip" />
-                  <InfoRow label="Identificação" value={`#${resource.id.substring(0, 8)}`} />
+                  <InfoRow label="Identificação" value={`#${resourceData.id.substring(0, 8)}`} />
+                  {resourceData.resource_type === 'video' && resourceData.duration && (
+                    <InfoRow 
+                      label="Duração" 
+                      value={formatDuration(resourceData.duration)} 
+                    />
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* Atributos de Vídeo */}
+            {resourceData.resource_type === 'video' && (
+              <div className="pt-10 border-t border-gray-100">
+                <h2 className="text-xl font-semibold text-gray-900 tracking-tighter flex items-center mb-6">
+                  <span className="h-6 w-1.5 bg-primary-500 mr-3 rounded-full" />
+                  Atributos
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-16">
+                  <div className="space-y-4">
+                    {resourceData.frame_rate !== null && resourceData.frame_rate !== undefined && (
+                      <InfoRow 
+                        label="Taxa de Quadros" 
+                        value={`${Number(resourceData.frame_rate).toFixed(2)} fps`} 
+                      />
+                    )}
+                    {resourceData.video_encoding && (
+                      <InfoRow 
+                        label="Codec / Codificação" 
+                        value={resourceData.video_encoding} 
+                      />
+                    )}
+                    {resourceData.video_audio_codec && (
+                      <InfoRow 
+                        label="Codec de Áudio" 
+                        value={resourceData.video_audio_codec.toUpperCase()} 
+                      />
+                    )}
+                    {resourceData.video_color_space && (
+                      <InfoRow 
+                        label="Espaço de Cor" 
+                        value={resourceData.video_color_space.toUpperCase()} 
+                      />
+                    )}
+                    {resourceData.video_has_timecode && (
+                      <InfoRow 
+                        label="Timecode" 
+                        value="Sim" 
+                      />
+                    )}
+                    {resourceData.orientation && (
+                      <InfoRow 
+                        label="Orientação" 
+                        value={resourceData.orientation} 
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-4">
+                    <InfoRow 
+                      label="Canal Alfa" 
+                      value={resourceData.has_alpha_channel === true ? 'Sim' : 'Não'} 
+                    />
+                    <InfoRow 
+                      label="Com loop" 
+                      value={resourceData.has_loop === true ? 'Sim' : 'Não'} 
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="pt-10 border-t border-gray-100">
               <p className="text-gray-700 leading-relaxed text-base font-medium">
@@ -322,10 +685,10 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
             )}
 
             {/* Author Section */}
-            <div className="pt-8 border-t border-gray-100 flex items-center justify-between mt-8">
+            <div className="pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-8">
               {isOfficial || !resource.creator_id || isSystemProfileSync(resource.creator_id) ? (
-                <div className="flex items-center space-x-4">
-                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden">
+                <div className="flex items-center space-x-4 flex-shrink-0">
+                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
                     {resource.creator?.avatar_url ? (
                       <Image 
                         src={resource.creator.avatar_url} 
@@ -340,11 +703,11 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                       <User className="h-8 w-8 text-gray-700" />
                     )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-base font-bold text-gray-900">{authorName}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-base font-bold text-gray-900 truncate">{authorName}</p>
                       {isOfficial && (
-                        <Image src="/images/verificado.svg" alt="Oficial" width={14} height={14} />
+                        <Image src="/images/verificado.svg" alt="Oficial" width={14} height={14} className="flex-shrink-0" />
                       )}
                     </div>
                     <p className="text-xs text-gray-600 font-bold tracking-widest mt-0.5 uppercase">
@@ -355,9 +718,9 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
               ) : (
                 <Link 
                   href={`/creator/${resource.creator_id}`}
-                  className="flex items-center space-x-4 hover:opacity-80 transition-opacity"
+                  className="flex items-center space-x-4 hover:opacity-80 transition-opacity flex-shrink-0"
                 >
-                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden">
+                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
                     {resource.creator?.avatar_url ? (
                       <Image 
                         src={resource.creator.avatar_url} 
@@ -370,9 +733,9 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                       <User className="h-8 w-8 text-gray-700" />
                     )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-base font-bold text-gray-900">{authorName}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-base font-bold text-gray-900 truncate">{authorName}</p>
                     </div>
                     <p className="text-xs text-gray-600 font-bold tracking-widest mt-0.5 uppercase">
                       Criador Verificado
@@ -497,7 +860,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
             <p className="text-gray-600 mt-2">Outros recursos que podem interessar você</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {relatedResources.map((relatedResource) => (
               <ResourceCard
                 key={relatedResource.id}
@@ -527,4 +890,13 @@ function InfoRow({ label, value }: { label: string; value: any }) {
       <span className="text-sm font-semibold text-gray-900 tracking-tight">{value}</span>
     </div>
   )
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  if (mins > 0) {
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+  return `0:${secs.toString().padStart(2, '0')}`
 }
