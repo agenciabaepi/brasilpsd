@@ -75,7 +75,11 @@ function FooterSection({ title, children }: { title: string, children: React.Rea
 function FooterLink({ href, children }: { href: string, children: React.ReactNode }) {
   return (
     <li>
-      <Link href={href} className="text-base text-gray-500 hover:text-secondary-500 transition-colors">
+      <Link 
+        href={href} 
+        prefetch={false}
+        className="text-base text-gray-500 hover:text-secondary-500 transition-colors"
+      >
         {children}
       </Link>
     </li>
