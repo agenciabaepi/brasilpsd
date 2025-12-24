@@ -101,8 +101,9 @@ export default function CheckoutPage() {
           setPaymentConfirmed(true)
           
           // Aguardar um pouco para mostrar o confete, depois redirecionar
+          // Usar window.location.href para forçar reload completo e atualizar o Header
           setTimeout(() => {
-            router.push('/dashboard')
+            window.location.href = '/dashboard'
           }, 2000)
         } else if (isPaymentConfirmed && !data.premiumActivated) {
           // Se o pagamento está confirmado mas premiumActivated não foi true, tentar novamente

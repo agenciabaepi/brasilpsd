@@ -168,6 +168,52 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Recarregar assinatura quando o pathname mudar (especialmente após pagamento)
+  useEffect(() => {
+    const refreshSubscription = async () => {
+      if (!user?.id) return
+
+      try {
+        const { data: subscriptionData } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        // Atualizar apenas se mudou
+        if (subscriptionData?.id !== subscription?.id) {
+          setSubscription(subscriptionData)
+        }
+
+        // Também atualizar o perfil para pegar is_premium atualizado
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (profileData && profileData.is_premium !== user.is_premium) {
+          setUser(profileData)
+        }
+      } catch (error) {
+        console.error('Erro ao recarregar assinatura:', error)
+      }
+    }
+
+    // Recarregar quando o pathname mudar para dashboard ou account
+    if (pathname === '/dashboard' || pathname === '/account' || pathname.startsWith('/checkout')) {
+      // Aguardar um pouco para dar tempo do backend processar o pagamento
+      const timeout = setTimeout(() => {
+        refreshSubscription()
+      }, 1000)
+
+      return () => clearTimeout(timeout)
+    }
+  }, [pathname, user?.id, subscription?.id, supabase])
+
   async function handleSignOut() {
     if (isLoggingOut) return
     
