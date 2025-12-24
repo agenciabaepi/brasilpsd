@@ -3,6 +3,7 @@ import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { extractImageMetadata } from '@/lib/image/metadata'
 
 export const runtime = 'nodejs'
+export const maxDuration = 10 // 10 segundos para extração de metadados
 
 /**
  * Extrai metadados de uma imagem

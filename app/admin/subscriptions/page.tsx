@@ -22,7 +22,10 @@ import {
   QrCode,
   Barcode,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Plus,
+  Clock,
+  RefreshCw
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import { format } from 'date-fns'
@@ -42,6 +45,16 @@ export default function AdminSubscriptionsPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
   const [asaasConnected, setAsaasConnected] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [customers, setCustomers] = useState<any[]>([])
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [createFormData, setCreateFormData] = useState({
+    tier: 'pro',
+    billingType: 'PIX',
+    billingCycle: 'monthly'
+  })
+  const [creating, setCreating] = useState(false)
   const supabase = createSupabaseClient()
 
   const [stats, setStats] = useState({
@@ -55,17 +68,24 @@ export default function AdminSubscriptionsPage() {
     loadSubscriptions()
   }, [])
 
+  useEffect(() => {
+    if (showCreateModal) {
+      loadCustomers()
+    }
+  }, [showCreateModal])
+
   async function loadSubscriptions() {
     setLoading(true)
     try {
-      // Buscar usuários premium do nosso banco
-      const { data: premiumUsers, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('is_premium', true)
+      // Buscar assinaturas próprias do sistema
+      const { data: ownSubscriptions, error: ownSubError } = await supabase
+        .from('subscriptions')
+        .select('*, profiles(full_name, email)')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (ownSubError) {
+        console.warn('Erro ao buscar assinaturas próprias:', ownSubError)
+      }
 
       // Buscar assinaturas do Asaas via API
       let asaasSubscriptions: any[] = []
@@ -75,7 +95,6 @@ export default function AdminSubscriptionsPage() {
           const errorData = await res.json().catch(() => ({}))
           console.warn('Erro na resposta da API:', res.status, errorData)
           setAsaasConnected(false)
-          // Não lançar erro aqui, apenas continuar sem dados do Asaas
         } else {
           const asaasData = await res.json()
           if (asaasData.error) {
@@ -89,40 +108,86 @@ export default function AdminSubscriptionsPage() {
       } catch (err: any) {
         console.warn('Erro ao buscar assinaturas do Asaas:', err.message)
         setAsaasConnected(false)
-        // Não lançar erro, apenas continuar sem dados do Asaas
       }
 
-      // Combinar dados do nosso banco com dados do Asaas
-      const combined = premiumUsers?.map((user: any) => {
-        // Buscar assinatura do Asaas pelo customer_id
-        const asaasSub = asaasSubscriptions.find((s: any) => 
-          s.customer === user.asaas_customer_id || 
-          s.externalReference === user.subscription_tier
+      // Combinar assinaturas próprias com assinaturas do Asaas
+      const combined: any[] = []
+
+      // Adicionar assinaturas próprias
+      if (ownSubscriptions) {
+        ownSubscriptions.forEach((sub: any) => {
+          combined.push({
+            id: sub.id,
+            userId: sub.user_id,
+            userName: sub.profiles?.full_name || 'Sem nome',
+            userEmail: sub.profiles?.email || '',
+            tier: sub.tier,
+            status: sub.status === 'active' ? 'ACTIVE' : 
+                   sub.status === 'expired' ? 'EXPIRED' : 
+                   sub.status === 'canceled' ? 'CANCELED' : 'INACTIVE',
+            amount: sub.amount,
+            cycle: sub.billing_cycle === 'monthly' ? 'MONTHLY' : 'YEARLY',
+            billingType: sub.payment_method || 'PIX',
+            nextDueDate: sub.current_period_end,
+            createdAt: sub.created_at,
+            asaasId: null,
+            asaasCustomerId: sub.asaas_customer_id,
+            asaasData: null,
+            isOwnSubscription: true, // Marca como assinatura própria
+            autoRenew: sub.auto_renew
+          })
+        })
+      }
+
+      // Adicionar assinaturas do Asaas (apenas as que não têm correspondente próprio)
+      for (const asaasSub of asaasSubscriptions) {
+        const hasOwn = ownSubscriptions?.some((own: any) => 
+          own.asaas_customer_id === asaasSub.customer
         )
         
-        return {
-          id: user.id,
+        if (!hasOwn) {
+          // Buscar usuário pelo customer_id
+          const { data: user } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('asaas_customer_id', asaasSub.customer)
+            .single()
+
+          if (user) {
+            combined.push({
+              id: asaasSub.id,
           userId: user.id,
           userName: user.full_name || 'Sem nome',
           userEmail: user.email,
-          tier: user.subscription_tier || 'pro',
-          status: user.is_premium ? 'ACTIVE' : 'INACTIVE',
-          amount: asaasSub?.value || (user.subscription_tier === 'lite' ? 19.90 : user.subscription_tier === 'pro' ? 29.90 : 49.90),
-          cycle: asaasSub?.cycle || 'MONTHLY',
-          billingType: asaasSub?.billingType || 'CREDIT_CARD',
-          nextDueDate: asaasSub?.nextDueDate || null,
-          createdAt: user.created_at,
-          asaasId: asaasSub?.id || null,
-          asaasCustomerId: user.asaas_customer_id,
-          asaasData: asaasSub
+              tier: asaasSub.externalReference || 'pro',
+              status: asaasSub.status || 'ACTIVE',
+              amount: asaasSub.value,
+              cycle: asaasSub.cycle || 'MONTHLY',
+              billingType: asaasSub.billingType || 'CREDIT_CARD',
+              nextDueDate: asaasSub.nextDueDate || null,
+              createdAt: asaasSub.dateCreated || null,
+              asaasId: asaasSub.id,
+              asaasCustomerId: asaasSub.customer,
+              asaasData: asaasSub,
+              isOwnSubscription: false
+            })
+          }
         }
-      }) || []
+      }
 
       setSubscriptions(combined)
+
+      // Ordenar por data de criação (mais recentes primeiro)
+      combined.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime()
+        const dateB = new Date(b.createdAt || 0).getTime()
+        return dateB - dateA
+      })
 
       // Calcular estatísticas
       const active = combined.filter(s => s.status === 'ACTIVE').length
       const canceled = combined.filter(s => s.status === 'CANCELED').length
+      const expired = combined.filter(s => s.status === 'EXPIRED').length
       const mrr = combined
         .filter(s => s.status === 'ACTIVE')
         .reduce((sum, s) => sum + (s.amount || 0), 0)
@@ -131,6 +196,7 @@ export default function AdminSubscriptionsPage() {
         total: combined.length,
         active,
         canceled,
+        expired,
         mrr
       })
     } catch (error: any) {
@@ -236,6 +302,84 @@ export default function AdminSubscriptionsPage() {
     }
   }
 
+  async function loadCustomers() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, is_premium, subscription_tier')
+        .order('full_name', { ascending: true })
+        .order('email', { ascending: true })
+
+      if (error) throw error
+      setCustomers(data || [])
+    } catch (error: any) {
+      console.error('Erro ao carregar clientes:', error)
+      toast.error('Erro ao carregar clientes')
+    }
+  }
+
+  async function handleCreateSubscription() {
+    if (!selectedCustomer) {
+      toast.error('Selecione um cliente')
+      return
+    }
+
+    if (selectedCustomer.is_premium) {
+      toast.error('Este cliente já possui uma assinatura ativa')
+      return
+    }
+
+    setCreating(true)
+    try {
+      const res = await fetch('/api/admin/subscriptions/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedCustomer.id,
+          tier: createFormData.tier,
+          billingType: createFormData.billingType,
+          billingCycle: createFormData.billingCycle
+        })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        // Tratar erro específico de configuração do Asaas
+        if (data.code === 'ASAAS_NOT_CONFIGURED') {
+          toast.error(
+            'Asaas não configurado. Configure a variável ASAAS_API_KEY no arquivo .env.local',
+            { duration: 6000 }
+          )
+        } else {
+          throw new Error(data.error || 'Erro ao criar assinatura')
+        }
+        return
+      }
+
+      toast.success('Assinatura criada com sucesso!')
+      setShowCreateModal(false)
+      setSelectedCustomer(null)
+      setCustomerSearch('')
+      setCreateFormData({ tier: 'pro', billingType: 'PIX', billingCycle: 'monthly' })
+      await loadSubscriptions()
+    } catch (error: any) {
+      console.error('Erro ao criar assinatura:', error)
+      toast.error(error.message || 'Erro ao criar assinatura')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const filteredCustomers = customers.filter(customer => {
+    if (!customerSearch) return true
+    const search = customerSearch.toLowerCase()
+    return (
+      customer.email?.toLowerCase().includes(search) ||
+      customer.full_name?.toLowerCase().includes(search)
+    )
+  })
+
   const filteredSubscriptions = subscriptions.filter(sub => {
     const matchesSearch = searchQuery === '' || 
       sub.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -336,9 +480,38 @@ export default function AdminSubscriptionsPage() {
               </select>
             </div>
           </div>
-          <Button onClick={loadSubscriptions} className="px-6 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-xl">
-            Atualizar
-          </Button>
+          <div className="flex items-center space-x-3">
+            <Button 
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/admin/subscriptions/check-expired')
+                  const data = await res.json()
+                  if (res.ok) {
+                    toast.success(`Processadas ${data.processed} assinaturas. ${data.blocked} bloqueadas, ${data.renewed} renovadas.`)
+                    loadSubscriptions()
+                  } else {
+                    toast.error(data.error || 'Erro ao verificar assinaturas vencidas')
+                  }
+                } catch (error: any) {
+                  toast.error('Erro ao verificar assinaturas vencidas')
+                }
+              }}
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl flex items-center space-x-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Verificar Vencidas</span>
+            </Button>
+            <Button 
+              onClick={() => setShowCreateModal(true)}
+              className="px-6 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold rounded-xl flex items-center space-x-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Criar Assinatura</span>
+            </Button>
+            <Button onClick={loadSubscriptions} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl">
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         {/* Table */}
@@ -385,9 +558,16 @@ export default function AdminSubscriptionsPage() {
                   </td>
                   <td className="px-8 py-5">
                     {sub.nextDueDate ? (
+                        <div className="flex flex-col">
                       <span className="text-xs font-semibold text-gray-600">
                         {format(new Date(sub.nextDueDate), 'dd/MM/yyyy', { locale: ptBR })}
                       </span>
+                          {sub.isOwnSubscription && (
+                            <span className="text-[9px] text-gray-400 mt-0.5">
+                              {sub.autoRenew ? 'Renovação automática' : 'Sem renovação'}
+                            </span>
+                          )}
+                        </div>
                     ) : (
                       <span className="text-[10px] text-gray-400">N/A</span>
                     )}
@@ -502,6 +682,199 @@ export default function AdminSubscriptionsPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Subscription Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] p-10 max-w-2xl w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => {
+                setShowCreateModal(false)
+                setSelectedCustomer(null)
+                setCustomerSearch('')
+              }} 
+              className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">Criar Nova Assinatura</h2>
+            
+            <div className="space-y-6">
+              {/* Customer Search */}
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                  Selecionar Cliente
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por nome ou e-mail..."
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/10"
+                  />
+                </div>
+                
+                {/* Customer List */}
+                <div className="mt-3 max-h-60 overflow-y-auto border border-gray-100 rounded-xl">
+                  {filteredCustomers.map((customer) => (
+                    <button
+                      key={customer.id}
+                      onClick={() => setSelectedCustomer(customer)}
+                      className={cn(
+                        "w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0",
+                        selectedCustomer?.id === customer.id && "bg-primary-50 border-primary-200"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {customer.full_name || 'Sem nome'}
+                          </p>
+                          <p className="text-xs text-gray-400">{customer.email}</p>
+                        </div>
+                        {customer.is_premium && (
+                          <span className="text-[9px] font-black px-2 py-1 bg-orange-100 text-orange-700 rounded-md uppercase">
+                            Premium
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  {filteredCustomers.length === 0 && (
+                    <div className="px-4 py-8 text-center text-gray-400 text-sm">
+                      Nenhum cliente encontrado
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Customer Info */}
+              {selectedCustomer && (
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                    Cliente Selecionado
+                  </p>
+                  <p className="text-sm font-bold text-gray-900">{selectedCustomer.full_name || 'Sem nome'}</p>
+                  <p className="text-xs text-gray-400">{selectedCustomer.email}</p>
+                </div>
+              )}
+
+              {/* Tier Selection */}
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                  Plano
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { id: 'lite', name: 'Lite', price: createFormData.billingCycle === 'monthly' ? '19,90' : '16,90' },
+                    { id: 'pro', name: 'Pro', price: createFormData.billingCycle === 'monthly' ? '29,90' : '24,90' },
+                    { id: 'plus', name: 'Plus', price: createFormData.billingCycle === 'monthly' ? '49,90' : '39,90' }
+                  ].map((tier) => (
+                    <button
+                      key={tier.id}
+                      onClick={() => setCreateFormData({ ...createFormData, tier: tier.id })}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all text-left",
+                        createFormData.tier === tier.id
+                          ? "border-primary-500 bg-primary-50"
+                          : "border-gray-100 hover:border-gray-200"
+                      )}
+                    >
+                      <p className="text-xs font-bold text-gray-900 uppercase mb-1">{tier.name}</p>
+                      <p className="text-sm font-bold text-gray-600">R$ {tier.price}/mês</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Billing Cycle */}
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                  Ciclo de Cobrança
+                </label>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setCreateFormData({ ...createFormData, billingCycle: 'monthly' })}
+                    className={cn(
+                      "flex-1 px-4 py-3 rounded-xl border-2 transition-all text-sm font-semibold",
+                      createFormData.billingCycle === 'monthly'
+                        ? "border-primary-500 bg-primary-50 text-primary-700"
+                        : "border-gray-100 text-gray-600 hover:border-gray-200"
+                    )}
+                  >
+                    Mensal
+                  </button>
+                  <button
+                    onClick={() => setCreateFormData({ ...createFormData, billingCycle: 'yearly' })}
+                    className={cn(
+                      "flex-1 px-4 py-3 rounded-xl border-2 transition-all text-sm font-semibold",
+                      createFormData.billingCycle === 'yearly'
+                        ? "border-primary-500 bg-primary-50 text-primary-700"
+                        : "border-gray-100 text-gray-600 hover:border-gray-200"
+                    )}
+                  >
+                    Anual
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                  Método de Pagamento
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'PIX', name: 'PIX', icon: QrCode },
+                    { id: 'BOLETO', name: 'Boleto', icon: Barcode }
+                  ].map((method) => (
+                    <button
+                      key={method.id}
+                      onClick={() => setCreateFormData({ ...createFormData, billingType: method.id })}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all flex items-center space-x-3",
+                        createFormData.billingType === method.id
+                          ? "border-primary-500 bg-primary-50"
+                          : "border-gray-100 hover:border-gray-200"
+                      )}
+                    >
+                      <method.icon className={cn(
+                        "h-5 w-5",
+                        createFormData.billingType === method.id ? "text-primary-600" : "text-gray-400"
+                      )} />
+                      <span className="text-sm font-semibold text-gray-900">{method.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center space-x-3 pt-4">
+                <Button
+                  onClick={handleCreateSubscription}
+                  disabled={!selectedCustomer || creating || selectedCustomer?.is_premium}
+                  className="flex-1 px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creating ? 'Criando...' : 'Criar Assinatura'}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowCreateModal(false)
+                    setSelectedCustomer(null)
+                    setCustomerSearch('')
+                  }}
+                  className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl"
+                >
+                  Cancelar
+                </Button>
+              </div>
             </div>
           </div>
         </div>

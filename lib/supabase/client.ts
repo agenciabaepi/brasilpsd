@@ -1,9 +1,6 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
-// Cache do cliente para evitar recriações
-let cachedClient: ReturnType<typeof createClientComponentClient> | null = null
-
+// Cliente para componentes do cliente (browser)
 export const createSupabaseClient = () => {
   // Verificar se as variáveis de ambiente estão configuradas
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -16,16 +13,13 @@ export const createSupabaseClient = () => {
     )
   }
   
-  // Retornar cliente em cache se existir (mas createClientComponentClient já gerencia isso)
-  // Apenas garantir que não há erro
-  try {
-    return createClientComponentClient()
-  } catch (error) {
-    console.error('Error creating Supabase client:', error)
-    throw error
-  }
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
+// Cliente admin (service role) - apenas para operações administrativas
 export const createSupabaseAdmin = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -34,6 +28,9 @@ export const createSupabaseAdmin = () => {
     throw new Error('Missing Supabase environment variables')
   }
 
+  // Importar dinamicamente para evitar problemas de SSR
+  const { createClient } = require('@supabase/supabase-js')
+  
   return createClient(supabaseUrl, supabaseKey, {
     auth: {
       autoRefreshToken: false,
@@ -41,4 +38,3 @@ export const createSupabaseAdmin = () => {
     },
   })
 }
-

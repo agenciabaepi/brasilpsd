@@ -27,22 +27,51 @@ export async function POST(
 
     const { asaasId } = await request.json()
 
-    if (!asaasId) {
-      return NextResponse.json({ error: 'ID da assinatura Asaas não fornecido' }, { status: 400 })
+    // Buscar a assinatura no banco de dados
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (subError || !subscription) {
+      return NextResponse.json({ error: 'Assinatura não encontrada' }, { status: 404 })
     }
 
-    // Reativar no Asaas
-    await asaas.reactivateSubscription(asaasId)
+    // Se tiver asaasId, tentar reativar no Asaas (pode ser null para assinaturas próprias)
+    if (asaasId) {
+      try {
+        await asaas.reactivateSubscription(asaasId)
+      } catch (error: any) {
+        // Se falhar no Asaas, continuar mesmo assim para atualizar no nosso banco
+        console.warn('Erro ao reativar no Asaas (continuando mesmo assim):', error.message)
+      }
+    }
 
-    // Buscar dados da assinatura para atualizar o tier
-    const subscription = await asaas.getSubscription(asaasId)
-    const tier = subscription.externalReference || 'pro'
+    // Atualizar assinatura no nosso banco
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        status: 'active',
+        canceled_at: null,
+        expires_at: null,
+        auto_renew: true
+      })
+      .eq('id', id)
 
-    // Atualizar no nosso banco
+    if (updateError) {
+      console.error('Erro ao atualizar assinatura:', updateError)
+      return NextResponse.json({ error: 'Erro ao atualizar assinatura no banco' }, { status: 500 })
+    }
+
+    // Atualizar perfil do usuário
     await supabase
       .from('profiles')
-      .update({ is_premium: true, subscription_tier: tier })
-      .eq('id', id)
+      .update({ 
+        is_premium: true, 
+        subscription_tier: subscription.tier 
+      })
+      .eq('id', subscription.user_id)
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

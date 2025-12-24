@@ -1,6 +1,8 @@
 export type UserRole = 'user' | 'creator' | 'admin'
 export type ResourceType = 'image' | 'video' | 'font' | 'psd' | 'ai' | 'audio' | 'other'
 export type ResourceStatus = 'pending' | 'approved' | 'rejected'
+export type SubscriptionStatus = 'active' | 'expired' | 'canceled' | 'suspended'
+export type BillingCycle = 'monthly' | 'yearly'
 
 export interface Profile {
   id: string
@@ -13,6 +15,17 @@ export interface Profile {
   is_admin: boolean
   is_premium: boolean
   subscription_tier: string
+  // Dados pessoais
+  cpf_cnpj: string | null
+  phone: string | null
+  birth_date: string | null
+  // Endereço
+  postal_code: string | null
+  city: string | null
+  state: string | null
+  address: string | null
+  address_number: string | null
+  neighborhood: string | null
   created_at: string
   updated_at: string
 }
@@ -139,5 +152,27 @@ export interface CollectionResource {
   // Relations
   resource?: Resource
   collection?: Collection
+}
+
+export interface Subscription {
+  id: string
+  user_id: string
+  tier: 'lite' | 'pro' | 'plus'
+  status: SubscriptionStatus
+  amount: number
+  billing_cycle: BillingCycle
+  start_date: string
+  current_period_start: string
+  current_period_end: string // Data de vencimento
+  canceled_at: string | null
+  expires_at: string | null
+  last_payment_id: string | null
+  asaas_customer_id: string | null
+  payment_method: string | null
+  auto_renew: boolean
+  created_at: string
+  updated_at: string
+  // Relations
+  user?: Profile
 }
 

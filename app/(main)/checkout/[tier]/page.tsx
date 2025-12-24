@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { CreditCard, QrCode, Barcode, Check, X, Copy, ShieldCheck, ArrowLeft, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import Link from 'next/link'
@@ -12,11 +12,14 @@ type Method = 'CREDIT_CARD' | 'PIX' | 'BOLETO'
 export default function CheckoutPage() {
   const { tier } = useParams()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const cycle = searchParams.get('cycle') || 'monthly'
   
   const [method, setMethod] = useState<Method>('CREDIT_CARD')
   const [loading, setLoading] = useState(false)
   const [paymentResult, setPaymentResult] = useState<any>(null)
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const [card, setCard] = useState({
     holderName: '',
@@ -27,12 +30,107 @@ export default function CheckoutPage() {
   })
 
   const planInfo: any = {
-    lite: { name: 'Premium Lite', price: cycle === 'monthly' ? 19.90 : 16.90 },
-    pro: { name: 'Premium Pro', price: cycle === 'monthly' ? 29.90 : 24.90 },
-    plus: { name: 'Premium Plus', price: cycle === 'monthly' ? 49.90 : 39.90 },
+    lite: { name: 'Premium Lite', price: 5.00 },
+    pro: { name: 'Premium Pro', price: 5.00 },
+    plus: { name: 'Premium Plus', price: 5.00 },
   }
 
   const currentPlan = planInfo[tier as string] || planInfo.pro
+
+  // Função para iniciar polling automático do pagamento
+  function startPaymentPolling(paymentId: string) {
+    // Limpar qualquer polling anterior
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+
+    // Verificar a cada 3 segundos
+    let attempts = 0
+    const maxAttempts = 200 // Máximo de 10 minutos (200 * 3s)
+    
+    pollingIntervalRef.current = setInterval(async () => {
+      attempts++
+      
+      // Limitar tentativas para evitar polling infinito
+      if (attempts > maxAttempts) {
+        console.warn('⏱️ Polling atingiu limite de tentativas')
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        return
+      }
+
+      try {
+        console.log(`🔍 Verificando pagamento ${paymentId} (tentativa ${attempts})...`)
+        
+        const res = await fetch('/api/finance/check-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId })
+        })
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          console.warn(`⚠️ Erro na verificação (${res.status}):`, errorData.error || 'Erro desconhecido')
+          return
+        }
+        
+        const data = await res.json()
+        
+        console.log(`📊 Status do pagamento:`, {
+          success: data.success,
+          premiumActivated: data.premiumActivated,
+          status: data.payment?.status,
+          message: data.message
+        })
+        
+        // Verificar se o pagamento foi confirmado/recebido
+        const isPaymentConfirmed = data.payment?.status === 'CONFIRMED' || data.payment?.status === 'RECEIVED'
+        
+        if (data.success && (data.premiumActivated || isPaymentConfirmed)) {
+          console.log('✅ Pagamento confirmado! Parando polling e ativando confete...')
+          
+          // Parar o polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current)
+            pollingIntervalRef.current = null
+          }
+          
+          // Marcar como confirmado e mostrar confete
+          setPaymentConfirmed(true)
+          
+          // Aguardar um pouco para mostrar o confete, depois redirecionar
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 2000)
+        } else if (isPaymentConfirmed && !data.premiumActivated) {
+          // Se o pagamento está confirmado mas premiumActivated não foi true, tentar novamente
+          console.log('⚠️ Pagamento confirmado mas premiumActivated não foi true, tentando novamente...')
+        }
+      } catch (error: any) {
+        console.error('❌ Erro ao verificar pagamento:', error.message || error)
+        // Não parar o polling por causa de erros de rede, continuar tentando
+      }
+    }, 3000) // Verificar a cada 3 segundos
+  }
+
+  // Limpar polling quando o componente desmontar ou quando o modal fechar
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
+  // Limpar polling quando fechar o modal
+  useEffect(() => {
+    if (!paymentResult && pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+  }, [paymentResult])
 
   async function handlePayment() {
     setLoading(true)
@@ -70,6 +168,16 @@ export default function CheckoutPage() {
         window.location.href = '/dashboard'
       } else {
         setPaymentResult(data)
+        // Iniciar verificação automática do pagamento
+        // O ID do pagamento pode vir em paymentId ou id
+        const paymentId = data.paymentId || data.id
+        if (paymentId) {
+          console.log('🔄 Iniciando polling para pagamento:', paymentId)
+          startPaymentPolling(paymentId)
+        } else {
+          console.error('❌ ID do pagamento não encontrado na resposta:', data)
+          toast.error('Erro: ID do pagamento não encontrado')
+        }
       }
     } catch (e: any) {
       toast.error(e.message)
@@ -196,8 +304,23 @@ export default function CheckoutPage() {
         {paymentResult && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl relative text-center space-y-6 animate-in zoom-in fade-in duration-300">
+              {!paymentConfirmed && (
               <button onClick={() => setPaymentResult(null)} className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button>
+              )}
               
+              {paymentConfirmed ? (
+                <>
+                  {/* Efeito de Confete */}
+                  <Confetti />
+                  
+                  <div className="h-16 w-16 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto animate-bounce">
+                    <Check className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900">Pagamento Confirmado!</h3>
+                  <p className="text-gray-600 font-medium">Redirecionando para o dashboard...</p>
+                </>
+              ) : (
+                <>
               <div className="h-16 w-16 bg-primary-50 text-primary-500 rounded-3xl flex items-center justify-center mx-auto">
                 {method === 'PIX' ? <QrCode className="h-8 w-8" /> : <Barcode className="h-8 w-8" />}
               </div>
@@ -211,14 +334,24 @@ export default function CheckoutPage() {
                   <button onClick={() => {navigator.clipboard.writeText(paymentResult.copyPaste); toast.success('Copiado!')}} className="w-full h-14 bg-gray-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2">
                     <Copy className="h-4 w-4" /><span>Copiar Código PIX</span>
                   </button>
+                      <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500"></div>
+                        <span className="font-medium">Aguardando confirmação do pagamento...</span>
+                      </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <p className="text-gray-500 text-sm font-medium">Seu boleto foi gerado. Clique abaixo para ver o boleto e pagar.</p>
                   <a href={paymentResult.bankSlipUrl} target="_blank" className="block w-full h-14 bg-gray-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center">Visualizar Boleto</a>
+                      <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500"></div>
+                        <span className="font-medium">Aguardando confirmação do pagamento...</span>
+                      </div>
                 </div>
               )}
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">O acesso será liberado assim que o pagamento for confirmado.</p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -234,5 +367,67 @@ function MethodBtn({ active, onClick, icon: Icon, label }: any) {
       <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
     </button>
   )
+}
+
+// Componente de Confete
+function Confetti() {
+  useEffect(() => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE']
+    const confettiCount = 150
+    
+    const confettiElements: HTMLElement[] = []
+    
+    for (let i = 0; i < confettiCount; i++) {
+      const confetti = document.createElement('div')
+      const color = colors[Math.floor(Math.random() * colors.length)]
+      const size = Math.random() * 10 + 5
+      const startX = Math.random() * window.innerWidth
+      const startY = -10
+      const endY = window.innerHeight + 10
+      const rotation = Math.random() * 360
+      const duration = Math.random() * 2 + 2
+      const delay = Math.random() * 0.5
+      
+      confetti.style.position = 'fixed'
+      confetti.style.left = `${startX}px`
+      confetti.style.top = `${startY}px`
+      confetti.style.width = `${size}px`
+      confetti.style.height = `${size}px`
+      confetti.style.backgroundColor = color
+      confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0'
+      confetti.style.pointerEvents = 'none'
+      confetti.style.zIndex = '9999'
+      confetti.style.opacity = '0.9'
+      
+      document.body.appendChild(confetti)
+      confettiElements.push(confetti)
+      
+      // Animar o confete
+      requestAnimationFrame(() => {
+        confetti.style.transition = `all ${duration}s ease-out ${delay}s`
+        confetti.style.transform = `translateY(${endY}px) rotate(${rotation + 360}deg)`
+        confetti.style.opacity = '0'
+      })
+    }
+    
+    // Remover confetes após a animação
+    setTimeout(() => {
+      confettiElements.forEach(confetti => {
+        if (confetti.parentNode) {
+          confetti.parentNode.removeChild(confetti)
+        }
+      })
+    }, 5000)
+    
+    return () => {
+      confettiElements.forEach(confetti => {
+        if (confetti.parentNode) {
+          confetti.parentNode.removeChild(confetti)
+        }
+      })
+    }
+  }, [])
+  
+  return null
 }
 

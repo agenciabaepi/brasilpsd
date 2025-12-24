@@ -29,8 +29,8 @@ export default function LoginPage() {
       if (error) throw error
 
       toast.success('Login realizado com sucesso!')
-      router.push('/dashboard')
-      router.refresh()
+      // Usar window.location para garantir que a sessão seja reconhecida
+      window.location.href = '/dashboard'
     } catch (error: any) {
       toast.error(error.message || 'Erro ao fazer login')
     } finally {

@@ -47,8 +47,8 @@ export default function AdminSidebar() {
       if (error) throw error
       
       toast.success('Logout realizado com sucesso')
-      router.push('/')
-      router.refresh()
+      // Usar window.location para garantir limpeza completa do estado
+      window.location.href = '/'
     } catch (error: any) {
       console.error('Erro ao fazer logout:', error)
       toast.error('Erro ao fazer logout. Tente novamente.')

@@ -1,11 +1,33 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+  let response = NextResponse.next({
+    request: {
+      headers: req.headers,
+    },
+  })
 
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            req.cookies.set(name, value)
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+
+  // Atualizar a sessão se necessário
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -13,7 +35,9 @@ export async function middleware(req: NextRequest) {
   // Protect admin routes
   if (req.nextUrl.pathname.startsWith('/admin')) {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', req.url))
+      const url = req.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
     }
 
     const { data: profile } = await supabase
@@ -23,13 +47,13 @@ export async function middleware(req: NextRequest) {
       .single()
 
     if (!profile?.is_admin) {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
+      const url = req.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
     }
   }
 
   // Protect creator dashboard routes (but allow public creator profiles)
-  // Public profile route: /creator/[id] (handled by (main) route group)
-  // Protected routes: /creator (dashboard), /creator/upload, /creator/resources, etc.
   const creatorPath = req.nextUrl.pathname
   
   // Check if this is exactly /creator (dashboard) or starts with a protected sub-route
@@ -44,13 +68,15 @@ export async function middleware(req: NextRequest) {
   // If it's NOT a protected route (i.e., it's a public profile like /creator/[uuid]), allow access
   if (creatorPath.startsWith('/creator') && !isProtectedRoute) {
     // This is a public creator profile - allow access without authentication
-    return res
+    return response
   }
   
   // Otherwise, protect creator dashboard routes
   if (isProtectedRoute) {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', req.url))
+      const url = req.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
     }
 
     const { data: profile } = await supabase
@@ -60,7 +86,9 @@ export async function middleware(req: NextRequest) {
       .single()
 
     if (!profile?.is_creator && !profile?.is_admin) {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
+      const url = req.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
     }
   }
 
@@ -68,11 +96,13 @@ export async function middleware(req: NextRequest) {
   if (req.nextUrl.pathname.startsWith('/dashboard') || 
       req.nextUrl.pathname.startsWith('/favorites')) {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', req.url))
+      const url = req.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
     }
   }
 
-  return res
+  return response
 }
 
 export const config = {
@@ -84,4 +114,3 @@ export const config = {
     '/collections/:path*',
   ],
 }
-

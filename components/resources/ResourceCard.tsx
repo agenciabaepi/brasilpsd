@@ -25,7 +25,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
 
   return (
-    <Link href={`/resources/${resource.id}`} className="break-inside-avoid mb-6 block group">
+    <Link href={`/resources/${resource.id}`} className="break-inside-avoid mb-3 block group">
       <div className="relative overflow-hidden rounded-2xl bg-gray-100 transition-all border border-gray-50 hover:border-primary-100 shadow-sm hover:shadow-md transition-all duration-300">
         {/* Image/Video Container */}
         <div 

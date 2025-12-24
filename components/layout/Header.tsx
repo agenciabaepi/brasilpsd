@@ -18,6 +18,7 @@ interface HeaderProps {
 export default function Header({ initialUser, initialCategories = [] }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [user, setUser] = useState<Profile | null>(initialUser || null)
+  const [subscription, setSubscription] = useState<any>(null)
   const [categories, setCategories] = useState<any[]>(initialCategories)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pathname = usePathname()
@@ -25,21 +26,71 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
   const supabase = createSupabaseClient()
 
   useEffect(() => {
-    // Sincroniza o estado do usuário se a sessão mudar no cliente
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-        setUser(profile)
-      } else {
-        setUser(null)
-      }
-    })
+    let mounted = true
+    let authSubscription: { unsubscribe: () => void } | null = null
 
-    return () => subscription.unsubscribe()
+    // Sincroniza o estado do usuário se a sessão mudar no cliente
+    const setupAuthListener = async () => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return
+
+        if (session?.user) {
+          const [profileResult, subscriptionResult] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single(),
+            supabase
+              .from('subscriptions')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          ])
+          
+          if (mounted) {
+            setUser(profileResult.data)
+            setSubscription(subscriptionResult.data)
+          }
+        } else {
+          if (mounted) {
+            setUser(null)
+            setSubscription(null)
+          }
+        }
+      })
+      
+      authSubscription = subscription
+    }
+
+    setupAuthListener()
+
+    // Carregar assinatura inicial se usuário já estiver logado (apenas uma vez)
+    if (initialUser) {
+      supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', initialUser.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (mounted) {
+            setSubscription(data)
+          }
+        })
+    }
+
+    return () => {
+      mounted = false
+      if (authSubscription) {
+        authSubscription.unsubscribe()
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -53,8 +104,8 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
       
       setUser(null)
       toast.success('Logout realizado com sucesso')
-      router.push('/')
-      router.refresh()
+      // Usar window.location para garantir limpeza completa do estado
+      window.location.href = '/'
     } catch (error: any) {
       console.error('Erro ao fazer logout:', error)
       toast.error('Erro ao fazer logout. Tente novamente.')
@@ -65,18 +116,20 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
   const isActive = (path: string) => pathname === path
 
   const menuItems = [
-    { name: 'Home', href: '/' },
-    { name: 'Imagens', href: '/images' },
-    { name: 'Coleções', href: '/collections' },
+    { id: 'home', name: 'Home', href: '/' },
+    { id: 'images', name: 'Imagens', href: '/images' },
+    { id: 'collections', name: 'Coleções', href: '/collections' },
     ...categories
       .filter(c => !c.parent_id)
       .map(parent => ({
+        id: `category-${parent.id}`,
         name: parent.name,
         href: `/categories/${parent.slug}`,
         hasDropdown: categories.some(c => c.parent_id === parent.id),
         subItems: categories
           .filter(c => c.parent_id === parent.id)
           .map(sub => ({
+            id: `subcategory-${sub.id}`,
             name: sub.name,
             href: `/categories/${sub.slug}`
           }))
@@ -100,12 +153,22 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                 <Moon className="h-5 w-5" />
               </button>
 
+              {user?.is_premium && subscription ? (
+                <Link 
+                  href="/premium" 
+                  className="hidden md:flex items-center space-x-2 text-base font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+                >
+                  <Crown className="h-4 w-4" />
+                  <span>Premium {subscription.tier.toUpperCase()}</span>
+                </Link>
+              ) : (
               <Link 
                 href="/premium" 
                 className="hidden md:flex text-base font-semibold text-orange-500 hover:text-orange-600 transition-colors"
               >
                 Assine o premium
               </Link>
+              )}
 
               <div className="flex items-center space-x-3">
                 {user ? (
@@ -167,7 +230,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
           <div className="flex h-12 items-center justify-between">
             <nav className="flex items-center space-x-6">
               {menuItems.map((item) => (
-                <div key={item.name} className="relative group">
+                <div key={item.id || item.name} className="relative group">
                   <Link
                     href={item.href}
                     className={`flex items-center text-base font-medium transition-colors py-4 ${
@@ -182,7 +245,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                     <div className="absolute left-0 top-full hidden group-hover:block w-48 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                       {'subItems' in item && item.subItems?.map((sub: any) => (
                         <Link
-                          key={sub.name}
+                          key={sub.id || sub.name}
                           href={sub.href}
                           className="block px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-secondary-600 transition-colors"
                         >
@@ -201,6 +264,16 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
       {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white py-4 px-4 space-y-4 max-h-[calc(100vh-64px)] overflow-y-auto">
+          {user?.is_premium && subscription ? (
+            <Link 
+              href="/premium" 
+              className="block text-center font-semibold text-primary-600 py-2 bg-primary-50 rounded-lg mb-4 flex items-center justify-center space-x-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Crown className="h-4 w-4" />
+              <span>Premium {subscription.tier.toUpperCase()}</span>
+            </Link>
+          ) : (
           <Link 
             href="/premium" 
             className="block text-center font-semibold text-orange-500 py-2 bg-orange-50 rounded-lg mb-4"
@@ -208,6 +281,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
           >
             Assine o premium
           </Link>
+          )}
           
           {/* User actions mobile */}
           {user ? (
@@ -260,7 +334,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
           
           <nav className="space-y-2">
             {menuItems.map((item) => (
-              <div key={item.name}>
+              <div key={item.id || item.name}>
                 <Link
                   href={item.href}
                   className={`block py-2 px-2 text-base font-semibold rounded-lg ${
@@ -276,7 +350,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
                   <div className="ml-4 mt-1 space-y-1">
                     {item.subItems.map((sub: any) => (
                       <Link
-                        key={sub.name}
+                        key={sub.id || sub.name}
                         href={sub.href}
                         className={`block py-1.5 px-2 text-sm rounded-lg ${
                           isActive(sub.href)

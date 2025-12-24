@@ -1,13 +1,7 @@
 import type { Metadata } from 'next'
-import { Titillium_Web } from 'next/font/google'
+import './fonts.css'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
-
-const titillium = Titillium_Web({ 
-  subsets: ['latin'],
-  weight: ['200', '300', '400', '600', '700', '900'],
-  variable: '--font-titillium',
-})
 
 export const metadata: Metadata = {
   title: 'BrasilPSD - Recursos Digitais Premium',
@@ -20,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" className={titillium.variable}>
+    <html lang="pt-BR">
       <body className="antialiased">
         {children}
         <Toaster 

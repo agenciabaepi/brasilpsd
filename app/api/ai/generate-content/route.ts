@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
+export const maxDuration = 30 // 30 segundos para análise pela IA
 
 /**
  * Gera título e descrição usando ChatGPT a partir dos metadados da imagem
@@ -253,20 +254,43 @@ Responda APENAS no formato JSON válido:
       messagesCount: messages.length
     })
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000, // Aumentar para garantir resposta completa
-        response_format: { type: "json_object" } // Forçar formato JSON
+    // Criar AbortController para timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25000) // 25 segundos timeout
+
+    let response
+    try {
+      response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1000, // Aumentar para garantir resposta completa
+          response_format: { type: "json_object" } // Forçar formato JSON
+        }),
+        signal: controller.signal
       })
-    })
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+      if (error.name === 'AbortError') {
+        console.error('⏱️ Timeout na chamada da API OpenAI (25s)')
+        // Fallback: gerar título do nome do arquivo
+        return NextResponse.json({
+          title: extractTitleFromFileName(fileName),
+          description: generateDescriptionFromMetadata(metadata),
+          keywords: [],
+          category_id: null
+        })
+      }
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }))

@@ -15,6 +15,8 @@ export default function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    phone: '',
+    cpf_cnpj: '',
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -47,6 +49,30 @@ export default function SignupPage() {
       })
 
       if (error) throw error
+
+      // Atualizar perfil com dados adicionais (se fornecidos)
+      if (data.user) {
+        const updateData: any = {
+          full_name: formData.fullName,
+        }
+        
+        if (formData.phone) {
+          updateData.phone = formData.phone.replace(/\D/g, '')
+        }
+        
+        if (formData.cpf_cnpj) {
+          updateData.cpf_cnpj = formData.cpf_cnpj.replace(/\D/g, '')
+        }
+
+        await supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', data.user.id)
+          .catch(err => {
+            // Ignorar erro se perfil ainda não foi criado pelo trigger
+            console.log('Perfil será criado pelo trigger')
+          })
+      }
 
       toast.success('Conta criada com sucesso! Verifique seu email.')
       router.push('/login')
@@ -82,6 +108,24 @@ export default function SignupPage() {
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             required
+          />
+
+          <Input
+            type="tel"
+            label="Telefone (opcional)"
+            placeholder="(00) 00000-0000"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
+            maxLength={15}
+          />
+
+          <Input
+            type="text"
+            label="CPF/CNPJ (opcional)"
+            placeholder="000.000.000-00"
+            value={formData.cpf_cnpj}
+            onChange={(e) => setFormData({ ...formData, cpf_cnpj: e.target.value.replace(/\D/g, '') })}
+            maxLength={18}
           />
 
           <Input

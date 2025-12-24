@@ -1,18 +1,102 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, Crown, Zap, Star } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Check, Crown, Zap, Star, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import Link from 'next/link'
+import { createSupabaseClient } from '@/lib/supabase/client'
+import toast from 'react-hot-toast'
 
 export default function PremiumPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
+  const [user, setUser] = useState<any>(null)
+  const [subscription, setSubscription] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [changingPlan, setChangingPlan] = useState<string | null>(null)
+  const router = useRouter()
+  const supabase = createSupabaseClient()
+
+  useEffect(() => {
+    loadUserData()
+  }, [])
+
+  async function loadUserData() {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      const [profileResult, subscriptionResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single(),
+        supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ])
+
+      setUser(profileResult.data)
+      setSubscription(subscriptionResult.data)
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleChangePlan(newTier: string) {
+    if (!subscription) {
+      // Se não tem assinatura, apenas redirecionar para checkout
+      router.push(`/checkout/${newTier}?cycle=${billingCycle}`)
+      return
+    }
+
+    if (subscription.tier === newTier) {
+      toast.error('Você já possui este plano ativo')
+      return
+    }
+
+    if (!confirm(`Tem certeza que deseja trocar de ${subscription.tier.toUpperCase()} para ${newTier.toUpperCase()}?\n\nSua assinatura atual será cancelada e você precisará realizar um novo pagamento.`)) {
+      return
+    }
+
+    setChangingPlan(newTier)
+    try {
+      const res = await fetch('/api/finance/change-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newTier, billingCycle })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao trocar plano')
+      }
+
+      toast.success('Plano alterado! Realize o pagamento para ativar.')
+      
+      // Redirecionar para checkout com o novo plano
+      router.push(`/checkout/${newTier}?cycle=${billingCycle}`)
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao trocar plano')
+    } finally {
+      setChangingPlan(null)
+    }
+  }
 
   const plans = [
     {
       id: 'lite',
       name: 'Premium Lite',
-      price: billingCycle === 'monthly' ? '19,90' : '16,90',
+      price: '5,00', // Valor mínimo do Asaas para testes
       description: 'Até 5 downloads por dia',
       icon: Zap,
       color: 'secondary',
@@ -21,7 +105,7 @@ export default function PremiumPage() {
     {
       id: 'pro',
       name: 'Premium Pro',
-      price: billingCycle === 'monthly' ? '29,90' : '24,90',
+      price: '5,00', // Valor mínimo do Asaas para testes
       description: 'Até 10 downloads por dia',
       icon: Crown,
       color: 'primary',
@@ -31,7 +115,7 @@ export default function PremiumPage() {
     {
       id: 'plus',
       name: 'Premium Plus',
-      price: billingCycle === 'monthly' ? '49,90' : '39,90',
+      price: '5,00', // Valor mínimo do Asaas para testes
       description: 'Até 20 downloads por dia',
       icon: Star,
       color: 'secondary',
@@ -39,12 +123,32 @@ export default function PremiumPage() {
     }
   ]
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-gray-50/50 min-h-screen py-20 px-4">
       <div className="container mx-auto max-w-7xl text-center">
         <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-6">
-          Escolha seu plano <span className="text-primary-500">Premium</span>
+          {subscription ? 'Gerenciar seu plano' : 'Escolha seu plano'} <span className="text-primary-500">Premium</span>
         </h1>
+        
+        {subscription && (
+          <div className="mb-8 inline-block bg-white rounded-2xl px-6 py-4 border border-gray-100 shadow-sm">
+            <p className="text-sm text-gray-600 mb-1">Plano Atual</p>
+            <p className="text-lg font-bold text-gray-900">
+              Premium {subscription.tier.toUpperCase()}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Válido até {new Date(subscription.current_period_end).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+        )}
         
         {/* Seletor de Ciclo */}
         <div className="flex items-center justify-center space-x-4 mb-16">
@@ -73,11 +177,36 @@ export default function PremiumPage() {
                   ))}
                 </div>
               </div>
-              <Link href={`/checkout/${plan.id}?cycle=${billingCycle}`} className="mt-10">
-                <button className={cn("w-full h-14 rounded-2xl font-semibold text-xs uppercase tracking-widest transition-all", plan.color === 'primary' ? "bg-primary-600 hover:bg-primary-700 text-white" : "bg-secondary-600 hover:bg-secondary-700 text-white")}>
-                  Assinar Agora
+              <div className="mt-10">
+                {subscription && subscription.tier === plan.id ? (
+                  <button 
+                    disabled
+                    className="w-full h-14 rounded-2xl font-semibold text-xs uppercase tracking-widest bg-gray-200 text-gray-500 cursor-not-allowed"
+                  >
+                    Plano Atual
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleChangePlan(plan.id)}
+                    disabled={changingPlan === plan.id}
+                    className={cn(
+                      "w-full h-14 rounded-2xl font-semibold text-xs uppercase tracking-widest transition-all disabled:opacity-50",
+                      plan.color === 'primary' ? "bg-primary-600 hover:bg-primary-700 text-white" : "bg-secondary-600 hover:bg-secondary-700 text-white"
+                    )}
+                  >
+                    {changingPlan === plan.id ? (
+                      <span className="flex items-center justify-center space-x-2">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>Trocando...</span>
+                      </span>
+                    ) : subscription ? (
+                      'Trocar para este plano'
+                    ) : (
+                      'Assinar Agora'
+                    )}
                 </button>
-              </Link>
+                )}
+              </div>
             </div>
           ))}
         </div>

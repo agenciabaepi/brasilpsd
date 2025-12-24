@@ -27,18 +27,51 @@ export async function POST(
 
     const { asaasId } = await request.json()
 
-    if (!asaasId) {
-      return NextResponse.json({ error: 'ID da assinatura Asaas não fornecido' }, { status: 400 })
+    // Buscar a assinatura no banco de dados
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (subError || !subscription) {
+      return NextResponse.json({ error: 'Assinatura não encontrada' }, { status: 404 })
     }
 
-    // Cancelar no Asaas
-    await asaas.cancelSubscription(asaasId)
+    // Se tiver asaasId, tentar cancelar no Asaas (pode ser null para assinaturas próprias)
+    if (asaasId) {
+      try {
+        await asaas.cancelSubscription(asaasId)
+      } catch (error: any) {
+        // Se falhar no Asaas, continuar mesmo assim para atualizar no nosso banco
+        console.warn('Erro ao cancelar no Asaas (continuando mesmo assim):', error.message)
+      }
+    }
 
-    // Atualizar no nosso banco
+    // Atualizar assinatura no nosso banco
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        status: 'canceled',
+        canceled_at: new Date().toISOString(),
+        expires_at: new Date().toISOString(),
+        auto_renew: false
+      })
+      .eq('id', id)
+
+    if (updateError) {
+      console.error('Erro ao atualizar assinatura:', updateError)
+      return NextResponse.json({ error: 'Erro ao atualizar assinatura no banco' }, { status: 500 })
+    }
+
+    // Atualizar perfil do usuário
     await supabase
       .from('profiles')
-      .update({ is_premium: false, subscription_tier: 'free' })
-      .eq('id', id)
+      .update({ 
+        is_premium: false, 
+        subscription_tier: null 
+      })
+      .eq('id', subscription.user_id)
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

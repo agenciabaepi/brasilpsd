@@ -20,7 +20,7 @@ export default async function HomePage() {
     .eq('status', 'approved')
     .eq('is_official', true)
     .order('created_at', { ascending: false })
-    .limit(15)
+    .limit(50)
 
   // 2. Exclusivos (Mais baixados ou Premium)
   const { data: popularResources } = await supabase
@@ -29,7 +29,7 @@ export default async function HomePage() {
     .eq('status', 'approved')
     .eq('is_premium', true)
     .order('download_count', { ascending: false })
-    .limit(15)
+    .limit(50)
 
   // 3. Novos (Comunidade)
   const { data: latestResources } = await supabase
@@ -37,7 +37,7 @@ export default async function HomePage() {
     .select('*, creator:profiles!creator_id(*)')
     .eq('status', 'approved')
     .order('created_at', { ascending: false })
-    .limit(15)
+    .limit(50)
 
   // 4. Grátis
   const { data: freeResources } = await supabase
@@ -46,7 +46,7 @@ export default async function HomePage() {
     .eq('status', 'approved')
     .eq('is_premium', false)
     .order('created_at', { ascending: false })
-    .limit(15)
+    .limit(50)
 
   // 5. Coleções (com últimos 4 recursos)
   const { data: collections } = await supabase

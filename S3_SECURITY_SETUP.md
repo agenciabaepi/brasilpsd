@@ -47,3 +47,4 @@ Se você já tem arquivos públicos no bucket, eles continuarão acessíveis at�
 1. Remova as políticas públicas
 2. Ou mova os arquivos para um novo bucket privado
 
+

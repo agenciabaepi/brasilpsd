@@ -28,9 +28,9 @@ export default function DashboardClient({ user, downloads, favorites, stats }: D
             </h1>
             <p className="text-gray-600">Bem-vindo ao seu painel pessoal</p>
           </div>
-          <Link href="/settings">
+          <Link href="/account">
             <button className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold">
-              Configurações
+              Minha Conta
             </button>
           </Link>
         </div>

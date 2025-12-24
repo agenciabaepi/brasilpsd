@@ -24,3 +24,4 @@ export default async function ImagesPage() {
   return <ImagesClient initialResources={initialResources || []} categories={categories || []} />
 }
 
+

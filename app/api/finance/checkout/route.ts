@@ -13,11 +13,11 @@ export async function POST(request: NextRequest) {
 
     const { tier, method, billingCycle, creditCard, creditCardHolderInfo } = await request.json()
 
-    // 1. Configuração de Preços e Ciclos
+    // 1. Configuração de Preços e Ciclos (valores mínimos para testes - mínimo do Asaas é R$ 5,00)
     const prices: Record<string, any> = {
-      'lite': { monthly: 19.90, yearly: 16.90 * 12 },
-      'pro': { monthly: 29.90, yearly: 24.90 * 12 },
-      'plus': { monthly: 49.90, yearly: 39.90 * 12 }
+      'lite': { monthly: 5.00, yearly: 5.00 },
+      'pro': { monthly: 5.00, yearly: 5.00 },
+      'plus': { monthly: 5.00, yearly: 5.00 }
     }
 
     const tierData = prices[tier.toLowerCase()]
@@ -28,44 +28,157 @@ export async function POST(request: NextRequest) {
 
     // 2. Obter/Criar Cliente no Asaas
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    
+    if (!profile?.cpf_cnpj) {
+      return NextResponse.json({ 
+        error: 'CPF/CNPJ é obrigatório para realizar pagamentos. Por favor, complete seu cadastro na página de configurações.' 
+      }, { status: 400 })
+    }
+    
     let asaasCustomerId = profile?.asaas_customer_id
     
     if (!asaasCustomerId) {
       asaasCustomerId = await asaas.getOrCreateCustomer({
         id: user.id,
         email: user.email!,
-        full_name: profile?.full_name || 'Usuário BrasilPSD'
+        full_name: profile?.full_name || 'Usuário BrasilPSD',
+        cpf_cnpj: profile.cpf_cnpj
       })
       // Salvar o ID do cliente no nosso banco
       await supabase
         .from('profiles')
         .update({ asaas_customer_id: asaasCustomerId })
         .eq('id', user.id)
+    } else {
+      // Se cliente já existe, atualizar CPF se necessário
+      try {
+        await asaas.getOrCreateCustomer({
+          id: user.id,
+          email: user.email!,
+          full_name: profile?.full_name || 'Usuário BrasilPSD',
+          cpf_cnpj: profile.cpf_cnpj
+        })
+      } catch (error: any) {
+        console.warn('Erro ao atualizar cliente Asaas:', error.message)
+      }
     }
 
-    // 3. Criar Assinatura no Asaas
-    const subscriptionData = await asaas.createSubscription({
+    // 3. Criar Assinatura ou Pagamento no Asaas
+    let paymentData: any
+
+    if (method === 'CREDIT_CARD') {
+      // Para cartão de crédito, criar assinatura recorrente
+      paymentData = await asaas.createSubscription({
       customerId: asaasCustomerId,
       amount,
       tier,
-      billingType: method, // 'PIX', 'BOLETO' ou 'CREDIT_CARD'
+        billingType: method,
       cycle: asaasCycle,
       creditCard,
       creditCardHolderInfo
     })
 
-    // 4. Registrar na nossa tabela de Transações (referente à primeira parcela)
+      // Registrar transação como paga (cartão é aprovado imediatamente)
     await supabase.from('transactions').insert({
+        id: paymentData.id,
+        user_id: user.id,
+        subscription_tier: tier,
+        amount_brute: amount,
+        amount_liquid: amount, 
+        payment_method: `asaas_${method.toLowerCase()}`,
+        status: 'paid'
+      })
+
+      // Ativar premium imediatamente para cartão
+      await supabase
+        .from('profiles')
+        .update({
+          is_premium: true,
+          subscription_tier: tier.toLowerCase()
+        })
+        .eq('id', user.id)
+
+      return NextResponse.json(paymentData)
+    } else {
+      // Para PIX e BOLETO, criar pagamento único (não assinatura)
+      // Formato do externalReference: tier_userId para facilitar identificação
+      paymentData = await asaas.createPayment({
+        customerId: asaasCustomerId,
+        amount,
+        billingType: method,
+        description: `Assinatura BrasilPSD - Plano ${tier.toUpperCase()} (${billingCycle === 'monthly' ? 'Mensal' : 'Anual'})`,
+        externalReference: `${tier}_${user.id}` // Formato: tier_userId
+      })
+
+      // O ID do pagamento pode vir em paymentId ou id
+      const paymentId = paymentData.paymentId || paymentData.id
+      
+      if (!paymentId) {
+        console.error('❌ ID do pagamento não encontrado na resposta:', JSON.stringify(paymentData, null, 2))
+        throw new Error('ID do pagamento não retornado pelo Asaas')
+      }
+
+      console.log(`📝 Criando transação pendente para pagamento ${paymentId}`)
+      console.log(`📊 Dados do pagamento:`, {
+        paymentId,
+        userId: user.id,
+        tier,
+        amount,
+        method
+      })
+
+      // Registrar transação como pendente no banco de dados
+      // A assinatura será criada apenas quando o pagamento for confirmado
+      const { data: insertedTransaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          id: paymentId,
       user_id: user.id,
       subscription_tier: tier,
       amount_brute: amount,
       amount_liquid: amount, 
       payment_method: `asaas_${method.toLowerCase()}`,
-      status: 'pending',
-      id: method === 'CREDIT_CARD' ? subscriptionData.id : subscriptionData.paymentId
+          status: 'pending'
+        })
+        .select()
+        .single()
+
+      if (transactionError) {
+        console.error('❌ Erro ao criar transação:', {
+          error: transactionError,
+          code: transactionError.code,
+          message: transactionError.message,
+          details: transactionError.details,
+          hint: transactionError.hint
+        })
+        
+        // Se o erro for de duplicação, a transação já existe (ok)
+        if (transactionError.code === '23505') {
+          console.log(`⚠️ Transação ${paymentId} já existe no banco, continuando...`)
+        } else {
+          // Para outros erros, lançar exceção para não continuar sem transação
+          throw new Error(`Erro ao criar transação: ${transactionError.message}`)
+        }
+      } else {
+        console.log(`✅ Transação ${paymentId} criada como pendente:`, insertedTransaction)
+      }
+
+      // Retornar dados do pagamento com QR Code ou Boleto
+      // Garantir que o paymentId está no retorno para o frontend
+      const responseData = {
+        ...paymentData,
+        paymentId: paymentId, // Garantir que paymentId está presente
+        id: paymentId // Também incluir id para compatibilidade
+      }
+      
+      console.log(`✅ Checkout concluído. Retornando dados do pagamento:`, {
+        paymentId,
+        hasQrCode: !!paymentData.qrCode,
+        hasBankSlipUrl: !!paymentData.bankSlipUrl
     })
 
-    return NextResponse.json(subscriptionData)
+      return NextResponse.json(responseData)
+    }
 
   } catch (error: any) {
     console.error('Checkout Error:', error)
