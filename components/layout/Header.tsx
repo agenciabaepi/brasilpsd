@@ -31,13 +31,74 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
     let isUpdating = false
     let lastUserId: string | null = null
 
+    // Verificar sessão imediatamente ao montar (para evitar flash)
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (!mounted) return
+
+        // Se temos initialUser do servidor, usar ele e carregar assinatura
+        if (initialUser && initialUser.id) {
+          setUser(initialUser)
+          
+          // Carregar assinatura imediatamente
+          const { data: subscriptionData } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('user_id', initialUser.id)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          
+          if (mounted) {
+            setSubscription(subscriptionData)
+          }
+        } else if (session?.user) {
+          // Se não temos initialUser mas temos sessão no cliente, buscar dados
+          const [profileResult, subscriptionResult] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single(),
+            supabase
+              .from('subscriptions')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          ])
+          
+          if (mounted) {
+            setUser(profileResult.data)
+            setSubscription(subscriptionResult.data)
+          }
+        } else if (!session && user) {
+          // Se não há sessão mas temos usuário, limpar
+          if (mounted) {
+            setUser(null)
+            setSubscription(null)
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao verificar sessão inicial:', error)
+      }
+    }
+
+    checkInitialSession()
+
     // Sincroniza o estado do usuário se a sessão mudar no cliente
     const setupAuthListener = async () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted || isUpdating) return
         
-        // Ignorar eventos de token refresh e signed_in inicial se já temos o usuário
+        // Ignorar eventos de token refresh
         if (event === 'TOKEN_REFRESHED') return
+        // Ignorar signed_in inicial se já temos o usuário correto
         if (event === 'SIGNED_IN' && user?.id === session?.user?.id) return
 
         // Evitar atualizações duplicadas para o mesmo usuário
@@ -89,26 +150,6 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
     }
 
     setupAuthListener()
-
-    // Carregar assinatura inicial se usuário já estiver logado (apenas uma vez)
-    if (initialUser && !subscription && initialUser.id) {
-      supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', initialUser.id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (mounted) {
-            setSubscription(data)
-          }
-        })
-        .catch(() => {
-          // Silenciar erros
-        })
-    }
 
     return () => {
       mounted = false
