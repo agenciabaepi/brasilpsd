@@ -15,10 +15,10 @@ interface HeaderProps {
   initialCategories?: any[]
 }
 
-export default function Header({ initialUser, initialCategories = [] }: HeaderProps) {
+export default function Header({ initialUser, initialSubscription, initialCategories = [] }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [user, setUser] = useState<Profile | null>(initialUser || null)
-  const [subscription, setSubscription] = useState<any>(null)
+  const [subscription, setSubscription] = useState<any>(initialSubscription || null)
   const [categories, setCategories] = useState<any[]>(initialCategories)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pathname = usePathname()
@@ -38,22 +38,29 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
         
         if (!mounted) return
 
-        // Se temos initialUser do servidor, usar ele e carregar assinatura
+        // Se temos initialUser do servidor, usar ele e assinatura
         if (initialUser && initialUser.id) {
           setUser(initialUser)
           
-          // Carregar assinatura imediatamente
-          const { data: subscriptionData } = await supabase
-            .from('subscriptions')
-            .select('*')
-            .eq('user_id', initialUser.id)
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          
-          if (mounted) {
-            setSubscription(subscriptionData)
+          // Se já temos initialSubscription, usar ela, senão carregar
+          if (initialSubscription) {
+            if (mounted) {
+              setSubscription(initialSubscription)
+            }
+          } else {
+            // Carregar assinatura imediatamente se não foi passada
+            const { data: subscriptionData } = await supabase
+              .from('subscriptions')
+              .select('*')
+              .eq('user_id', initialUser.id)
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            
+            if (mounted) {
+              setSubscription(subscriptionData)
+            }
           }
         } else if (session?.user) {
           // Se não temos initialUser mas temos sessão no cliente, buscar dados

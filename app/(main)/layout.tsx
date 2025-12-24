@@ -16,13 +16,27 @@ export default async function MainLayout({
   const { data: { session } } = await supabase.auth.getSession()
   
   let profile = null
+  let initialSubscription = null
+  
   if (session?.user) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single()
-    profile = data
+    const [profileResult, subscriptionResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single(),
+      supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ])
+    
+    profile = profileResult.data
+    initialSubscription = subscriptionResult.data
   }
 
   // Busca categorias para o menu
@@ -34,7 +48,11 @@ export default async function MainLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header initialUser={profile} initialCategories={categories || []} />
+      <Header 
+        initialUser={profile} 
+        initialSubscription={initialSubscription}
+        initialCategories={categories || []} 
+      />
       <main className="flex-1">
         {children}
       </main>
