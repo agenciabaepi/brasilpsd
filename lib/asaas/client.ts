@@ -211,13 +211,18 @@ export const asaas = {
     // Formatar resposta para manter compatibilidade com o frontend
     if (billingType === 'PIX') {
       try {
+        // Aguardar um pouco antes de buscar o QR Code (pode levar alguns segundos para gerar)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
         const qrCode = await this.fetch(`/payments/${payment.id}/pixQrCode`)
         
         console.log('QR Code response from Asaas:', {
           hasEncodedImage: !!qrCode.encodedImage,
           hasPayload: !!qrCode.payload,
           hasCopyPaste: !!qrCode.copyPaste,
-          keys: Object.keys(qrCode)
+          keys: Object.keys(qrCode),
+          paymentId: payment.id,
+          paymentStatus: payment.status
         })
         
         // O Asaas retorna encodedImage que pode já incluir o prefixo data:image ou ser apenas base64
@@ -228,23 +233,39 @@ export const asaas = {
           qrCodeImage = `data:image/png;base64,${qrCodeImage}`
         }
         
-        // Garantir que temos o payload (código copiável)
-        const pixPayload = qrCode.payload || qrCode.copyPaste || qrCode.pixCopiaECola
+        // Garantir que temos o payload (código copiável) - ESSENCIAL para pagamentos PIX
+        const pixPayload = qrCode.payload || qrCode.copyPaste || qrCode.pixCopiaECola || qrCode.pixCopyPaste
         
         if (!pixPayload) {
-          console.warn('⚠️ Payload PIX não encontrado na resposta do Asaas')
+          console.error('❌ Payload PIX não encontrado na resposta do Asaas. Estrutura completa:', JSON.stringify(qrCode, null, 2))
+          // Mesmo sem payload, retornar o QR code se existir, pois o usuário ainda pode tentar escanear
+          console.warn('⚠️ Continuando sem payload PIX. QR Code pode não funcionar corretamente.')
+        }
+        
+        if (!qrCodeImage && !pixPayload) {
+          throw new Error('QR Code PIX não foi gerado corretamente. Verifique se a conta Asaas tem chave PIX cadastrada.')
         }
         
         return {
           paymentId: payment.id,
           subscriptionId: null, // Não é assinatura
-          qrCode: qrCodeImage,
-          copyPaste: pixPayload,
+          qrCode: qrCodeImage || null,
+          copyPaste: pixPayload || null,
           invoiceUrl: payment.invoiceUrl,
           ...payment
         }
       } catch (error: any) {
-        console.error('Erro ao buscar QR Code PIX:', error)
+        console.error('❌ Erro ao buscar QR Code PIX:', {
+          error: error.message,
+          paymentId: payment.id,
+          stack: error.stack
+        })
+        
+        // Se o erro mencionar que não há chave PIX ou QR Code inválido, dar mensagem mais clara
+        if (error.message?.includes('QR126E') || error.message?.includes('QR Code') || error.message?.includes('invalid')) {
+          throw new Error('QR Code PIX inválido. Verifique se a conta Asaas tem uma chave PIX cadastrada. Se estiver usando sandbox, certifique-se de que a chave PIX está configurada corretamente.')
+        }
+        
         throw new Error(`Erro ao gerar QR Code PIX: ${error.message || 'QR Code não disponível'}`)
       }
     }
