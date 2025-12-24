@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 
 interface HeaderProps {
   initialUser?: Profile | null
+  initialSubscription?: any
   initialCategories?: any[]
 }
 
