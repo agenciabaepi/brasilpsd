@@ -6,6 +6,9 @@ import { Toaster } from 'react-hot-toast'
 export const metadata: Metadata = {
   title: 'BrasilPSD - Recursos Digitais Premium',
   description: 'Baixe imagens, vídeos, fontes, PSD, AI e muito mais. Recursos digitais de alta qualidade para seus projetos.',
+  icons: {
+    icon: '/images/logopreto.png',
+  },
 }
 
 export default function RootLayout({
