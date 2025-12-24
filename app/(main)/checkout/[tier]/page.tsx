@@ -328,16 +328,45 @@ export default function CheckoutPage() {
               
               {method === 'PIX' ? (
                 <div className="space-y-6">
-                  <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 inline-block mx-auto">
-                    <img src={`data:image/png;base64,${paymentResult.qrCode}`} alt="QR Code" className="w-48 h-48" />
+                  {paymentResult.qrCode ? (
+                    <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 inline-block mx-auto">
+                      <img 
+                        src={paymentResult.qrCode.startsWith('data:') ? paymentResult.qrCode : `data:image/png;base64,${paymentResult.qrCode}`} 
+                        alt="QR Code PIX" 
+                        className="w-48 h-48"
+                        onError={(e) => {
+                          console.error('Erro ao carregar QR Code:', e)
+                          toast.error('Erro ao exibir QR Code. Use o código copiável abaixo.')
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100 text-center">
+                      <p className="text-sm text-gray-500">QR Code não disponível</p>
+                    </div>
+                  )}
+                  {paymentResult.copyPaste && (
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(paymentResult.copyPaste)
+                        toast.success('Código PIX copiado!')
+                      }} 
+                      className="w-full h-14 bg-gray-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      <span>Copiar Código PIX</span>
+                    </button>
+                  )}
+                  {paymentResult.copyPaste && (
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <p className="text-xs text-gray-500 mb-1">Código PIX (copie e cole no app do banco):</p>
+                      <p className="text-xs font-mono text-gray-700 break-all">{paymentResult.copyPaste}</p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500"></div>
+                    <span className="font-medium">Aguardando confirmação do pagamento...</span>
                   </div>
-                  <button onClick={() => {navigator.clipboard.writeText(paymentResult.copyPaste); toast.success('Copiado!')}} className="w-full h-14 bg-gray-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2">
-                    <Copy className="h-4 w-4" /><span>Copiar Código PIX</span>
-                  </button>
-                      <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500"></div>
-                        <span className="font-medium">Aguardando confirmação do pagamento...</span>
-                      </div>
                 </div>
               ) : (
                 <div className="space-y-4">

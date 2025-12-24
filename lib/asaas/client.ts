@@ -210,14 +210,42 @@ export const asaas = {
 
     // Formatar resposta para manter compatibilidade com o frontend
     if (billingType === 'PIX') {
-      const qrCode = await this.fetch(`/payments/${payment.id}/pixQrCode`)
-      return {
-        paymentId: payment.id,
-        subscriptionId: null, // Não é assinatura
-        qrCode: qrCode.encodedImage,
-        copyPaste: qrCode.payload,
-        invoiceUrl: payment.invoiceUrl,
-        ...payment
+      try {
+        const qrCode = await this.fetch(`/payments/${payment.id}/pixQrCode`)
+        
+        console.log('QR Code response from Asaas:', {
+          hasEncodedImage: !!qrCode.encodedImage,
+          hasPayload: !!qrCode.payload,
+          hasCopyPaste: !!qrCode.copyPaste,
+          keys: Object.keys(qrCode)
+        })
+        
+        // O Asaas retorna encodedImage que pode já incluir o prefixo data:image ou ser apenas base64
+        let qrCodeImage = qrCode.encodedImage || qrCode.base64Image || qrCode.qrCode
+        
+        // Se não começar com data:, adicionar o prefixo
+        if (qrCodeImage && !qrCodeImage.startsWith('data:')) {
+          qrCodeImage = `data:image/png;base64,${qrCodeImage}`
+        }
+        
+        // Garantir que temos o payload (código copiável)
+        const pixPayload = qrCode.payload || qrCode.copyPaste || qrCode.pixCopiaECola
+        
+        if (!pixPayload) {
+          console.warn('⚠️ Payload PIX não encontrado na resposta do Asaas')
+        }
+        
+        return {
+          paymentId: payment.id,
+          subscriptionId: null, // Não é assinatura
+          qrCode: qrCodeImage,
+          copyPaste: pixPayload,
+          invoiceUrl: payment.invoiceUrl,
+          ...payment
+        }
+      } catch (error: any) {
+        console.error('Erro ao buscar QR Code PIX:', error)
+        throw new Error(`Erro ao gerar QR Code PIX: ${error.message || 'QR Code não disponível'}`)
       }
     }
 
