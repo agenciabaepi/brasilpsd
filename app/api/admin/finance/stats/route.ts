@@ -66,7 +66,13 @@ export async function GET(request: NextRequest) {
       transactionsCount: transactions.length,
       paymentsResponseType: Array.isArray(paymentsResponse) ? 'array' : typeof paymentsResponse,
       subscriptionsResponseType: Array.isArray(subscriptionsResponse) ? 'array' : typeof subscriptionsResponse,
-      paymentsResponseKeys: paymentsResponse && typeof paymentsResponse === 'object' ? Object.keys(paymentsResponse) : 'N/A'
+      paymentsResponseKeys: paymentsResponse && typeof paymentsResponse === 'object' ? Object.keys(paymentsResponse) : 'N/A',
+      samplePayment: payments.length > 0 ? {
+        id: payments[0].id,
+        status: payments[0].status,
+        value: payments[0].value,
+        description: payments[0].description
+      } : null
     })
 
     // Calcular estatísticas de pagamentos
@@ -84,17 +90,25 @@ export async function GET(request: NextRequest) {
     // Exemplo: R$ 5,00 (cobrança) + R$ -0,99 (taxa PIX) + R$ -0,99 (taxa mensageria)
     
     // Identificar pagamentos recebidos (valores positivos, excluindo taxas)
+    // Lógica simplificada: incluir todos os pagamentos com status RECEIVED/CONFIRMED e valor positivo,
+    // exceto aqueles que são claramente taxas (têm palavras-chave de taxa na descrição)
     const confirmedPayments = payments.filter((p: any) => {
+      // Apenas pagamentos confirmados ou recebidos
       if (p.status !== 'CONFIRMED' && p.status !== 'RECEIVED') return false
-      if (Number(p.value) <= 0) return false // Apenas valores positivos
       
+      // Apenas valores positivos
+      const value = Number(p.value) || 0
+      if (value <= 0) return false
+      
+      // Excluir taxas: se a descrição contém palavras-chave de taxa
       const desc = (p.description || '').toLowerCase()
-      // Excluir transações que são taxas (mesmo que tenham valor positivo)
-      if (desc.includes('taxa') || desc.includes('fee') || desc.includes('mensageria')) return false
+      const isFee = desc.includes('taxa') || 
+                    desc.includes('fee') || 
+                    desc.includes('mensageria') ||
+                    desc.includes('tarifa')
       
-      // Excluir se a descrição menciona "cobrança recebida" mas é na verdade uma taxa
-      // Incluir apenas "Cobrança recebida" (pagamento principal)
-      return desc.includes('cobrança recebida') || desc.includes('recebida')
+      // Incluir todos os pagamentos positivos que não são taxas
+      return !isFee
     })
     
     // Identificar taxas (valores negativos OU descrições que indicam taxa)
@@ -140,21 +154,25 @@ export async function GET(request: NextRequest) {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     
-    // Filtrar pagamentos mensais (apenas valores positivos, excluindo taxas)
+    // Filtrar pagamentos mensais (últimos 30 dias, apenas valores positivos, excluindo taxas)
     const monthlyPayments = payments.filter((p: any) => {
       if (p.status !== 'CONFIRMED' && p.status !== 'RECEIVED') return false
       
       const paymentDate = p.paymentDate ? new Date(p.paymentDate) : null
       if (!paymentDate || paymentDate < thirtyDaysAgo) return false
       
-      if (Number(p.value) <= 0) return false // Apenas valores positivos
+      const value = Number(p.value) || 0
+      if (value <= 0) return false // Apenas valores positivos
       
+      // Excluir taxas
       const desc = (p.description || '').toLowerCase()
-      // Excluir transações que são taxas
-      if (desc.includes('taxa') || desc.includes('fee') || desc.includes('mensageria')) return false
+      const isFee = desc.includes('taxa') || 
+                    desc.includes('fee') || 
+                    desc.includes('mensageria') ||
+                    desc.includes('tarifa')
       
-      // Incluir apenas "Cobrança recebida" (pagamento principal)
-      return desc.includes('cobrança recebida') || desc.includes('recebida')
+      // Incluir todos os pagamentos positivos que não são taxas
+      return !isFee
     })
     
     // Filtrar taxas mensais
