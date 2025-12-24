@@ -33,16 +33,16 @@ export default function Footer() {
 
           <FooterSection title="Comunidade">
             <FooterLink href="/creator">Painel do Criador</FooterLink>
-            <FooterLink href="/become-creator">Seja um Criador</FooterLink>
-            <FooterLink href="/pricing">Planos Premium</FooterLink>
-            <FooterLink href="/help">Central de Ajuda</FooterLink>
+            <FooterLink href="/signup">Seja um Criador</FooterLink>
+            <FooterLink href="/premium">Planos Premium</FooterLink>
+            <FooterLink href="/dashboard">Minha Conta</FooterLink>
           </FooterSection>
 
           <FooterSection title="Institucional">
-            <FooterLink href="/terms">Termos de Uso</FooterLink>
-            <FooterLink href="/privacy">Privacidade</FooterLink>
-            <FooterLink href="/license">Licenças</FooterLink>
-            <FooterLink href="/contact">Contato</FooterLink>
+            <FooterLink href="/premium">Planos e Preços</FooterLink>
+            <FooterLink href="/collections">Coleções</FooterLink>
+            <FooterLink href="/explore">Explorar Recursos</FooterLink>
+            <FooterLink href="/dashboard">Suporte</FooterLink>
           </FooterSection>
         </div>
 
