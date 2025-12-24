@@ -106,22 +106,22 @@ export default function DashboardPage() {
   }
 
   async function loadUser() {
+    setLoading(true)
     try {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
       
       if (authError || !authUser) {
         console.error('Erro de autenticação:', authError)
         router.push('/login')
-        setLoading(false)
         return
       }
 
       // Buscar perfil e assinatura em paralelo
       const [profileResult, subscriptionResult] = await Promise.all([
         supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', authUser.id)
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
           .single(),
         supabase
           .from('subscriptions')
@@ -148,8 +148,10 @@ export default function DashboardPage() {
         setSubscriptionDetails(activeSubscription)
         setTransactions(subscriptionTransactions || [])
         
-        // Verificar status dos pagamentos no Asaas
-        await refreshTransactionsStatus()
+        // Verificar status dos pagamentos no Asaas (não bloquear o carregamento)
+        refreshTransactionsStatus().catch(err => {
+          console.error('Erro ao atualizar transações (não crítico):', err)
+        })
       } else {
         setSubscriptionDetails(null)
         setTransactions([])
@@ -167,7 +169,7 @@ export default function DashboardPage() {
               full_name: authUser.user_metadata?.full_name || null,
             })
             .select()
-    .single()
+            .single()
   
           if (createError) {
             console.error('Erro ao criar perfil:', createError)
