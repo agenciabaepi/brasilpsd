@@ -32,9 +32,15 @@ export async function GET(request: NextRequest) {
     // Buscar dados em paralelo
     const [paymentsResponse, subscriptionsResponse, transactionsData] = await Promise.all([
       // Pagamentos do Asaas
-      asaas.getPayments({ limit: 1000 }).catch(() => ({ data: [] })),
+      asaas.getPayments({ limit: 1000 }).catch((error) => {
+        console.error('Erro ao buscar pagamentos do Asaas:', error)
+        return { data: [], object: 'list' }
+      }),
       // Assinaturas do Asaas
-      asaas.getSubscriptions().catch(() => ({ data: [] })),
+      asaas.getSubscriptions().catch((error) => {
+        console.error('Erro ao buscar assinaturas do Asaas:', error)
+        return { data: [], object: 'list' }
+      }),
       // Transações do nosso banco
       supabase
         .from('transactions')
@@ -42,9 +48,26 @@ export async function GET(request: NextRequest) {
         .order('created_at', { ascending: false })
     ])
 
-    const payments = paymentsResponse.data || []
-    const subscriptions = subscriptionsResponse.data || subscriptionsResponse || []
+    // A API do Asaas retorna { object: 'list', data: [...] } para listas
+    // Tratar diferentes formatos de resposta
+    const payments = Array.isArray(paymentsResponse) 
+      ? paymentsResponse 
+      : (paymentsResponse?.data || [])
+    
+    const subscriptions = Array.isArray(subscriptionsResponse)
+      ? subscriptionsResponse
+      : (subscriptionsResponse?.data || [])
+    
     const transactions = transactionsData.data || []
+    
+    console.log('📊 Estatísticas financeiras carregadas:', {
+      paymentsCount: payments.length,
+      subscriptionsCount: subscriptions.length,
+      transactionsCount: transactions.length,
+      paymentsResponseType: Array.isArray(paymentsResponse) ? 'array' : typeof paymentsResponse,
+      subscriptionsResponseType: Array.isArray(subscriptionsResponse) ? 'array' : typeof subscriptionsResponse,
+      paymentsResponseKeys: paymentsResponse && typeof paymentsResponse === 'object' ? Object.keys(paymentsResponse) : 'N/A'
+    })
 
     // Calcular estatísticas de pagamentos
     const paymentsByStatus = {
