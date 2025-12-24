@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { asaas } from '@/lib/asaas/client'
 
+// Forçar renderização dinâmica (usa cookies para autenticação)
+export const dynamic = 'force-dynamic'
+
 /**
  * Endpoint para buscar pagamentos do Asaas
  * GET /api/admin/finance/payments?status=PENDING&limit=100

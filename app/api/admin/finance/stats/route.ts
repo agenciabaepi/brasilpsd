@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { asaas } from '@/lib/asaas/client'
 
+// Forçar renderização dinâmica (usa cookies para autenticação)
+export const dynamic = 'force-dynamic'
+
 /**
  * Endpoint para buscar estatísticas financeiras do Asaas
  * GET /api/admin/finance/stats
