@@ -2,6 +2,18 @@ export const asaas = {
   async fetch(endpoint: string, options: RequestInit = {}) {
     let apiKey = process.env.ASAAS_API_KEY;
     const apiUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api/v3';
+    const environment = apiUrl.includes('sandbox') ? 'SANDBOX' : 'PRODUÇÃO';
+
+    // Log do ambiente (apenas em desenvolvimento ou se for erro)
+    if (process.env.NODE_ENV === 'development' || endpoint.includes('pixQrCode')) {
+      console.log(`🔧 Asaas API Config:`, {
+        environment,
+        apiUrl,
+        endpoint,
+        hasApiKey: !!apiKey,
+        apiKeyPrefix: apiKey?.substring(0, 5) + '...'
+      });
+    }
 
     if (!apiKey) {
       console.error('❌ ERRO: ASAAS_API_KEY não encontrada nas variáveis de ambiente!');
@@ -214,15 +226,27 @@ export const asaas = {
         // Aguardar um pouco antes de buscar o QR Code (pode levar alguns segundos para gerar)
         await new Promise(resolve => setTimeout(resolve, 1000))
         
+        const apiUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api/v3';
+        const environment = apiUrl.includes('sandbox') ? 'SANDBOX' : 'PRODUÇÃO';
+        
+        console.log(`🔍 Buscando QR Code PIX (${environment}) para pagamento:`, {
+          paymentId: payment.id,
+          paymentStatus: payment.status,
+          apiUrl: apiUrl.replace(/\/api\/v3$/, ''),
+          endpoint: `/payments/${payment.id}/pixQrCode`
+        });
+        
         const qrCode = await this.fetch(`/payments/${payment.id}/pixQrCode`)
         
-        console.log('QR Code response from Asaas:', {
+        console.log(`✅ QR Code response from Asaas (${environment}):`, {
           hasEncodedImage: !!qrCode.encodedImage,
           hasPayload: !!qrCode.payload,
           hasCopyPaste: !!qrCode.copyPaste,
           keys: Object.keys(qrCode),
           paymentId: payment.id,
-          paymentStatus: payment.status
+          paymentStatus: payment.status,
+          encodedImageLength: qrCode.encodedImage?.length || 0,
+          payloadLength: qrCode.payload?.length || 0
         })
         
         // O Asaas retorna encodedImage que pode já incluir o prefixo data:image ou ser apenas base64
@@ -255,18 +279,26 @@ export const asaas = {
           ...payment
         }
       } catch (error: any) {
-        console.error('❌ Erro ao buscar QR Code PIX:', {
+        const apiUrl = process.env.ASAAS_API_URL || 'https://sandbox.asaas.com/api/v3';
+        const environment = apiUrl.includes('sandbox') ? 'SANDBOX' : 'PRODUÇÃO';
+        
+        console.error(`❌ Erro ao buscar QR Code PIX (${environment}):`, {
           error: error.message,
           paymentId: payment.id,
-          stack: error.stack
+          apiUrl: apiUrl.replace(/\/api\/v3$/, ''),
+          stack: error.stack,
+          fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
         })
         
         // Se o erro mencionar que não há chave PIX ou QR Code inválido, dar mensagem mais clara
-        if (error.message?.includes('QR126E') || error.message?.includes('QR Code') || error.message?.includes('invalid')) {
-          throw new Error('QR Code PIX inválido. Verifique se a conta Asaas tem uma chave PIX cadastrada. Se estiver usando sandbox, certifique-se de que a chave PIX está configurada corretamente.')
+        if (error.message?.includes('QR126E') || error.message?.includes('QR Code') || error.message?.includes('invalid') || error.message?.includes('não é válido')) {
+          const envMessage = environment === 'SANDBOX' 
+            ? ' Se estiver usando sandbox, certifique-se de que a chave PIX está configurada corretamente no painel do Asaas (sandbox.asaas.com).'
+            : ' Verifique se a conta Asaas em produção tem uma chave PIX cadastrada e aprovada.';
+          throw new Error(`QR Code PIX inválido (${environment}). Verifique se a conta Asaas tem uma chave PIX cadastrada.${envMessage}`)
         }
         
-        throw new Error(`Erro ao gerar QR Code PIX: ${error.message || 'QR Code não disponível'}`)
+        throw new Error(`Erro ao gerar QR Code PIX (${environment}): ${error.message || 'QR Code não disponível'}`)
       }
     }
 
