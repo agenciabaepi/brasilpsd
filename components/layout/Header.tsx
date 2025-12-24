@@ -28,38 +28,60 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
   useEffect(() => {
     let mounted = true
     let authSubscription: { unsubscribe: () => void } | null = null
+    let isUpdating = false
+    let lastUserId: string | null = null
 
     // Sincroniza o estado do usuário se a sessão mudar no cliente
     const setupAuthListener = async () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (!mounted) return
+        if (!mounted || isUpdating) return
+        
+        // Ignorar eventos de token refresh e signed_in inicial se já temos o usuário
+        if (event === 'TOKEN_REFRESHED') return
+        if (event === 'SIGNED_IN' && user?.id === session?.user?.id) return
 
-        if (session?.user) {
-          const [profileResult, subscriptionResult] = await Promise.all([
-            supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single(),
-            supabase
-              .from('subscriptions')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .eq('status', 'active')
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle()
-          ])
-          
-          if (mounted) {
-            setUser(profileResult.data)
-            setSubscription(subscriptionResult.data)
+        // Evitar atualizações duplicadas para o mesmo usuário
+        if (session?.user?.id === lastUserId && user?.id === session.user.id) return
+
+        isUpdating = true
+        lastUserId = session?.user?.id || null
+
+        try {
+          if (session?.user) {
+            // Só atualizar se o usuário mudou ou não temos dados ainda
+            if (!user || user.id !== session.user.id) {
+              const [profileResult, subscriptionResult] = await Promise.all([
+                supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', session.user.id)
+                  .single(),
+                supabase
+                  .from('subscriptions')
+                  .select('*')
+                  .eq('user_id', session.user.id)
+                  .eq('status', 'active')
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+              ])
+              
+              if (mounted) {
+                setUser(profileResult.data)
+                setSubscription(subscriptionResult.data)
+              }
+            }
+          } else {
+            if (mounted && user) {
+              setUser(null)
+              setSubscription(null)
+              lastUserId = null
+            }
           }
-        } else {
-          if (mounted) {
-            setUser(null)
-            setSubscription(null)
-          }
+        } catch (error) {
+          console.error('Erro ao atualizar estado do usuário:', error)
+        } finally {
+          isUpdating = false
         }
       })
       
@@ -69,7 +91,7 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
     setupAuthListener()
 
     // Carregar assinatura inicial se usuário já estiver logado (apenas uma vez)
-    if (initialUser) {
+    if (initialUser && !subscription && initialUser.id) {
       supabase
         .from('subscriptions')
         .select('*')
@@ -82,6 +104,9 @@ export default function Header({ initialUser, initialCategories = [] }: HeaderPr
           if (mounted) {
             setSubscription(data)
           }
+        })
+        .catch(() => {
+          // Silenciar erros
         })
     }
 
