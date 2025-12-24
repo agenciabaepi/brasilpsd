@@ -199,14 +199,20 @@ export async function POST(request: NextRequest) {
       const responseData = {
         ...paymentData,
         paymentId: paymentId, // Garantir que paymentId está presente
-        id: paymentId // Também incluir id para compatibilidade
+        id: paymentId, // Também incluir id para compatibilidade
+        // Garantir que qrCode e copyPaste estão presentes para PIX
+        qrCode: paymentData.qrCode || null,
+        copyPaste: paymentData.copyPaste || paymentData.payload || null
       }
       
       console.log(`✅ Checkout concluído. Retornando dados do pagamento:`, {
         paymentId,
-        hasQrCode: !!paymentData.qrCode,
-        hasBankSlipUrl: !!paymentData.bankSlipUrl
-    })
+        hasQrCode: !!responseData.qrCode,
+        hasCopyPaste: !!responseData.copyPaste,
+        hasBankSlipUrl: !!paymentData.bankSlipUrl,
+        qrCodeLength: responseData.qrCode?.length || 0,
+        copyPasteLength: responseData.copyPaste?.length || 0
+      })
 
       return NextResponse.json(responseData)
     }
