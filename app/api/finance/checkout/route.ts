@@ -29,54 +29,79 @@ export async function POST(request: NextRequest) {
     // 2. Obter/Criar Cliente no Asaas
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     
-    if (!profile?.cpf_cnpj) {
+    if (!profile) {
+      return NextResponse.json({ 
+        error: 'Perfil não encontrado. Por favor, complete seu cadastro.' 
+      }, { status: 400 })
+    }
+    
+    if (!profile.cpf_cnpj) {
       return NextResponse.json({ 
         error: 'CPF/CNPJ é obrigatório para realizar pagamentos. Por favor, complete seu cadastro na página de configurações.' 
       }, { status: 400 })
     }
+
+    // Validar formato do CPF/CNPJ (deve ter pelo menos 11 dígitos)
+    const cpfCnpjClean = profile.cpf_cnpj.replace(/\D/g, '')
+    if (cpfCnpjClean.length < 11) {
+      return NextResponse.json({ 
+        error: 'CPF/CNPJ inválido. Por favor, verifique os dados na página de configurações.' 
+      }, { status: 400 })
+    }
     
-    let asaasCustomerId = profile?.asaas_customer_id
+    let asaasCustomerId = profile.asaas_customer_id
     
-    if (!asaasCustomerId) {
+    // Sempre verificar/criar o customer para garantir que está válido
+    try {
       asaasCustomerId = await asaas.getOrCreateCustomer({
         id: user.id,
         email: user.email!,
-        full_name: profile?.full_name || 'Usuário BrasilPSD',
+        full_name: profile.full_name || 'Usuário BrasilPSD',
         cpf_cnpj: profile.cpf_cnpj
       })
-      // Salvar o ID do cliente no nosso banco
-      await supabase
+
+      if (!asaasCustomerId) {
+        throw new Error('Falha ao criar/obter customer no Asaas')
+      }
+
+      // Salvar o ID do cliente no nosso banco (atualizar sempre para garantir sincronização)
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({ asaas_customer_id: asaasCustomerId })
         .eq('id', user.id)
-    } else {
-      // Se cliente já existe, atualizar CPF se necessário
-      try {
-        await asaas.getOrCreateCustomer({
-          id: user.id,
-          email: user.email!,
-          full_name: profile?.full_name || 'Usuário BrasilPSD',
-          cpf_cnpj: profile.cpf_cnpj
-        })
-      } catch (error: any) {
-        console.warn('Erro ao atualizar cliente Asaas:', error.message)
+
+      if (updateError) {
+        console.error('Erro ao salvar asaas_customer_id:', updateError)
+        // Não bloquear o fluxo, mas logar o erro
       }
+    } catch (error: any) {
+      console.error('Erro ao obter/criar customer no Asaas:', error)
+      return NextResponse.json({ 
+        error: error.message || 'Erro ao conectar com Asaas: Customer inválido ou não informado' 
+      }, { status: 500 })
     }
 
-    // 3. Criar Assinatura ou Pagamento no Asaas
+    // 3. Validar que temos um customerId válido
+    if (!asaasCustomerId) {
+      return NextResponse.json({ 
+        error: 'Erro ao conectar com Asaas: Customer inválido ou não informado' 
+      }, { status: 500 })
+    }
+
+    // 4. Criar Assinatura ou Pagamento no Asaas
     let paymentData: any
 
     if (method === 'CREDIT_CARD') {
       // Para cartão de crédito, criar assinatura recorrente
       paymentData = await asaas.createSubscription({
-      customerId: asaasCustomerId,
-      amount,
-      tier,
+        customerId: asaasCustomerId,
+        amount,
+        tier,
         billingType: method,
-      cycle: asaasCycle,
-      creditCard,
-      creditCardHolderInfo
-    })
+        cycle: asaasCycle,
+        creditCard,
+        creditCardHolderInfo
+      })
 
       // Registrar transação como paga (cartão é aprovado imediatamente)
     await supabase.from('transactions').insert({
@@ -102,6 +127,12 @@ export async function POST(request: NextRequest) {
     } else {
       // Para PIX e BOLETO, criar pagamento único (não assinatura)
       // Formato do externalReference: tier_userId para facilitar identificação
+      if (!asaasCustomerId) {
+        return NextResponse.json({ 
+          error: 'Erro ao conectar com Asaas: Customer inválido ou não informado' 
+        }, { status: 500 })
+      }
+
       paymentData = await asaas.createPayment({
         customerId: asaasCustomerId,
         amount,

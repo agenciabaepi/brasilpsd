@@ -49,28 +49,42 @@ export const asaas = {
 
   async getOrCreateCustomer(user: { email: string; full_name: string; id: string; cpf_cnpj?: string | null }) {
     try {
-      const customers = await this.fetch(`/customers?email=${user.email}`)
+      // Validar dados obrigatórios
+      if (!user.email || !user.full_name) {
+        throw new Error('Email e nome são obrigatórios para criar customer no Asaas')
+      }
+
+      // Buscar cliente existente por email
+      const customers = await this.fetch(`/customers?email=${encodeURIComponent(user.email)}`)
       let customer = customers.data && customers.data.length > 0 ? customers.data[0] : null
       
       // Se cliente existe mas não tem CPF e temos CPF, atualizar
       if (customer && user.cpf_cnpj && !customer.cpfCnpj) {
         try {
-          await this.fetch(`/customers/${customer.id}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              cpfCnpj: user.cpf_cnpj.replace(/\D/g, '') // Remove formatação, deixa apenas números
+          const cpfCnpjClean = user.cpf_cnpj.replace(/\D/g, '')
+          if (cpfCnpjClean.length >= 11) {
+            await this.fetch(`/customers/${customer.id}`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                cpfCnpj: cpfCnpjClean
+              })
             })
-          })
+          }
         } catch (updateError: any) {
           console.warn('Erro ao atualizar CPF do cliente:', updateError.message)
         }
-        return customer.id
+        
+        if (customer.id) {
+          return customer.id
+        }
       }
       
       // Se cliente existe, retornar ID
-      if (customer) return customer.id
+      if (customer && customer.id) {
+        return customer.id
+      }
 
-      // Criar novo cliente com CPF se disponível
+      // Criar novo cliente
       const customerData: any = {
         name: user.full_name,
         email: user.email,
@@ -79,17 +93,29 @@ export const asaas = {
       
       // Adicionar CPF/CNPJ se disponível (obrigatório para criar cobranças)
       if (user.cpf_cnpj) {
-        customerData.cpfCnpj = user.cpf_cnpj.replace(/\D/g, '') // Remove formatação, deixa apenas números
+        const cpfCnpjClean = user.cpf_cnpj.replace(/\D/g, '')
+        if (cpfCnpjClean.length >= 11) {
+          customerData.cpfCnpj = cpfCnpjClean
+        } else {
+          throw new Error('CPF/CNPJ inválido. Deve ter pelo menos 11 dígitos.')
+        }
+      } else {
+        throw new Error('CPF/CNPJ é obrigatório para criar customer no Asaas')
       }
 
       const newCustomer = await this.fetch('/customers', {
         method: 'POST',
         body: JSON.stringify(customerData)
       })
+      
+      if (!newCustomer || !newCustomer.id) {
+        throw new Error('Falha ao criar customer no Asaas: ID não retornado')
+      }
+      
       return newCustomer.id
     } catch (error: any) {
       console.error('Erro ao buscar/criar cliente no Asaas:', error.message);
-      throw error;
+      throw new Error(`Erro ao conectar com Asaas: ${error.message}`);
     }
   },
 
