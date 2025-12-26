@@ -24,6 +24,12 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
   const fromAddress = fromName ? `${fromName} <${from}>` : from
 
   try {
+    console.log('📧 Tentando enviar email:', {
+      from: fromAddress,
+      to: options.to,
+      subject: options.subject,
+    })
+
     const info = await transporter.sendMail({
       from: fromAddress,
       to: options.to,
@@ -44,12 +50,23 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       to: options.to,
       subject: options.subject,
       messageId: info.messageId,
+      response: info.response,
     })
   } catch (error: any) {
     console.error('❌ Erro ao enviar email:', {
       to: options.to,
       subject: options.subject,
+      from: fromAddress,
       error: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+      errno: error.errno,
+      syscall: error.syscall,
+      hostname: error.hostname,
+      port: error.port,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     })
     throw error
   }

@@ -13,22 +13,32 @@ export function createEmailTransporter() {
   const smtpUser = process.env.SMTP_USER
   const smtpPassword = process.env.SMTP_PASSWORD
 
+  console.log('🔧 Configurando SMTP:', {
+    host: smtpHost,
+    port: smtpPort,
+    user: smtpUser,
+    hasPassword: !!smtpPassword,
+    nodeEnv: process.env.NODE_ENV
+  })
+
   if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+    const missing = []
+    if (!smtpHost) missing.push('SMTP_HOST')
+    if (!smtpPort) missing.push('SMTP_PORT')
+    if (!smtpUser) missing.push('SMTP_USER')
+    if (!smtpPassword) missing.push('SMTP_PASSWORD')
+    
     throw new Error(
-      'SMTP credentials não configuradas. Configure as seguintes variáveis de ambiente:\n' +
-      '- SMTP_HOST\n' +
-      '- SMTP_PORT\n' +
-      '- SMTP_USER\n' +
-      '- SMTP_PASSWORD'
+      `SMTP credentials não configuradas. Configure as seguintes variáveis de ambiente: ${missing.join(', ')}`
     )
   }
 
   const port = parseInt(smtpPort)
   if (isNaN(port)) {
-    throw new Error('SMTP_PORT deve ser um número válido')
+    throw new Error(`SMTP_PORT deve ser um número válido. Recebido: ${smtpPort}`)
   }
 
-  return nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: port,
     secure: port === 465, // true para porta 465, false para outras portas
@@ -40,7 +50,11 @@ export function createEmailTransporter() {
       // Não rejeitar conexões não autorizadas (para desenvolvimento)
       rejectUnauthorized: process.env.NODE_ENV === 'production',
     },
+    debug: process.env.NODE_ENV === 'development', // Habilitar debug em desenvolvimento
+    logger: process.env.NODE_ENV === 'development', // Logar em desenvolvimento
   })
+
+  return transporter
 }
 
 /**
