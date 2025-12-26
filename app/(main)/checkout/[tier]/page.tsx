@@ -31,8 +31,8 @@ export default function CheckoutPage() {
 
   const planInfo: any = {
     lite: { name: 'Premium Lite', price: 5.00 },
-    pro: { name: 'Premium Pro', price: 5.00 },
-    plus: { name: 'Premium Plus', price: 5.00 },
+    pro: { name: 'Premium Pro', price: 6.00 },
+    plus: { name: 'Premium Plus', price: 7.00 },
   }
 
   const currentPlan = planInfo[tier as string] || planInfo.pro

@@ -111,8 +111,8 @@ export async function GET(request: NextRequest) {
       return !isFee
     })
     
-    // Identificar taxas (valores negativos OU descrições que indicam taxa)
-    const fees = payments.filter((p: any) => {
+    // Identificar taxas retornadas pelo Asaas (valores negativos OU descrições que indicam taxa)
+    const feesFromAsaas = payments.filter((p: any) => {
       if (p.status !== 'CONFIRMED' && p.status !== 'RECEIVED') return false
       
       const desc = (p.description || '').toLowerCase()
@@ -131,13 +131,31 @@ export async function GET(request: NextRequest) {
     const totalRevenue = confirmedPayments
       .reduce((sum: number, p: any) => sum + Math.abs(Number(p.value) || 0), 0)
 
-    // Calcular taxas totais (soma absoluta dos valores das taxas)
-    // Como as taxas são negativas, precisamos usar Math.abs
-    const totalFees = fees.reduce((sum: number, f: any) => {
+    // Calcular taxas retornadas pelo Asaas
+    const feesFromAsaasTotal = feesFromAsaas.reduce((sum: number, f: any) => {
       const feeValue = Number(f.value) || 0
-      // Se for negativo, já está correto. Se for positivo (improvável), também conta
       return sum + Math.abs(feeValue)
     }, 0)
+
+    // Calcular taxas manualmente: R$ 1,98 por pagamento PIX recebido/confirmado
+    const pixPayments = confirmedPayments.filter((p: any) => {
+      return p.billingType === 'PIX'
+    })
+    const calculatedPixFees = pixPayments.length * 1.98
+
+    // Usar o maior valor entre taxas do Asaas e cálculo manual (geralmente o manual será mais preciso)
+    // Se o Asaas retornar taxas, usar elas, senão usar cálculo manual
+    const totalFees = feesFromAsaasTotal > 0 ? feesFromAsaasTotal : calculatedPixFees
+    
+    // Log para debug
+    console.log('💰 Cálculo de taxas:', {
+      feesFromAsaasCount: feesFromAsaas.length,
+      feesFromAsaasTotal,
+      pixPaymentsCount: pixPayments.length,
+      calculatedPixFees,
+      totalFees,
+      using: feesFromAsaasTotal > 0 ? 'Asaas' : 'Cálculo manual'
+    })
 
     // Calcular valor líquido (receita bruta - taxas)
     const totalNetValue = totalRevenue - totalFees
@@ -175,8 +193,8 @@ export async function GET(request: NextRequest) {
       return !isFee
     })
     
-    // Filtrar taxas mensais
-    const monthlyFeesList = payments.filter((p: any) => {
+    // Calcular taxas mensais retornadas pelo Asaas
+    const monthlyFeesFromAsaas = payments.filter((p: any) => {
       if (p.status !== 'CONFIRMED' && p.status !== 'RECEIVED') return false
       
       const paymentDate = p.paymentDate ? new Date(p.paymentDate) : null
@@ -197,10 +215,19 @@ export async function GET(request: NextRequest) {
     const monthlyRevenue = monthlyPayments
       .reduce((sum: number, p: any) => sum + Math.abs(Number(p.value) || 0), 0)
 
-    const monthlyFees = monthlyFeesList.reduce((sum: number, f: any) => {
+    const monthlyFeesFromAsaasTotal = monthlyFeesFromAsaas.reduce((sum: number, f: any) => {
       const feeValue = Number(f.value) || 0
       return sum + Math.abs(feeValue)
     }, 0)
+
+    // Calcular taxas mensais manualmente: R$ 1,98 por pagamento PIX nos últimos 30 dias
+    const monthlyPixPayments = monthlyPayments.filter((p: any) => {
+      return p.billingType === 'PIX'
+    })
+    const calculatedMonthlyPixFees = monthlyPixPayments.length * 1.98
+
+    // Usar o maior valor entre taxas do Asaas e cálculo manual
+    const monthlyFees = monthlyFeesFromAsaasTotal > 0 ? monthlyFeesFromAsaasTotal : calculatedMonthlyPixFees
 
     const monthlyNetValue = monthlyRevenue - monthlyFees
 

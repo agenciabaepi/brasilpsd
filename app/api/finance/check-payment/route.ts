@@ -183,6 +183,29 @@ export async function POST(request: NextRequest) {
             throw new Error(`Erro ao renovar assinatura: ${renewError.message}`)
           } else {
             console.log(`✅ Assinatura renovada com sucesso:`, renewedSubscription)
+            
+            // Enviar email de confirmação
+            try {
+              const { sendPaymentConfirmationEmail, sendSubscriptionConfirmationEmail } = await import('@/lib/email/sender')
+              
+              await sendPaymentConfirmationEmail(
+                user.email!,
+                profile.full_name || 'Usuário',
+                payment.value,
+                payment.billingType || 'PIX',
+                paymentId
+              )
+              
+              await sendSubscriptionConfirmationEmail(
+                user.email!,
+                profile.full_name || 'Usuário',
+                tier.toUpperCase(),
+                payment.value,
+                'monthly'
+              )
+            } catch (emailError) {
+              console.error('Erro ao enviar emails de confirmação:', emailError)
+            }
           }
         } else {
           // Criar nova assinatura
@@ -223,6 +246,29 @@ export async function POST(request: NextRequest) {
           } else {
             console.log(`✅ Nova assinatura criada com sucesso:`, newSubscription)
             console.log(`✅ Assinatura válida até ${periodEnd.toISOString().split('T')[0]} (30 dias)`)
+            
+            // Enviar email de confirmação
+            try {
+              const { sendPaymentConfirmationEmail, sendSubscriptionConfirmationEmail } = await import('@/lib/email/sender')
+              
+              await sendPaymentConfirmationEmail(
+                user.email!,
+                profile.full_name || 'Usuário',
+                payment.value,
+                payment.billingType || 'PIX',
+                paymentId
+              )
+              
+              await sendSubscriptionConfirmationEmail(
+                user.email!,
+                profile.full_name || 'Usuário',
+                tier.toUpperCase(),
+                payment.value,
+                'monthly'
+              )
+            } catch (emailError) {
+              console.error('Erro ao enviar emails de confirmação:', emailError)
+            }
           }
         }
 

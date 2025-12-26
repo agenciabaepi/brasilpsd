@@ -32,25 +32,52 @@ import { isSystemProfileSync } from '@/lib/utils/system'
 
 interface ResourceDetailClientProps {
   resource: Resource
-  initialIsFavorited: boolean
+  initialUser?: Profile | null
+  initialIsFavorited?: boolean
+  initialDownloadStatus?: { current: number; limit: number; remaining: number; allowed: boolean } | null
   collection?: Collection | null
   collectionResources?: Resource[]
   relatedResources?: Resource[]
 }
 
-export default function ResourceDetailClient({ resource, initialIsFavorited, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
+export default function ResourceDetailClient({ resource, initialUser, initialIsFavorited = false, initialDownloadStatus = null, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
   const router = useRouter()
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited)
   const [downloading, setDownloading] = useState(false)
-  const [user, setUser] = useState<Profile | null>(null)
+  const [user, setUser] = useState<Profile | null>(initialUser || null)
   const [isFollowingCreator, setIsFollowingCreator] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoError, setVideoError] = useState<string | null>(null)
   const [isExtractingMetadata, setIsExtractingMetadata] = useState(false)
+  const [videoLoading, setVideoLoading] = useState(true)
+  const [videoReady, setVideoReady] = useState(false)
+  const [downloadStatus, setDownloadStatus] = useState<{ current: number; limit: number; remaining: number; allowed: boolean } | null>(initialDownloadStatus)
+  const [loadingDownloadStatus, setLoadingDownloadStatus] = useState(false)
   const [resourceData, setResourceData] = useState(resource)
   const supabase = createSupabaseClient()
 
   useEffect(() => {
+    // Se já temos initialUser, usar ele e não recarregar (evita flash)
+    if (initialUser) {
+      setUser(initialUser)
+      
+      // Apenas verificar se está seguindo o criador
+      if (resource.creator_id && initialUser.id !== resource.creator_id) {
+        async function checkFollowing() {
+          const { data: followData } = await supabase
+            .from('followers')
+            .select('id')
+            .eq('follower_id', initialUser!.id)
+            .eq('creator_id', resource.creator_id)
+            .single()
+          setIsFollowingCreator(!!followData)
+        }
+        checkFollowing()
+      }
+      return
+    }
+
+    // Se não temos initialUser, carregar do cliente
     async function loadUser() {
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
@@ -59,7 +86,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
           .select('*')
           .eq('id', authUser.id)
           .single()
-        setUser(profile)
+        setUser(profile || null)
 
         // Verificar se está seguindo o criador
         if (resource.creator_id && authUser.id !== resource.creator_id) {
@@ -75,7 +102,7 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
     }
     loadUser()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resource.creator_id])
+  }, [resource.creator_id, initialUser])
 
   // Carregar signed URL para vídeo (sempre usar preview_url com marca d'água se disponível)
   useEffect(() => {
@@ -113,12 +140,15 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
               console.log('✅ Signed URL received:', data.url?.substring(0, 100) + '...')
               if (data.url) {
                 setVideoUrl(data.url)
+                setVideoLoading(true)
+                setVideoReady(false)
                 return // Usar signed URL
               }
             } else {
               const errorData = await response.json()
               console.warn('⚠️ Failed to get signed URL:', errorData)
               setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
+              setVideoLoading(false)
             }
           } else {
             console.log('ℹ️ User not authenticated')
@@ -133,6 +163,65 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
     loadVideoUrl()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.resource_type, resource.preview_url, resource.file_url, supabase])
+
+  // Buscar status de downloads quando usuário estiver logado (apenas se não foi passado inicialmente)
+  useEffect(() => {
+    // Se já temos o status inicial do servidor, não precisa buscar novamente
+    if (initialDownloadStatus) {
+      return
+    }
+
+    async function loadDownloadStatus() {
+      if (!user) {
+        setDownloadStatus(null)
+        return
+      }
+
+      try {
+        setLoadingDownloadStatus(true)
+        // Adicionar timestamp para evitar cache
+        const response = await fetch(`/api/downloads/status?t=${Date.now()}`)
+        if (response.ok) {
+          const data = await response.json()
+          console.log('📊 Download status loaded:', data)
+          setDownloadStatus({
+            current: data.current || 0,
+            limit: data.limit || 0,
+            remaining: data.remaining || 0,
+            allowed: data.allowed !== undefined ? data.allowed : (data.remaining > 0)
+          })
+        } else {
+          console.error('Error loading download status:', response.status, response.statusText)
+        }
+      } catch (error) {
+        console.error('Error loading download status:', error)
+      } finally {
+        setLoadingDownloadStatus(false)
+      }
+    }
+
+    // Se não tiver initialDownloadStatus, carregar do servidor
+    if (!initialDownloadStatus) {
+      loadDownloadStatus()
+    }
+
+    // Listener para atualizar após download
+    const handleDownloadCompleted = () => {
+      setTimeout(loadDownloadStatus, 500) // Pequeno delay para garantir que o banco foi atualizado
+    }
+
+    // Listener para atualizar quando download é bloqueado
+    const handleDownloadBlocked = () => {
+      setTimeout(loadDownloadStatus, 500)
+    }
+
+    window.addEventListener('download-completed', handleDownloadCompleted)
+    window.addEventListener('download-blocked', handleDownloadBlocked)
+    return () => {
+      window.removeEventListener('download-completed', handleDownloadCompleted)
+      window.removeEventListener('download-blocked', handleDownloadBlocked)
+    }
+  }, [user, initialDownloadStatus])
 
   // Função para extrair metadados de vídeos antigos
   async function handleExtractMetadata() {
@@ -182,6 +271,16 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
   // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
   const isOfficial = resourceData.is_official || isSystemProfileSync(resourceData.creator_id)
   const authorName = isOfficial ? (resourceData.creator?.full_name || 'BrasilPSD') : (resourceData.creator?.full_name || 'BrasilPSD')
+  
+  // Calcular aspect ratio do vídeo baseado nas dimensões
+  const getVideoAspectRatio = () => {
+    if (resourceData.resource_type !== 'video' || !resourceData.width || !resourceData.height) {
+      return null // Usar aspect-video padrão
+    }
+    return { aspectRatio: `${resourceData.width} / ${resourceData.height}` }
+  }
+  
+  const videoAspectRatioStyle = getVideoAspectRatio()
 
   async function handleFavorite() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -245,22 +344,59 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
       
       const downloadData = await response.json()
 
-      if (downloadData.error) throw new Error(downloadData.error)
+      if (downloadData.error) {
+        // Se for erro de limite excedido, atualizar o status e mostrar mensagem
+        if (response.status === 403 && downloadData.message) {
+          // Atualizar status localmente quando limite é excedido
+          if (downloadData.current_count !== undefined && downloadData.limit_count !== undefined) {
+            setDownloadStatus({
+              current: downloadData.current_count,
+              limit: downloadData.limit_count,
+              remaining: downloadData.remaining || 0,
+              allowed: false
+            })
+          }
+          // Disparar evento para recarregar status
+          window.dispatchEvent(new CustomEvent('download-blocked'))
+          throw new Error(downloadData.message)
+        }
+        throw new Error(downloadData.error)
+      }
 
-      if (!user) throw new Error('Usuário não autenticado')
+      if (!downloadData.url) {
+        throw new Error('URL de download não recebida')
+      }
 
-      await supabase.from('downloads').insert({
-        user_id: user.id,
-        resource_id: resource.id,
-      })
-
+      // Incrementar contador do recurso (a API já registrou o download)
       await supabase.rpc('increment', {
         table_name: 'resources',
         column_name: 'download_count',
         row_id: resource.id,
       })
 
+      // Atualizar status localmente imediatamente (otimização UX)
+      if (downloadData.current_count !== undefined && downloadData.limit_count !== undefined) {
+        setDownloadStatus({
+          current: downloadData.current_count,
+          limit: downloadData.limit_count,
+          remaining: downloadData.remaining || 0,
+          allowed: downloadData.remaining > 0
+        })
+      }
+
+      // Abrir download
       window.open(downloadData.url, '_blank')
+      
+      // Disparar evento para atualizar estatísticas de downloads (para outros componentes)
+      window.dispatchEvent(new CustomEvent('download-completed', {
+        detail: {
+          downloadId: downloadData.download_id,
+          currentCount: downloadData.current_count,
+          limitCount: downloadData.limit_count,
+          remaining: downloadData.remaining
+        }
+      }))
+
       toast.success('Download iniciado!')
     } catch (error: any) {
       toast.error(error.message || 'Erro ao baixar recurso')
@@ -279,7 +415,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
           <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center min-h-[400px] group relative shadow-sm">
             {resource.resource_type === 'video' && videoUrl ? (
               <div 
-                className="w-full aspect-video bg-black flex items-center justify-center relative select-none"
+                className={`w-full bg-black flex items-center justify-center relative select-none ${!videoAspectRatioStyle ? 'aspect-video' : ''}`}
+                style={videoAspectRatioStyle || undefined}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -309,10 +446,10 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                 />
                 <video
                   key={videoUrl} // Force re-render when URL changes
-                  src={videoUrl + '#t=2'}
+                  src={videoUrl}
                   controls
                   className="w-full h-full max-h-[800px] object-contain relative z-20"
-                  preload="auto"
+                  preload="metadata"
                   crossOrigin="anonymous"
                   playsInline
                   muted={false}
@@ -343,7 +480,9 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                   style={{
                     pointerEvents: 'auto',
                     userSelect: 'none',
-                    WebkitUserSelect: 'none'
+                    WebkitUserSelect: 'none',
+                    opacity: videoReady ? 1 : 0,
+                    transition: 'opacity 0.3s ease-in-out'
                   }}
                   onLoadStart={() => {
                     console.log('🎬 Video load started:', {
@@ -351,6 +490,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                       format: resource.file_format,
                       hasSignedUrl: !!videoUrl
                     })
+                    setVideoLoading(true)
+                    setVideoReady(false)
                   }}
                   onLoadedMetadata={(e) => {
                     const video = e.currentTarget
@@ -361,12 +502,32 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                       readyState: video.readyState,
                       networkState: video.networkState
                     })
+                    // Ir para 2 segundos se o vídeo tiver mais de 2 segundos
+                    if (video.duration >= 2) {
+                      video.currentTime = 2
+                    }
                   }}
                   onCanPlay={() => {
                     console.log('✅ Video can play')
+                    setVideoLoading(false)
+                    setVideoReady(true)
                   }}
                   onCanPlayThrough={() => {
                     console.log('✅ Video can play through')
+                    setVideoLoading(false)
+                    setVideoReady(true)
+                  }}
+                  onWaiting={() => {
+                    console.log('⏳ Video waiting for data...')
+                    setVideoLoading(true)
+                  }}
+                  onPlaying={() => {
+                    setVideoLoading(false)
+                    setVideoReady(true)
+                  }}
+                  onStalled={() => {
+                    console.warn('⚠️ Video stalled')
+                    setVideoLoading(true)
                   }}
                   onError={(e) => {
                     const video = e.currentTarget
@@ -380,6 +541,8 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                       readyState: video.readyState,
                       format: resource.file_format
                     })
+                    
+                    setVideoLoading(false)
                     
                     // Mensagens de erro específicas
                     let errorMessage = 'Erro ao carregar vídeo'
@@ -400,17 +563,11 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                     console.error('❌ Video signed URL failed, not using direct URL for security')
                     setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
                   }}
-                  onWaiting={() => {
-                    console.log('⏳ Video waiting for data...')
-                  }}
-                  onStalled={() => {
-                    console.warn('⚠️ Video stalled')
-                  }}
                 >
                   Seu navegador não suporta a tag de vídeo.
                 </video>
-                {!videoUrl && !videoError && (
-                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm bg-black/50">
+                {(videoLoading || (!videoUrl && !videoError)) && (
+                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm bg-black/50 z-30">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
                       <p>Carregando vídeo...</p>
@@ -674,14 +831,46 @@ export default function ResourceDetailClient({ resource, initialIsFavorited, col
                 </button>
               </Link>
             ) : (
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="w-full h-16 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group mt-8 shadow-lg shadow-primary-500/20"
-              >
-                <Download className="h-5 w-5 group-hover:translate-y-1 transition-transform" />
-                <span>Baixar Agora ({formatFileSize(resource.file_size)})</span>
-              </button>
+              <div className="mt-8 space-y-3">
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading || (downloadStatus && !downloadStatus.allowed)}
+                  className={cn(
+                    "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group shadow-lg",
+                    downloadStatus && !downloadStatus.allowed
+                      ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed shadow-gray-400/20"
+                      : "bg-primary-500 hover:bg-primary-600 text-white shadow-primary-500/20"
+                  )}
+                  title={downloadStatus && !downloadStatus.allowed ? `Limite de downloads excedido. Você já fez ${downloadStatus.current} de ${downloadStatus.limit} downloads hoje.` : undefined}
+                >
+                  <Download className={cn(
+                    "h-5 w-5 transition-transform",
+                    downloadStatus && !downloadStatus.allowed ? "" : "group-hover:translate-y-1"
+                  )} />
+                  <span>
+                    {downloading 
+                      ? 'Baixando...' 
+                      : downloadStatus && !downloadStatus.allowed
+                      ? `Limite Atingido (${downloadStatus.current}/${downloadStatus.limit})`
+                      : downloadStatus
+                      ? `Baixar Agora (${downloadStatus.remaining} restantes)`
+                      : `Baixar Agora (${formatFileSize(resource.file_size)})`
+                    }
+                  </span>
+                </button>
+                
+                {/* Mostrar contador de downloads se disponível */}
+                {downloadStatus && (
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 font-medium">
+                      {downloadStatus.current} / {downloadStatus.limit} downloads hoje
+                      {downloadStatus.remaining > 0 && (
+                        <span className="text-primary-600 font-semibold"> • {downloadStatus.remaining} restantes</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Author Section */}

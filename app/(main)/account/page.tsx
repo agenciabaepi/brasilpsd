@@ -10,8 +10,10 @@ import { getS3Url } from '@/lib/aws/s3'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
+import DownloadStats from '@/components/user/DownloadStats'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
+import { checkAndUpdateSubscriptionStatusClient } from '@/lib/utils/subscription-check'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -52,6 +54,9 @@ export default function AccountPage() {
         router.push('/login')
         return
       }
+
+      // Verificar e atualizar status da assinatura antes de carregar perfil
+      await checkAndUpdateSubscriptionStatusClient(authUser.id)
 
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -283,6 +288,11 @@ export default function AccountPage() {
           </button>
         </div>
       </Card>
+
+      {/* Estatísticas de Downloads */}
+      <div className="mb-8">
+        <DownloadStats userId={user.id} />
+      </div>
 
       <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
         {/* Informações Pessoais */}

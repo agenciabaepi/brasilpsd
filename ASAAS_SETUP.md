@@ -63,9 +63,9 @@ ASAAS_API_URL=https://api.asaas.com/v3
 
 ### Planos de Assinatura
 
-- **Premium Lite**: R$ 19,90/mês ou R$ 16,90/mês (anual)
-- **Premium Pro**: R$ 29,90/mês ou R$ 24,90/mês (anual)
-- **Premium Plus**: R$ 49,90/mês ou R$ 39,90/mês (anual)
+- **Premium Lite**: R$ 5,00/mês ou R$ 5,00/mês (anual)
+- **Premium Pro**: R$ 6,00/mês ou R$ 6,00/mês (anual)
+- **Premium Plus**: R$ 7,00/mês ou R$ 7,00/mês (anual)
 
 ### Eventos do Webhook
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail } from 'lucide-react'
+import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard } from 'lucide-react'
 import type { Profile } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import Button from '@/components/ui/Button'
@@ -52,8 +52,15 @@ export default function DashboardPage() {
 
   const [activeSection, setActiveSection] = useState<'account' | 'subscriptions' | 'downloads' | 'favorites' | 'saved' | 'following' | 'affiliate'>('account')
   const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null)
+  const [allSubscriptions, setAllSubscriptions] = useState<any[]>([])
   const [transactions, setTransactions] = useState<any[]>([])
   const [refreshingTransactions, setRefreshingTransactions] = useState(false)
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false)
+  const [showAllTransactions, setShowAllTransactions] = useState(false)
+  const [showAllSubscriptions, setShowAllSubscriptions] = useState(false)
+  
+  const TRANSACTIONS_LIMIT = 5
+  const SUBSCRIPTIONS_LIMIT = 3
 
   const menuItems = [
     { id: 'account', name: 'Minha conta', icon: User },
@@ -138,6 +145,13 @@ export default function DashboardPage() {
 
       // Se tem assinatura, buscar detalhes completos e transações
       if (activeSubscription) {
+        // Buscar TODAS as assinaturas do usuário (ativas, expiradas, canceladas)
+        const { data: allUserSubscriptions } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .order('created_at', { ascending: false })
+        
         // Buscar transações relacionadas
         const { data: subscriptionTransactions } = await supabase
           .from('transactions')
@@ -146,6 +160,7 @@ export default function DashboardPage() {
           .order('created_at', { ascending: false })
         
         setSubscriptionDetails(activeSubscription)
+        setAllSubscriptions(allUserSubscriptions || [])
         setTransactions(subscriptionTransactions || [])
         
         // Verificar status dos pagamentos no Asaas (não bloquear o carregamento)
@@ -155,6 +170,22 @@ export default function DashboardPage() {
       } else {
         setSubscriptionDetails(null)
         setTransactions([])
+        
+        // Mesmo sem assinatura ativa, buscar todas as assinaturas e transações
+        const { data: allUserSubscriptions } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .order('created_at', { ascending: false })
+        
+        const { data: subscriptionTransactions } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .order('created_at', { ascending: false })
+        
+        setAllSubscriptions(allUserSubscriptions || [])
+        setTransactions(subscriptionTransactions || [])
       }
   
       if (error) {
@@ -472,13 +503,24 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center space-x-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span>Logout</span>
-                  </button>
+                  <div className="flex items-center space-x-3">
+                    {user.is_creator && (
+                      <Button
+                        onClick={() => router.push('/creator')}
+                        className="flex items-center space-x-2 bg-primary-500 hover:bg-primary-600 text-white"
+                      >
+                        <LayoutDashboard className="h-4 w-4" />
+                        <span>Painel do Criador</span>
+                      </Button>
+                    )}
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center space-x-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
                 </div>
               </Card>
 
@@ -859,10 +901,257 @@ export default function DashboardPage() {
                       )}
                     </div>
                   ) : (
-                    <Card className="p-8 text-center">
+                    <Card className="p-8 text-center mb-8">
                       <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhuma assinatura ativa</h3>
                       <p className="text-gray-500 mb-6">Você ainda não possui uma assinatura premium.</p>
+                      <Button onClick={() => router.push('/premium')}>
+                        Assinar Premium
+                      </Button>
+                    </Card>
+                  )}
+
+                  {/* Todas as Assinaturas (Incluindo Expiradas e Canceladas) */}
+                  {allSubscriptions.length > 0 && (
+                    <div className="space-y-6 mt-8">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-2xl font-semibold text-gray-900">Histórico de Assinaturas</h2>
+                        <span className="text-sm text-gray-500">
+                          {allSubscriptions.length} {allSubscriptions.length === 1 ? 'assinatura' : 'assinaturas'}
+                        </span>
+                      </div>
+
+                      <div className="grid gap-4">
+                        {(showAllSubscriptions ? allSubscriptions : allSubscriptions.slice(0, SUBSCRIPTIONS_LIMIT)).map((sub) => {
+                          const isActive = sub.status === 'active'
+                          const isExpired = sub.status === 'expired'
+                          const isCanceled = sub.status === 'canceled'
+                          const isSuspended = sub.status === 'suspended'
+                          
+                          return (
+                            <Card key={sub.id} className={cn(
+                              "p-6 border-2 transition-all",
+                              isActive ? "border-green-200 bg-green-50/30" :
+                              isExpired ? "border-red-200 bg-red-50/30" :
+                              isCanceled ? "border-gray-200 bg-gray-50/30" :
+                              "border-yellow-200 bg-yellow-50/30"
+                            )}>
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-3 mb-2">
+                                    <h3 className="text-lg font-semibold text-gray-900">
+                                      Premium {sub.tier.toUpperCase()}
+                                    </h3>
+                                    <span className={cn(
+                                      "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
+                                      isActive ? "bg-green-100 text-green-700" :
+                                      isExpired ? "bg-red-100 text-red-700" :
+                                      isCanceled ? "bg-gray-100 text-gray-700" :
+                                      "bg-yellow-100 text-yellow-700"
+                                    )}>
+                                      {isActive ? 'Ativa' :
+                                       isExpired ? 'Expirada' :
+                                       isCanceled ? 'Cancelada' :
+                                       'Suspensa'}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-500">
+                                    Criada em {format(new Date(sub.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-bold text-gray-900">
+                                    R$ {Number(sub.amount).toFixed(2).replace('.', ',')}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    / {sub.billing_cycle === 'monthly' ? 'mês' : 'ano'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Período</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {format(new Date(sub.current_period_start), "dd/MM/yyyy", { locale: ptBR })} até {format(new Date(sub.current_period_end), "dd/MM/yyyy", { locale: ptBR })}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Pagamento</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {sub.payment_method === 'PIX' ? 'PIX' :
+                                     sub.payment_method === 'BOLETO' ? 'Boleto' :
+                                     sub.payment_method === 'CREDIT_CARD' ? 'Cartão' :
+                                     sub.payment_method || 'N/A'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Renovação</p>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    {sub.auto_renew ? 'Automática' : 'Manual'}
+                                  </p>
+                                </div>
+                                {sub.canceled_at && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cancelada em</p>
+                                    <p className="text-sm font-semibold text-gray-900">
+                                      {format(new Date(sub.canceled_at), "dd/MM/yyyy", { locale: ptBR })}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {sub.last_payment_id && (
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Último Pagamento ID</p>
+                                  <p className="text-sm font-mono text-gray-700 break-all">
+                                    {sub.last_payment_id}
+                                  </p>
+                                </div>
+                              )}
+                            </Card>
+                          )
+                        })}
+                      </div>
+                      
+                      {allSubscriptions.length > SUBSCRIPTIONS_LIMIT && (
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() => setShowAllSubscriptions(!showAllSubscriptions)}
+                            className="flex items-center space-x-2 px-6 py-3 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                          >
+                            {showAllSubscriptions ? (
+                              <>
+                                <ChevronUp className="h-4 w-4" />
+                                <span>Mostrar menos</span>
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-4 w-4" />
+                                <span>Ver mais ({allSubscriptions.length - SUBSCRIPTIONS_LIMIT} {allSubscriptions.length - SUBSCRIPTIONS_LIMIT === 1 ? 'assinatura' : 'assinaturas'})</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Histórico Completo de Pagamentos */}
+                  {transactions.length > 0 && (
+                    <Card className="p-8 mt-8">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h3 className="text-2xl font-semibold text-gray-900">Histórico Completo de Pagamentos</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {transactions.length} {transactions.length === 1 ? 'pagamento' : 'pagamentos'} encontrados
+                          </p>
+                        </div>
+                        <button
+                          onClick={refreshTransactionsStatus}
+                          disabled={refreshingTransactions}
+                          className="text-sm font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                          {refreshingTransactions ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                              <span>Atualizando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Atualizar status</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {(showAllTransactions ? transactions : transactions.slice(0, TRANSACTIONS_LIMIT)).map((transaction) => (
+                          <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-3 mb-2">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {format(new Date(transaction.created_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
+                                </p>
+                                <span className={cn(
+                                  "px-2 py-1 rounded text-xs font-bold uppercase",
+                                  transaction.status === 'paid' ? "bg-green-100 text-green-700" :
+                                  transaction.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
+                                  transaction.status === 'overdue' ? "bg-orange-100 text-orange-700" :
+                                  "bg-red-100 text-red-700"
+                                )}>
+                                  {transaction.status === 'paid' ? 'Pago' :
+                                   transaction.status === 'pending' ? 'Pendente' :
+                                   transaction.status === 'overdue' ? 'Vencido' :
+                                   transaction.status === 'canceled' ? 'Cancelado' :
+                                   transaction.status}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-4 text-xs text-gray-500">
+                                <span>
+                                  {transaction.payment_method?.replace('asaas_', '').toUpperCase() || 'N/A'}
+                                </span>
+                                {transaction.subscription_tier && (
+                                  <>
+                                    <span>•</span>
+                                    <span>Plano {transaction.subscription_tier.toUpperCase()}</span>
+                                  </>
+                                )}
+                                {transaction.amount_fees > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span>Taxa: R$ {Number(transaction.amount_fees).toFixed(2).replace('.', ',')}</span>
+                                  </>
+                                )}
+                              </div>
+                              {transaction.id && (
+                                <p className="text-xs text-gray-400 mt-1 font-mono">
+                                  ID: {transaction.id}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="text-lg font-bold text-gray-900">
+                                R$ {Number(transaction.amount_brute).toFixed(2).replace('.', ',')}
+                              </p>
+                              {transaction.amount_liquid && transaction.amount_liquid !== transaction.amount_brute && (
+                                <p className="text-xs text-gray-500">
+                                  Líquido: R$ {Number(transaction.amount_liquid).toFixed(2).replace('.', ',')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {transactions.length > TRANSACTIONS_LIMIT && (
+                        <div className="flex justify-center pt-4 border-t border-gray-200">
+                          <button
+                            onClick={() => setShowAllTransactions(!showAllTransactions)}
+                            className="flex items-center space-x-2 px-6 py-3 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                          >
+                            {showAllTransactions ? (
+                              <>
+                                <ChevronUp className="h-4 w-4" />
+                                <span>Mostrar menos</span>
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-4 w-4" />
+                                <span>Ver mais ({transactions.length - TRANSACTIONS_LIMIT} {transactions.length - TRANSACTIONS_LIMIT === 1 ? 'pagamento' : 'pagamentos'})</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </Card>
+                  )}
+
+                  {/* Mensagem quando não há histórico */}
+                  {transactions.length === 0 && allSubscriptions.length === 0 && !subscriptionDetails && (
+                    <Card className="p-8 text-center">
+                      <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum histórico encontrado</h3>
+                      <p className="text-gray-500 mb-6">Você ainda não possui assinaturas ou pagamentos registrados.</p>
                       <Button onClick={() => router.push('/premium')}>
                         Assinar Premium
                       </Button>

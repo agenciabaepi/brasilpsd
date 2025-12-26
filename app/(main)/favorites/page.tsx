@@ -80,7 +80,7 @@ export default function FavoritesPage() {
         </div>
 
         {favorites.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-1">
             {favorites.map((favorite) => (
               favorite.resource && (
                 <ResourceCard

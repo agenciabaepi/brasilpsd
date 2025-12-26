@@ -5,6 +5,7 @@ import sharp from 'sharp'
 import { convertVideoToMp4, checkFfmpegAvailable, extractVideoMetadata } from '@/lib/video/convert'
 import { addWatermarkToVideo } from '@/lib/video/watermark'
 import { extractVideoThumbnail } from '@/lib/video/thumbnail'
+import { generateVideoPreview } from '@/lib/video/preview'
 
 export const maxDuration = 300 // 5 minutos para uploads grandes
 export const runtime = 'nodejs'
@@ -407,10 +408,10 @@ export async function POST(request: NextRequest) {
         console.log('🎬 Starting video processing (watermark + thumbnail)...')
         const processingStartTime = Date.now()
         
-        // Processar marca d'água e thumbnail em paralelo para acelerar
+        // Processar marca d'água, preview de vídeo (metade) e thumbnail em paralelo para acelerar
         try {
-          const [previewResult, thumbnailResult] = await Promise.allSettled([
-            // 3.1. Criar versão com marca d'água para preview
+          const [previewResult, videoPreviewResult, thumbnailResult] = await Promise.allSettled([
+            // 3.1. Criar versão com marca d'água para preview completo
             (async () => {
               console.log('💧 Creating watermarked preview version...')
               const watermarked = await addWatermarkToVideo(buffer, previewExtension || 'mp4', 'BRASILPSD')
@@ -432,7 +433,33 @@ export async function POST(request: NextRequest) {
               }
               return null
             })(),
-            // 3.2. Extrair thumbnail do primeiro frame
+            // 3.2. Gerar preview de vídeo (metade do vídeo) para thumbnail
+            (async () => {
+              console.log('🎬 Generating video preview (half of video) for thumbnail...')
+              const videoPreview = await generateVideoPreview(buffer, previewExtension || 'mp4', videoMetadata?.duration)
+              if (videoPreview && videoPreview.length > 0) {
+                // Adicionar marca d'água ao preview também
+                const watermarkedPreview = await addWatermarkToVideo(videoPreview, 'mp4', 'BRASILPSD')
+                const finalPreview = watermarkedPreview || videoPreview
+                
+                const previewFileName = `video-preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
+                const previewKey = `video-previews/${user.id}/${previewFileName}`
+                const url = await uploadFileToS3({
+                  file: finalPreview,
+                  key: previewKey,
+                  contentType: 'video/mp4',
+                  metadata: {
+                    userId: user.id,
+                    originalName: file.name,
+                    isVideoPreview: 'true'
+                  },
+                })
+                console.log('✅ Video preview (half) uploaded:', url)
+                return { buffer: finalPreview, url }
+              }
+              return null
+            })(),
+            // 3.3. Extrair thumbnail do primeiro frame (fallback)
             (async () => {
               console.log('🖼️ Extracting video thumbnail from first frame...')
               const thumb = await extractVideoThumbnail(buffer, previewExtension || 'mp4', 'jpeg', 85)
@@ -457,6 +484,8 @@ export async function POST(request: NextRequest) {
           ])
           
           // Processar resultados
+          let videoPreviewUrl: string | null = null
+          
           if (previewResult.status === 'fulfilled' && previewResult.value) {
             previewBuffer = previewResult.value.buffer
             previewUrl = previewResult.value.url
@@ -464,9 +493,21 @@ export async function POST(request: NextRequest) {
             console.warn('⚠️ Failed to create watermarked preview:', previewResult.reason)
           }
           
+          if (videoPreviewResult.status === 'fulfilled' && videoPreviewResult.value) {
+            videoPreviewUrl = videoPreviewResult.value.url
+            // Usar o preview de vídeo como thumbnail_url também (será um vídeo curto)
+            thumbnailUrl = videoPreviewResult.value.url
+            console.log('✅ Video preview (half) will be used as thumbnail')
+          } else if (videoPreviewResult.status === 'rejected') {
+            console.warn('⚠️ Failed to generate video preview:', videoPreviewResult.reason)
+          }
+          
           if (thumbnailResult.status === 'fulfilled' && thumbnailResult.value) {
-            thumbnailBuffer = thumbnailResult.value.buffer
-            thumbnailUrl = thumbnailResult.value.url
+            // Só usar thumbnail estático se o preview de vídeo falhou
+            if (!videoPreviewUrl) {
+              thumbnailBuffer = thumbnailResult.value.buffer
+              thumbnailUrl = thumbnailResult.value.url
+            }
           } else if (thumbnailResult.status === 'rejected') {
             console.warn('⚠️ Failed to extract thumbnail:', thumbnailResult.reason)
           }
@@ -522,8 +563,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       url: fileUrl, 
       key: fileKey,
-      previewUrl: previewUrl || undefined, // URL da versão com marca d'água
-      thumbnailUrl: thumbnailUrl || undefined, // URL do thumbnail extraído do primeiro frame
+      previewUrl: previewUrl || undefined, // URL da versão completa com marca d'água
+      thumbnailUrl: thumbnailUrl || undefined, // URL do preview de vídeo (metade) ou thumbnail estático
       isAiGenerated,
       videoMetadata: videoMetadata || undefined,
       wasProcessed: !!(previewUrl || thumbnailUrl) // Indica se foi processado

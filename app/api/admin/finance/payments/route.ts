@@ -93,6 +93,8 @@ export async function GET(request: NextRequest) {
     
     // Processar pagamentos principais e adicionar taxas relacionadas
     const processedPayments = mainPayments.map((payment: any) => {
+      const grossValue = Number(payment.value) || 0
+      
       // Tentar encontrar taxas relacionadas por número da fatura
       const invoiceNum = extractInvoiceNumber(payment.description || '')
       const invoiceKey = invoiceNum || payment.invoiceNumber || payment.invoice?.id || payment.customer || 'unknown'
@@ -113,22 +115,31 @@ export async function GET(request: NextRequest) {
       
       const allRelatedFees = relatedFees.length > 0 ? relatedFees : feesByDate
       
-      // Calcular taxas totais relacionadas
-      const totalFees = allRelatedFees.reduce((sum: number, f: any) => {
+      // Calcular taxas totais relacionadas do Asaas
+      const feesFromAsaas = allRelatedFees.reduce((sum: number, f: any) => {
         const feeValue = Math.abs(Number(f.value) || 0)
         return sum + feeValue
       }, 0)
       
+      // Calcular taxa manualmente: R$ 1,98 por pagamento PIX recebido/confirmado
+      let calculatedFees = feesFromAsaas
+      if (payment.billingType === 'PIX' && (payment.status === 'RECEIVED' || payment.status === 'CONFIRMED')) {
+        // Se não encontrou taxas do Asaas ou se a taxa calculada manualmente é maior, usar a manual
+        const manualFee = 1.98
+        if (feesFromAsaas === 0 || manualFee > feesFromAsaas) {
+          calculatedFees = manualFee
+        }
+      }
+      
       // Calcular valor líquido
-      const grossValue = Number(payment.value) || 0
-      const netValue = grossValue - totalFees
+      const netValue = grossValue - calculatedFees
       
       return {
         ...payment,
         // Manter o valor original
         value: grossValue,
         // Adicionar campos calculados (sempre retornar valores, mesmo que 0)
-        calculatedFees: totalFees,
+        calculatedFees: calculatedFees,
         calculatedNetValue: netValue,
         // Manter netValue do Asaas se existir, senão usar o calculado
         netValue: payment.netValue || netValue,

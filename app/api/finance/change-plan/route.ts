@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
     // Preços
     const prices: Record<string, any> = {
       'lite': { monthly: 5.00, yearly: 5.00 },
-      'pro': { monthly: 5.00, yearly: 5.00 },
-      'plus': { monthly: 5.00, yearly: 5.00 }
+      'pro': { monthly: 6.00, yearly: 6.00 },
+      'plus': { monthly: 7.00, yearly: 7.00 }
     }
 
     const tierData = prices[newTier.toLowerCase()]

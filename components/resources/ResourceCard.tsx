@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Heart, Sparkles, Crown, Play } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
@@ -17,26 +17,95 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   const router = useRouter()
   const [isVideoHovered, setIsVideoHovered] = useState(false)
   const [videoRef, setVideoRef] = useState<HTMLVideoElement | null>(null)
+  const [isInView, setIsInView] = useState(false)
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
   const isOfficial = resource.is_official || isSystemProfile(resource.creator_id)
   const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
   const canLinkToProfile = !isOfficial && resource.creator_id && !isSystemProfile(resource.creator_id)
   const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
+  
+  // Calcular aspect ratio do vídeo baseado nas dimensões
+  const getVideoAspectRatio = () => {
+    if (!isVideo || !resource.width || !resource.height) {
+      return null // Fallback para aspect-square
+    }
+    // Usar aspect ratio customizado via style para proporções exatas
+    return { aspectRatio: `${resource.width} / ${resource.height}` }
+  }
+  
+  const videoAspectRatioStyle = getVideoAspectRatio()
+
+  // Intersection Observer para lazy loading
+  useEffect(() => {
+    if (!cardRef.current) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true)
+            // Carregar vídeo apenas quando estiver visível e próximo (100px antes)
+            if (isVideo) {
+              // Delay pequeno para não carregar todos os vídeos de uma vez
+              setTimeout(() => setShouldLoadVideo(true), 200)
+            }
+            observer.disconnect()
+          }
+        })
+      },
+      {
+        rootMargin: '100px', // Começar a carregar 100px antes de aparecer
+        threshold: 0.01
+      }
+    )
+
+    observer.observe(cardRef.current)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [isVideo])
+
+  // Cleanup do timeout no unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
-    <Link href={`/resources/${resource.id}`} className="break-inside-avoid mb-3 block group">
-      <div className="relative overflow-hidden rounded-2xl bg-gray-100 transition-all border border-gray-50 hover:border-primary-100 shadow-sm hover:shadow-md transition-all duration-300">
+    <Link href={`/resources/${resource.id}`} className="break-inside-avoid block group mb-2">
+      <div ref={cardRef} className={`relative overflow-hidden transition-all hover:opacity-90 transition-all duration-200 ${isVideo ? 'bg-black' : 'bg-gray-100'}`}>
         {/* Image/Video Container */}
         <div 
-          className="relative w-full overflow-hidden flex items-center justify-center min-h-[150px]"
+          className={`relative w-full overflow-hidden flex items-center justify-center ${isVideo ? '' : 'min-h-[150px]'}`}
           onMouseEnter={() => {
-            setIsVideoHovered(true)
-            if (videoRef && isVideo) {
-              videoRef.play().catch(() => {})
+            // Debounce para evitar múltiplas chamadas rápidas
+            if (hoverTimeoutRef.current) {
+              clearTimeout(hoverTimeoutRef.current)
             }
+            hoverTimeoutRef.current = setTimeout(() => {
+              setIsVideoHovered(true)
+              if (videoRef && isVideo && shouldLoadVideo) {
+                // Só tentar play se o vídeo já estiver carregado (metadata ou mais)
+                if (videoRef.readyState >= 2) {
+                  videoRef.play().catch(() => {
+                    // Silenciar erros de autoplay
+                  })
+                }
+              }
+            }, 100) // Pequeno delay para evitar sobrecarga
           }}
           onMouseLeave={() => {
+            if (hoverTimeoutRef.current) {
+              clearTimeout(hoverTimeoutRef.current)
+            }
             setIsVideoHovered(false)
             if (videoRef && isVideo) {
               videoRef.pause()
@@ -46,84 +115,132 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
         >
           {isVideo && resource.file_url ? (
             <div 
-              className="relative w-full aspect-square bg-black select-none"
+              className={`relative w-full select-none ${!videoAspectRatioStyle ? 'aspect-square' : ''}`}
+              style={videoAspectRatioStyle || undefined}
               onContextMenu={(e) => e.preventDefault()}
               onDragStart={(e) => e.preventDefault()}
             >
-              {/* Thumbnail - sempre visível quando não está em hover */}
+              {/* Preview de vídeo (metade) ou thumbnail - sempre visível quando não está em hover */}
               {resource.thumbnail_url ? (
-                <Image
-                  src={getS3Url(resource.thumbnail_url)}
-                  alt={resource.title}
-                  width={500}
-                  height={500}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-                    isVideoHovered ? 'opacity-0' : 'opacity-100'
-                  }`}
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  priority={false}
-                  draggable={false}
-                  onContextMenu={(e) => e.preventDefault()}
-                />
-              ) : (
-                // Fallback: mostrar primeiro frame do vídeo como thumbnail
+                // Se thumbnail_url for um vídeo (preview de metade), usar como vídeo
+                resource.thumbnail_url.match(/\.(mp4|webm)$/i) ? (
+                  <video
+                    src={getS3Url(resource.thumbnail_url)}
+                    className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
+                      isVideoHovered ? 'opacity-0' : 'opacity-100'
+                    }`}
+                    muted
+                    playsInline
+                    loop
+                    preload="metadata"
+                    controlsList="nodownload"
+                    disablePictureInPicture
+                    onContextMenu={(e) => e.preventDefault()}
+                    onDragStart={(e) => e.preventDefault()}
+                  />
+                ) : (
+                  // Thumbnail estático (imagem)
+                  <Image
+                    src={getS3Url(resource.thumbnail_url)}
+                    alt={resource.title}
+                    width={resource.width || 500}
+                    height={resource.height || 500}
+                    className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
+                      isVideoHovered ? 'opacity-0' : 'opacity-100'
+                    }`}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    priority={false}
+                    loading="lazy"
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                  />
+                )
+              ) : isInView ? (
+                // Fallback: mostrar preview de vídeo ou primeiro frame
                 <video
-                  src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=2'}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                  src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url))}
+                  className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
                     isVideoHovered ? 'opacity-0' : 'opacity-100'
                   }`}
                   muted
                   playsInline
+                  loop
                   preload="metadata"
                   controlsList="nodownload"
                   disablePictureInPicture
                   onContextMenu={(e) => e.preventDefault()}
                   onDragStart={(e) => e.preventDefault()}
-                  onLoadedData={(e) => {
-                    // Pausar em 2 segundos para usar como thumbnail (evita frames pretos)
-                    e.currentTarget.currentTime = 2
-                    e.currentTarget.pause()
+                  onLoadedMetadata={(e) => {
+                    // Ir para 2 segundos e pausar para usar como thumbnail
+                    const video = e.currentTarget
+                    if (video.duration >= 2) {
+                      video.currentTime = 2
+                    } else if (video.duration > 0) {
+                      video.currentTime = video.duration * 0.1
+                    }
+                    video.pause()
+                  }}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gray-200 animate-pulse" />
+              )}
+              {/* Vídeo completo - aparece apenas no hover - carregar apenas quando necessário */}
+              {shouldLoadVideo && (
+                <video
+                  ref={(el) => {
+                    setVideoRef(el)
+                    if (el && isVideoHovered && el.readyState >= 2) {
+                      el.play().catch(() => {})
+                    }
+                  }}
+                  src={resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)}
+                  className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
+                    isVideoHovered ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                  }`}
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  controlsList="nodownload noplaybackrate nofullscreen"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  onLoadedMetadata={(e) => {
+                    // Quando metadata carregar, se estiver em hover, tentar play
+                    if (isVideoHovered) {
+                      e.currentTarget.play().catch(() => {})
+                    }
+                  }}
+                  onCanPlay={(e) => {
+                    // Quando puder tocar, se estiver em hover, tocar
+                    if (isVideoHovered) {
+                      e.currentTarget.play().catch(() => {})
+                    }
+                  }}
+                  onAuxClick={(e) => {
+                    e.preventDefault()
+                    return false
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault()
+                    return false
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    return false
+                  }}
+                  onDragStart={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    return false
+                  }}
+                  style={{
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    pointerEvents: isVideoHovered ? 'auto' : 'none'
                   }}
                 />
               )}
-              {/* Vídeo - aparece apenas no hover - SEMPRE usar preview_url se disponível (com marca d'água) */}
-              <video
-                ref={setVideoRef}
-                src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=2'}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-                  isVideoHovered ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-                }`}
-                muted
-                loop
-                playsInline
-                preload="none"
-                controlsList="nodownload noplaybackrate nofullscreen"
-                disablePictureInPicture
-                disableRemotePlayback
-                onAuxClick={(e) => {
-                  e.preventDefault()
-                  return false
-                }}
-                onDoubleClick={(e) => {
-                  e.preventDefault()
-                  return false
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  return false
-                }}
-                onDragStart={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  return false
-                }}
-                style={{
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  pointerEvents: isVideoHovered ? 'auto' : 'none'
-                }}
-              />
               {/* Ícone de play - aparece apenas quando não está em hover */}
               {!isVideoHovered && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-20 pointer-events-none">
@@ -140,9 +257,10 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
               alt={resource.title}
               width={500}
               height={500}
-              className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
+              className="w-full h-auto object-cover"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               priority={false}
+              loading="lazy"
             />
           ) : resource.thumbnail_url ? (
             <Image
@@ -150,9 +268,10 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
               alt={resource.title}
               width={500}
               height={500}
-              className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
+              className="w-full h-auto object-cover"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               priority={false}
+              loading="lazy"
             />
           ) : (
             <div className="aspect-square w-full flex items-center justify-center bg-gray-50 text-gray-400 text-xs font-bold tracking-widest uppercase">
@@ -160,15 +279,15 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
             </div>
           )}
           
-          {/* Status Badge (Top Corners like Designi) */}
+          {/* Status Badge (Top Corners) */}
           <div className="absolute top-2 left-2 z-10">
             {resource.is_premium && (
-              <div className="bg-gray-900/80 backdrop-blur-sm p-1.5 rounded-lg shadow-lg border border-white/10">
+              <div className="bg-gray-900/80 backdrop-blur-sm p-1.5 rounded shadow-lg">
                 <Crown className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
               </div>
             )}
             {!resource.is_premium && (
-              <div className="bg-blue-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+              <div className="bg-blue-500 text-white text-[9px] font-bold px-2 py-0.5 rounded shadow-sm">
                 Grátis
               </div>
             )}
@@ -176,21 +295,21 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
 
           <div className="absolute top-2 right-2 z-10 flex gap-1">
             {resource.is_official && (
-              <div className="bg-gray-900/80 backdrop-blur-sm p-1 rounded-md shadow-sm">
+              <div className="bg-gray-900/80 backdrop-blur-sm p-1 rounded shadow-sm">
                 <Image src="/images/verificado.svg" alt="Oficial" width={12} height={12} className="w-3 h-3" />
               </div>
             )}
           </div>
 
           {resource.is_ai_generated && (
-            <div className="absolute bottom-2 left-2 z-10 bg-black/40 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-white/10 flex items-center gap-1 uppercase">
+            <div className="absolute bottom-2 left-2 z-10 bg-black/40 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1 uppercase">
               <Sparkles className="h-2.5 w-2.5 text-secondary-400" />
               IA Gerada
             </div>
           )}
 
           {/* Minimalist Overlay on hover */}
-          <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+          <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-xs font-semibold text-white drop-shadow-md truncate max-w-[150px] tracking-tight">

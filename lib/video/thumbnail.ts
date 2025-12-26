@@ -96,16 +96,17 @@ export async function extractVideoThumbnail(
               throw new Error('Could not find generated thumbnail file')
             }
             
-            // Processar com Sharp para otimizar
+            // Processar com Sharp para otimizar - tamanho menor para carregamento mais rápido
             thumbnailBuffer = await sharp(thumbnailBuffer)
-              .resize(1200, 1200, {
+              .resize(800, 800, {
                 fit: 'inside',
                 withoutEnlargement: true
               })
               .jpeg({ 
-                quality: quality,
+                quality: 80, // Qualidade reduzida para arquivos menores
                 progressive: true,
-                mozjpeg: true
+                mozjpeg: true,
+                optimizeScans: true
               })
               .toBuffer()
             

@@ -33,10 +33,21 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
     row_id: resource.id,
   })
 
-  // Verifica se o usuário logado favoritou o recurso
+  // Buscar perfil do usuário e verificar favorito
+  let initialUser = null
   let initialIsFavorited = false
+  let initialDownloadStatus = null
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (authUser) {
+    // Buscar perfil completo do usuário
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authUser.id)
+      .single()
+    initialUser = profile || null
+
+    // Verificar se favoritou
     const { data: favorite } = await supabase
       .from('favorites')
       .select('id')
@@ -44,6 +55,25 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
       .eq('resource_id', params.id)
       .single()
     initialIsFavorited = !!favorite
+
+    // Buscar status de downloads no servidor (para exibir imediatamente no botão)
+    try {
+      // Usar a função helper que conta corretamente
+      const { getDownloadStatus } = await import('@/lib/utils/downloads')
+      const downloadStatusData = await getDownloadStatus(authUser.id)
+      
+      if (downloadStatusData) {
+        initialDownloadStatus = {
+          current: downloadStatusData.current || 0,
+          limit: downloadStatusData.limit || 0,
+          remaining: downloadStatusData.remaining || 0,
+          allowed: downloadStatusData.allowed || false
+        }
+      }
+    } catch (error) {
+      // Silenciar erro - o cliente vai buscar depois se necessário
+      console.error('Error fetching initial download status:', error)
+    }
   }
 
   // Buscar coleções que contêm este recurso
@@ -145,7 +175,9 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
   return (
     <ResourceDetailClient 
       resource={resource} 
+      initialUser={initialUser}
       initialIsFavorited={initialIsFavorited}
+      initialDownloadStatus={initialDownloadStatus}
       collection={collection}
       collectionResources={collectionResources}
       relatedResources={relatedResources}

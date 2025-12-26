@@ -96,30 +96,57 @@ export default function PremiumPage() {
     {
       id: 'lite',
       name: 'Premium Lite',
-      price: '5,00', // Valor mínimo do Asaas para testes
-      description: 'Até 5 downloads por dia',
+      price: '5,00',
+      description: 'Ideal para iniciantes',
       icon: Zap,
       color: 'secondary',
-      features: ['Acesso total', 'Arquivos PSD/AI', 'Suporte via Chat']
+      downloadLimit: 3,
+      features: [
+        '3 downloads por dia',
+        'Acesso total à biblioteca',
+        'Arquivos PSD, AI e vetores',
+        'Suporte via Chat',
+        'Sem anúncios',
+        'Downloads ilimitados de recursos gratuitos'
+      ]
     },
     {
       id: 'pro',
       name: 'Premium Pro',
-      price: '5,00', // Valor mínimo do Asaas para testes
-      description: 'Até 10 downloads por dia',
+      price: '6,00',
+      description: 'Para profissionais criativos',
       icon: Crown,
       color: 'primary',
       popular: true,
-      features: ['Acesso total', 'Velocidade máxima', 'Sem anúncios']
+      downloadLimit: 10,
+      features: [
+        '10 downloads por dia',
+        'Acesso total à biblioteca',
+        'Arquivos PSD, AI e vetores',
+        'Velocidade máxima de download',
+        'Sem anúncios',
+        'Suporte prioritário',
+        'Acesso antecipado a novos recursos'
+      ]
     },
     {
       id: 'plus',
       name: 'Premium Plus',
-      price: '5,00', // Valor mínimo do Asaas para testes
-      description: 'Até 20 downloads por dia',
+      price: '7,00',
+      description: 'Máximo desempenho',
       icon: Star,
       color: 'secondary',
-      features: ['Acesso total', 'Suporte Prioritário', 'Atualizações diárias']
+      downloadLimit: 20,
+      features: [
+        '20 downloads por dia',
+        'Acesso total à biblioteca',
+        'Arquivos PSD, AI e vetores',
+        'Velocidade máxima de download',
+        'Sem anúncios',
+        'Suporte prioritário 24/7',
+        'Acesso antecipado a novos recursos',
+        'Atualizações diárias da biblioteca'
+      ]
     }
   ]
 
@@ -172,9 +199,19 @@ export default function PremiumPage() {
                   </div>
                 </div>
                 <div className="space-y-4 text-left">
-                  {plan.features.map(f => (
-                    <div key={f} className="flex items-center space-x-3 text-sm font-medium text-gray-600"><Check className="h-4 w-4 text-primary-500" /><span>{f}</span></div>
-                  ))}
+                  <div className="pb-4 border-b border-gray-100">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Downloads Diários</p>
+                    <p className="text-2xl font-bold text-gray-900">{plan.downloadLimit} <span className="text-sm font-normal text-gray-500">por dia</span></p>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-4">{plan.description}</p>
+                  <div className="space-y-3">
+                    {plan.features.map(f => (
+                      <div key={f} className="flex items-start space-x-3 text-sm font-medium text-gray-600">
+                        <Check className="h-4 w-4 text-primary-500 mt-0.5 flex-shrink-0" />
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="mt-10">

@@ -95,6 +95,21 @@ export default function AdminDashboardPage() {
   }
 
   async function handleApprove(resourceId: string) {
+    // Buscar dados do recurso antes de aprovar
+    const { data: resource } = await supabase
+      .from('resources')
+      .select(`
+        *,
+        creator:profiles!creator_id(email, full_name)
+      `)
+      .eq('id', resourceId)
+      .single()
+
+    if (!resource) {
+      alert('Recurso não encontrado')
+      return
+    }
+
     const { error } = await supabase
       .from('resources')
       .update({ 
@@ -109,12 +124,46 @@ export default function AdminDashboardPage() {
       return
     }
 
+    // Enviar email ao criador (via API route para evitar problemas com nodemailer no cliente)
+    if (resource.creator && resource.creator.email) {
+      try {
+        await fetch('/api/admin/notify-resource', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resourceId,
+            action: 'approved'
+          })
+        }).catch(() => {
+          // Ignorar erros de email (não bloquear aprovação)
+        })
+      } catch (emailError) {
+        console.error('Erro ao enviar email de aprovação:', emailError)
+        // Não bloquear a aprovação se o email falhar
+      }
+    }
+
     loadData()
   }
 
   async function handleReject(resourceId: string, reason: string) {
     const reasonText = prompt('Digite o motivo da rejeição:', reason)
     if (!reasonText) return
+
+    // Buscar dados do recurso antes de rejeitar
+    const { data: resource } = await supabase
+      .from('resources')
+      .select(`
+        *,
+        creator:profiles!creator_id(email, full_name)
+      `)
+      .eq('id', resourceId)
+      .single()
+
+    if (!resource) {
+      alert('Recurso não encontrado')
+      return
+    }
 
     const { error } = await supabase
       .from('resources')
@@ -129,6 +178,26 @@ export default function AdminDashboardPage() {
     if (error) {
       alert('Erro ao rejeitar recurso')
       return
+    }
+
+    // Enviar email ao criador (via API route para evitar problemas com nodemailer no cliente)
+    if (resource.creator && resource.creator.email) {
+      try {
+        await fetch('/api/admin/notify-resource', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resourceId,
+            action: 'rejected',
+            reason: reasonText
+          })
+        }).catch(() => {
+          // Ignorar erros de email (não bloquear rejeição)
+        })
+      } catch (emailError) {
+        console.error('Erro ao enviar email de rejeição:', emailError)
+        // Não bloquear a rejeição se o email falhar
+      }
     }
 
     loadData()

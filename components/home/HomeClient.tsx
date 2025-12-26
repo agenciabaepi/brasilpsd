@@ -60,13 +60,13 @@ export default function HomeClient({
         {/* Content Grid */}
         <>
           {/* Mobile: Grid 2 colunas */}
-          <div className="grid grid-cols-2 gap-3 min-h-[600px] lg:hidden">
+          <div className="grid grid-cols-2 gap-1 min-h-[600px] lg:hidden">
             {currentData.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} />
             ))}
           </div>
           {/* Desktop: Columns masonry */}
-          <div className="hidden lg:block columns-3 xl:columns-4 2xl:columns-5 gap-3 min-h-[600px]">
+          <div className="hidden lg:block columns-3 xl:columns-4 2xl:columns-5 gap-1 min-h-[600px]">
             {currentData.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} />
             ))}

@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     // 1. Configuração de Preços e Ciclos (valores mínimos para testes - mínimo do Asaas é R$ 5,00)
     const prices: Record<string, any> = {
       'lite': { monthly: 5.00, yearly: 5.00 },
-      'pro': { monthly: 5.00, yearly: 5.00 },
-      'plus': { monthly: 5.00, yearly: 5.00 }
+      'pro': { monthly: 6.00, yearly: 6.00 },
+      'plus': { monthly: 7.00, yearly: 7.00 }
     }
 
     const tierData = prices[tier.toLowerCase()]
@@ -122,6 +122,21 @@ export async function POST(request: NextRequest) {
           subscription_tier: tier.toLowerCase()
         })
         .eq('id', user.id)
+
+      // Enviar email de confirmação de assinatura (cartão é aprovado imediatamente)
+      try {
+        const { sendSubscriptionConfirmationEmail } = await import('@/lib/email/sender')
+        await sendSubscriptionConfirmationEmail(
+          user.email!,
+          profile.full_name || 'Usuário',
+          tier.toUpperCase(),
+          amount,
+          billingCycle
+        )
+      } catch (emailError) {
+        console.error('Erro ao enviar email de confirmação de assinatura:', emailError)
+        // Não falhar o checkout se o email falhar
+      }
 
       return NextResponse.json(paymentData)
     } else {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseAdmin } from '@/lib/supabase/client'
+import { createSupabaseAdmin } from '@/lib/supabase/server'
 import { asaas } from '@/lib/asaas/client'
 
 /**
@@ -194,6 +194,33 @@ async function processPaymentEvent({
           console.error('❌ Erro ao ativar premium:', profileError)
         } else {
           console.log(`✅ Pagamento confirmado - Premium ativado para ${profile.email} (${tier})`)
+          
+          // Enviar email de confirmação de pagamento e assinatura
+          try {
+            const { sendPaymentConfirmationEmail, sendSubscriptionConfirmationEmail } = await import('@/lib/email/sender')
+            
+            // Email de confirmação de pagamento
+            await sendPaymentConfirmationEmail(
+              profile.email,
+              profile.full_name || 'Usuário',
+              payment.value,
+              payment.billingType || 'PIX',
+              payment.id
+            )
+            
+            // Email de confirmação de assinatura
+            const billingCycle = payment.subscription ? 'monthly' : 'monthly' // Default mensal
+            await sendSubscriptionConfirmationEmail(
+              profile.email,
+              profile.full_name || 'Usuário',
+              tier.toUpperCase(),
+              payment.value,
+              billingCycle
+            )
+          } catch (emailError) {
+            console.error('Erro ao enviar emails de confirmação:', emailError)
+            // Não falhar o webhook se o email falhar
+          }
         }
         break
 

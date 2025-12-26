@@ -222,7 +222,7 @@ export default function AdminSubscriptionsPage() {
             userEmail: user.email,
             tier: user.subscription_tier || 'pro',
             status: user.is_premium ? 'ACTIVE' : 'INACTIVE',
-            amount: user.subscription_tier === 'lite' ? 19.90 : user.subscription_tier === 'pro' ? 29.90 : 49.90,
+            amount: user.subscription_tier === 'lite' ? 5.00 : user.subscription_tier === 'pro' ? 6.00 : 7.00,
             cycle: 'MONTHLY',
             billingType: 'CREDIT_CARD',
             nextDueDate: null,
@@ -773,9 +773,9 @@ export default function AdminSubscriptionsPage() {
                 </label>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { id: 'lite', name: 'Lite', price: createFormData.billingCycle === 'monthly' ? '19,90' : '16,90' },
-                    { id: 'pro', name: 'Pro', price: createFormData.billingCycle === 'monthly' ? '29,90' : '24,90' },
-                    { id: 'plus', name: 'Plus', price: createFormData.billingCycle === 'monthly' ? '49,90' : '39,90' }
+                    { id: 'lite', name: 'Lite', price: createFormData.billingCycle === 'monthly' ? '5,00' : '5,00' },
+                    { id: 'pro', name: 'Pro', price: createFormData.billingCycle === 'monthly' ? '6,00' : '6,00' },
+                    { id: 'plus', name: 'Plus', price: createFormData.billingCycle === 'monthly' ? '7,00' : '7,00' }
                   ].map((tier) => (
                     <button
                       key={tier.id}

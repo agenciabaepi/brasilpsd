@@ -471,7 +471,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
             <>
               {/* Mobile: Grid 2 colunas */}
               <div className={cn(
-                "gap-6 lg:hidden",
+                "gap-1 lg:hidden",
                 viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
               )}>
                 {resources.map((resource) => (
@@ -485,7 +485,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
               </div>
               {/* Desktop: Columns masonry */}
               <div className={cn(
-                "gap-6 hidden lg:block",
+                "gap-1 hidden lg:block",
                 viewMode === 'grid' ? "columns-3 xl:columns-5 2xl:columns-6" : "flex flex-col"
               )}>
                 {resources.map((resource) => (
