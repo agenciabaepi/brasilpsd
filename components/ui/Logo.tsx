@@ -15,14 +15,17 @@ export default function Logo({ variant = 'auto', className, width = 120, height 
     : '/images/logobranco.png'
 
   return (
-    <Image
-      src={logoSrc}
-      alt="BrasilPSD"
-      width={width}
-      height={height}
-      className={cn("h-8 w-auto", className)}
-      priority
-    />
+    <div className={cn("relative flex items-center flex-shrink-0", className)} style={{ height: '32px' }}>
+      <Image
+        src={logoSrc}
+        alt="BrasilPSD"
+        width={width}
+        height={height}
+        className="h-8 w-auto object-contain"
+        style={{ maxHeight: '32px', maxWidth: 'none' }}
+        priority
+      />
+    </div>
   )
 }
 

@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types/database'
 import toast from 'react-hot-toast'
+import { checkAndUpdateSubscriptionStatusClient } from '@/lib/utils/subscription-check'
 
 interface HeaderProps {
   initialUser?: Profile | null
@@ -174,6 +175,10 @@ export default function Header({ initialUser, initialSubscription, initialCatego
       if (!user?.id) return
 
       try {
+        // Verificar e atualizar status da assinatura primeiro
+        const { isActive, subscription: activeSub } = await checkAndUpdateSubscriptionStatusClient(user.id)
+
+        // Buscar assinatura atualizada
         const { data: subscriptionData } = await supabase
           .from('subscriptions')
           .select('*')
@@ -183,9 +188,12 @@ export default function Header({ initialUser, initialSubscription, initialCatego
           .limit(1)
           .maybeSingle()
 
+        // Usar a assinatura ativa encontrada pela verificação, ou a do banco
+        const finalSubscription = activeSub || subscriptionData
+
         // Atualizar apenas se mudou
-        if (subscriptionData?.id !== subscription?.id) {
-          setSubscription(subscriptionData)
+        if (finalSubscription?.id !== subscription?.id) {
+          setSubscription(finalSubscription)
         }
 
         // Também atualizar o perfil para pegar is_premium atualizado
@@ -195,7 +203,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
           .eq('id', user.id)
           .single()
 
-        if (profileData && profileData.is_premium !== user.is_premium) {
+        if (profileData) {
           setUser(profileData)
         }
       } catch (error) {
@@ -261,14 +269,14 @@ export default function Header({ initialUser, initialSubscription, initialCatego
       {/* Top Row: Logo & User Actions */}
       <div className="border-b border-gray-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
+          <div className="flex h-16 items-center justify-between gap-2">
             {/* Logo */}
-            <Link href="/" className="flex items-center space-x-3">
+            <Link href="/" className="flex items-center flex-shrink-0 min-w-0">
               <Logo variant="dark" />
             </Link>
 
             {/* Top Right Actions */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center gap-1 sm:gap-2 md:gap-6 flex-shrink-0 min-w-0">
               <button className="hidden sm:flex text-gray-500 hover:text-gray-900 transition-colors">
                 <Moon className="h-5 w-5" />
               </button>
@@ -290,7 +298,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
               </Link>
               )}
 
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 {user ? (
                   <>
                     <Link
@@ -310,7 +318,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
                       size="sm" 
                       onClick={handleSignOut} 
                       disabled={isLoggingOut}
-                      className="text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="hidden sm:flex text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoggingOut ? 'Saindo...' : 'Sair'}
                     </Button>
@@ -318,13 +326,13 @@ export default function Header({ initialUser, initialSubscription, initialCatego
                 ) : (
                   <>
                     <Link href="/signup">
-                      <Button variant="outline" size="sm" className="rounded-full px-6 border-gray-200 text-gray-700 font-semibold">
+                      <Button variant="outline" size="sm" className="rounded-full px-3 sm:px-4 md:px-6 border-gray-200 text-gray-700 font-semibold text-xs sm:text-sm whitespace-nowrap">
                         Cadastre-se
                       </Button>
                     </Link>
                     <Link href="/login">
-                      <Button variant="secondary" size="sm" className="rounded-full px-8 font-semibold">
-                        <User className="mr-2 h-4 w-4 fill-current" />
+                      <Button variant="secondary" size="sm" className="rounded-full px-3 sm:px-4 md:px-8 font-semibold text-xs sm:text-sm whitespace-nowrap">
+                        <User className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 fill-current" />
                         Entrar
                       </Button>
                     </Link>
@@ -334,8 +342,9 @@ export default function Header({ initialUser, initialSubscription, initialCatego
 
               {/* Mobile Menu Button */}
               <button
-                className="md:hidden p-2 text-gray-600"
+                className="md:hidden p-2 text-gray-600 flex-shrink-0 ml-2"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
+                aria-label="Toggle menu"
               >
                 {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </button>
