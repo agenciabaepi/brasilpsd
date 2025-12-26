@@ -2,10 +2,11 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
-import { Heart, Sparkles, Crown, Play } from 'lucide-react'
+import { Heart, Sparkles, Crown, Play, Package } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { isSystemProfile } from '@/lib/utils/system'
+import FontThumbnail from '@/components/fonts/FontThumbnail'
 
 interface ResourceCardProps {
   resource: Resource
@@ -19,6 +20,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   const [videoRef, setVideoRef] = useState<HTMLVideoElement | null>(null)
   const [isInView, setIsInView] = useState(false)
   const [shouldLoadVideo, setShouldLoadVideo] = useState(false)
+  const [familyCount, setFamilyCount] = useState<number | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
@@ -69,6 +71,33 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
       observer.disconnect()
     }
   }, [isVideo])
+
+  // Verificar se a fonte pertence a uma família
+  useEffect(() => {
+    async function checkFamily() {
+      if (resource.resource_type === 'font') {
+        try {
+          const { createSupabaseClient } = await import('@/lib/supabase/client')
+          const supabase = createSupabaseClient()
+          const familyId = resource.font_family_id || resource.id
+          
+          const { count } = await supabase
+            .from('resources')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'approved')
+            .eq('resource_type', 'font')
+            .or(`id.eq.${familyId},font_family_id.eq.${familyId}`)
+          
+          if (count && count > 1) {
+            setFamilyCount(count)
+          }
+        } catch (error) {
+          console.error('Error checking font family:', error)
+        }
+      }
+    }
+    checkFamily()
+  }, [resource.resource_type, resource.font_family_id, resource.id])
 
   // Cleanup do timeout no unmount
   useEffect(() => {
@@ -250,6 +279,9 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
                 </div>
               )}
             </div>
+          ) : resource.resource_type === 'font' ? (
+            // Thumbnail automática para fontes
+            <FontThumbnail resource={resource} size="medium" className="w-full" />
           ) : resource.preview_url ? (
             // Usar preview_url (com marca d'água) se disponível
             <Image
@@ -305,6 +337,14 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
             <div className="absolute bottom-2 left-2 z-10 bg-black/40 backdrop-blur-md text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1 uppercase">
               <Sparkles className="h-2.5 w-2.5 text-secondary-400" />
               IA Gerada
+            </div>
+          )}
+
+          {/* Badge de Família de Fontes */}
+          {resource.resource_type === 'font' && familyCount && familyCount > 1 && (
+            <div className="absolute bottom-2 right-2 z-10 bg-primary-500 text-white text-[9px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1.5">
+              <Package className="h-3 w-3" />
+              <span>Família ({familyCount})</span>
             </div>
           )}
 

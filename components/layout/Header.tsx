@@ -33,10 +33,10 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     let isUpdating = false
     let lastUserId: string | null = null
 
-    // Verificar sessão imediatamente ao montar (para evitar flash)
+    // Verificar usuário autenticado imediatamente ao montar (para evitar flash)
     const checkInitialSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { user: authUser } } = await supabase.auth.getUser()
         
         if (!mounted) return
 
@@ -64,18 +64,18 @@ export default function Header({ initialUser, initialSubscription, initialCatego
               setSubscription(subscriptionData)
             }
           }
-        } else if (session?.user) {
-          // Se não temos initialUser mas temos sessão no cliente, buscar dados
+        } else if (authUser) {
+          // Se não temos initialUser mas temos usuário autenticado no cliente, buscar dados
           const [profileResult, subscriptionResult] = await Promise.all([
             supabase
               .from('profiles')
               .select('*')
-              .eq('id', session.user.id)
+              .eq('id', authUser.id)
               .single(),
             supabase
               .from('subscriptions')
               .select('*')
-              .eq('user_id', session.user.id)
+              .eq('user_id', authUser.id)
               .eq('status', 'active')
               .order('created_at', { ascending: false })
               .limit(1)
@@ -86,8 +86,8 @@ export default function Header({ initialUser, initialSubscription, initialCatego
             setUser(profileResult.data)
             setSubscription(subscriptionResult.data)
           }
-        } else if (!session && user) {
-          // Se não há sessão mas temos usuário, limpar
+        } else if (!authUser && user) {
+          // Se não há usuário autenticado mas temos usuário no estado, limpar
           if (mounted) {
             setUser(null)
             setSubscription(null)
@@ -244,7 +244,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   const isActive = (path: string) => pathname === path
 
   // Categorias fixas que já estão no menu - não devem aparecer duplicadas
-  const fixedMenuItems = ['Home', 'Imagens', 'Coleções']
+  const fixedMenuItems = ['Home', 'Imagens', 'Fontes', 'Áudios', 'Coleções']
   
   // Encontrar categoria "Imagens" e "Coleções" no banco para verificar subcategorias
   // Buscar por nome ou slug (case-insensitive)
@@ -296,6 +296,8 @@ export default function Header({ initialUser, initialSubscription, initialCatego
       hasDropdown: imagesSubItems.length > 0,
       subItems: imagesSubItems
     },
+    { id: 'fonts', name: 'Fontes', href: '/fonts' },
+    { id: 'audios', name: 'Áudios', href: '/audios' },
     { 
       id: 'collections', 
       name: 'Coleções', 
@@ -304,7 +306,26 @@ export default function Header({ initialUser, initialSubscription, initialCatego
       subItems: collectionsSubItems
     },
     ...categories
-      .filter(c => !c.parent_id && !fixedMenuItems.includes(c.name))
+      .filter(c => {
+        // Filtrar categorias que não devem aparecer no menu principal
+        if (!c.parent_id && fixedMenuItems.includes(c.name)) return false
+        
+        // Encontrar categorias de fontes e áudios
+        const fontesCategory = categories.find(cat => !cat.parent_id && (cat.slug === 'fontes' || cat.slug === 'fonts' || cat.name.toLowerCase() === 'fontes'))
+        const audiosCategory = categories.find(cat => !cat.parent_id && (cat.slug === 'audios' || cat.slug === 'audio' || cat.name.toLowerCase() === 'áudios' || cat.name.toLowerCase() === 'audios'))
+        
+        // Excluir a categoria principal de fontes
+        if (fontesCategory && c.id === fontesCategory.id) return false
+        // Excluir a categoria principal de áudios
+        if (audiosCategory && c.id === audiosCategory.id) return false
+        // Excluir subcategorias de fontes
+        if (fontesCategory && c.parent_id === fontesCategory.id) return false
+        // Excluir subcategorias de áudios
+        if (audiosCategory && c.parent_id === audiosCategory.id) return false
+        
+        return true
+      })
+      .filter(c => !c.parent_id) // Apenas categorias principais
       .map(parent => ({
         id: `category-${parent.id}`,
         name: parent.name,

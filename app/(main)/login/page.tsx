@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showVerificationModal, setShowVerificationModal] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
   const supabase = createSupabaseClient()
 
   async function handleSubmit(e: React.FormEvent) {
@@ -84,7 +86,7 @@ export default function LoginPage() {
 
       toast.success('Login realizado com sucesso!')
       // Usar window.location para garantir que a sessão seja reconhecida
-      window.location.href = '/dashboard'
+      window.location.href = redirectTo
     } catch (error: any) {
       // Só mostrar erro se a flag permitir
       if (shouldShowError) {

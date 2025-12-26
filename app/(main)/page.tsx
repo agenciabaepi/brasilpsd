@@ -14,38 +14,46 @@ export const dynamic = 'force-dynamic'
 export default async function HomePage() {
   const supabase = createServerSupabaseClient()
 
-  // 1. Destaques (Oficiais)
+  // 1. Destaques (Oficiais) - excluindo fontes e áudios
   const { data: officialResources } = await supabase
     .from('resources')
     .select('*, creator:profiles!creator_id(*)')
     .eq('status', 'approved')
     .eq('is_official', true)
+    .neq('resource_type', 'font')
+    .neq('resource_type', 'audio')
     .order('created_at', { ascending: false })
     .limit(50)
 
-  // 2. Exclusivos (Mais baixados ou Premium)
+  // 2. Exclusivos (Mais baixados ou Premium) - excluindo fontes e áudios
   const { data: popularResources } = await supabase
     .from('resources')
     .select('*, creator:profiles!creator_id(*)')
     .eq('status', 'approved')
     .eq('is_premium', true)
+    .neq('resource_type', 'font')
+    .neq('resource_type', 'audio')
     .order('download_count', { ascending: false })
     .limit(50)
 
-  // 3. Novos (Comunidade)
+  // 3. Novos (Comunidade) - excluindo fontes e áudios
   const { data: latestResources } = await supabase
     .from('resources')
     .select('*, creator:profiles!creator_id(*)')
     .eq('status', 'approved')
+    .neq('resource_type', 'font')
+    .neq('resource_type', 'audio')
     .order('created_at', { ascending: false })
     .limit(50)
 
-  // 4. Grátis
+  // 4. Grátis - excluindo fontes e áudios
   const { data: freeResources } = await supabase
     .from('resources')
     .select('*, creator:profiles!creator_id(*)')
     .eq('status', 'approved')
     .eq('is_premium', false)
+    .neq('resource_type', 'font')
+    .neq('resource_type', 'audio')
     .order('created_at', { ascending: false })
     .limit(50)
 

@@ -12,7 +12,9 @@ import {
   ExternalLink, 
   LogOut,
   ChevronRight,
-  FolderOpen
+  FolderOpen,
+  Type,
+  Music
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { createSupabaseClient } from '@/lib/supabase/client'
@@ -23,6 +25,8 @@ const menuItems = [
   { name: 'Painel', href: '/creator', icon: LayoutDashboard },
   { name: 'Meus Arquivos', href: '/creator/resources', icon: Files },
   { name: 'Fazer Upload', href: '/creator/upload', icon: UploadCloud },
+  { name: 'Upload de Fonte', href: '/creator/upload/font', icon: Type },
+  { name: 'Upload de Áudio', href: '/creator/upload/audio', icon: Music },
   { name: 'Coleções', href: '/creator/collections', icon: FolderOpen },
   { name: 'Minhas Comissões', href: '/creator/earnings', icon: DollarSign },
   { name: 'Perfil Criador', href: '/creator/profile', icon: User },

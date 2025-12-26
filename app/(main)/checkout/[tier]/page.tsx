@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
-import { CreditCard, QrCode, Barcode, Check, X, Copy, ShieldCheck, ArrowLeft, Lock, Clock } from 'lucide-react'
+import { CreditCard, QrCode, Barcode, Check, X, Copy, ShieldCheck, ArrowLeft, Lock, Clock, AlertCircle, LogIn } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { createSupabaseClient } from '@/lib/supabase/client'
 
 type Method = 'CREDIT_CARD' | 'PIX' | 'BOLETO'
 
@@ -14,12 +15,14 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const cycle = searchParams.get('cycle') || 'monthly'
+  const supabase = createSupabaseClient()
   
   const [method, setMethod] = useState<Method>('PIX')
   const [loading, setLoading] = useState(false)
   const [paymentResult, setPaymentResult] = useState<any>(null)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<number>(600) // 10 minutos em segundos
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null) // null = verificando
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -48,6 +51,35 @@ export default function CheckoutPage() {
   }
 
   const currentPlan = planInfo[tier as string] || planInfo.pro
+
+  // Verificar autenticação
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        setIsAuthenticated(!!user)
+        
+        if (!user) {
+          // Se não estiver autenticado, redirecionar para login após 3 segundos
+          // Mas vamos apenas mostrar o alerta visual primeiro
+        }
+      } catch (error) {
+        console.error('Erro ao verificar autenticação:', error)
+        setIsAuthenticated(false)
+      }
+    }
+    
+    checkAuth()
+    
+    // Escutar mudanças na autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsAuthenticated(!!session)
+    })
+    
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase.auth])
 
   // Timer countdown
   useEffect(() => {
@@ -187,6 +219,13 @@ export default function CheckoutPage() {
   }, [paymentResult])
 
   async function handlePayment() {
+    // Verificar autenticação antes de processar pagamento
+    if (!isAuthenticated) {
+      toast.error('Você precisa estar logado para realizar o pagamento')
+      router.push(`/login?redirect=/checkout/${tier}?cycle=${cycle}`)
+      return
+    }
+    
     setLoading(true)
     try {
       const body: any = { tier, method, billingCycle: cycle }
@@ -248,11 +287,40 @@ export default function CheckoutPage() {
           Voltar para Planos
         </Link>
 
+        {/* Alerta de Autenticação */}
+        {isAuthenticated === false && (
+          <div className="mb-6 bg-amber-50 border-2 border-amber-200 rounded-2xl p-6">
+            <div className="flex items-start space-x-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-amber-900 mb-2">
+                  Login necessário para continuar
+                </h3>
+                <p className="text-sm text-amber-700 mb-4">
+                  Você precisa estar logado para realizar o pagamento e ativar sua assinatura premium.
+                </p>
+                <Link
+                  href={`/login?redirect=/checkout/${tier}?cycle=${cycle}`}
+                  className="inline-flex items-center space-x-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Fazer Login</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           
           {/* Coluna de Pagamento */}
           <div className="lg:col-span-3 space-y-6">
-            <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm">
+            <div className={cn(
+              "bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm",
+              !isAuthenticated && "opacity-75"
+            )}>
               <h1 className="text-2xl font-bold text-gray-900 mb-8">Como deseja pagar?</h1>
               
               <div className="grid grid-cols-3 gap-3 mb-6">
@@ -309,8 +377,17 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <button onClick={handlePayment} disabled={loading} className="w-full h-14 bg-gray-900 text-white rounded-2xl font-bold text-sm hover:bg-black transition-all disabled:opacity-50">
-                {loading ? 'Processando...' : 'Finalizar Assinatura'}
+              <button 
+                onClick={handlePayment} 
+                disabled={loading || !isAuthenticated} 
+                className={cn(
+                  "w-full h-14 text-white rounded-2xl font-bold text-sm transition-all",
+                  isAuthenticated 
+                    ? "bg-gray-900 hover:bg-black disabled:opacity-50" 
+                    : "bg-gray-400 cursor-not-allowed"
+                )}
+              >
+                {loading ? 'Processando...' : !isAuthenticated ? 'Faça login para continuar' : 'Finalizar Assinatura'}
               </button>
             </div>
 

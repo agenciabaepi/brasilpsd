@@ -27,14 +27,14 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  // Atualizar a sessão se necessário
+  // Verificar usuário autenticado (usando getUser() para segurança)
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
   // Protect admin routes
   if (req.nextUrl.pathname.startsWith('/admin')) {
-    if (!session) {
+    if (!user) {
       const url = req.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
@@ -43,7 +43,7 @@ export async function middleware(req: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_admin')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile?.is_admin) {
@@ -73,7 +73,7 @@ export async function middleware(req: NextRequest) {
   
   // Otherwise, protect creator dashboard routes
   if (isProtectedRoute) {
-    if (!session) {
+    if (!user) {
       const url = req.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
@@ -82,7 +82,7 @@ export async function middleware(req: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_creator, is_admin')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile?.is_creator && !profile?.is_admin) {
@@ -95,7 +95,7 @@ export async function middleware(req: NextRequest) {
   // Protect dashboard routes
   if (req.nextUrl.pathname.startsWith('/dashboard') || 
       req.nextUrl.pathname.startsWith('/favorites')) {
-    if (!session) {
+    if (!user) {
       const url = req.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)

@@ -16,12 +16,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { metadata, fileName, categories, imageBase64 } = await request.json()
+    const { metadata, fileName, categories, imageBase64, resourceType } = await request.json()
 
     // Se temos imagem visual, não usar fileName para evitar que a IA copie o nome do arquivo
     const shouldIgnoreFileName = !!imageBase64
+    const isFont = resourceType === 'font'
 
     console.log('📸 AI Generate Content Request:', {
+      resourceType: resourceType || 'image',
       fileName: shouldIgnoreFileName ? 'IGNORADO (usando análise visual)' : (fileName || 'não fornecido'),
       hasImageBase64: !!imageBase64,
       imageBase64Length: imageBase64?.length || 0,
@@ -36,38 +38,74 @@ export async function POST(request: NextRequest) {
     // Buscar categorias se não foram fornecidas
     let categoriesList = categories
     if (!categoriesList || categoriesList.length === 0) {
-      // Se não foram fornecidas, buscar apenas categorias de imagens
-      const { data: imagensCategory } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('slug', 'imagens')
-        .is('parent_id', null)
-        .maybeSingle()
-      
-      if (imagensCategory) {
-        const { data: mainCat } = await supabase
+      if (isFont) {
+        // Buscar categorias de fontes
+        const { data: fontesCategory } = await supabase
           .from('categories')
-          .select('id, name, parent_id, slug')
-          .eq('id', imagensCategory.id)
-          .single()
+          .select('id')
+          .or('slug.eq.fontes,slug.eq.fonts')
+          .is('parent_id', null)
+          .maybeSingle()
         
-        const { data: subCats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id, slug')
-          .eq('parent_id', imagensCategory.id)
-          .order('order_index', { ascending: true })
-        
-        categoriesList = [
-          ...(mainCat ? [mainCat] : []),
-          ...(subCats || [])
-        ]
+        if (fontesCategory) {
+          const { data: mainCat } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .eq('id', fontesCategory.id)
+            .single()
+          
+          const { data: subCats } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .eq('parent_id', fontesCategory.id)
+            .order('order_index', { ascending: true })
+          
+          categoriesList = [
+            ...(mainCat ? [mainCat] : []),
+            ...(subCats || [])
+          ]
+        } else {
+          // Fallback: buscar todas
+          const { data: cats } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .order('name')
+          categoriesList = cats || []
+        }
       } else {
-        // Fallback: buscar todas
-        const { data: cats } = await supabase
+        // Buscar categorias de imagens (padrão)
+        const { data: imagensCategory } = await supabase
           .from('categories')
-          .select('id, name, parent_id, slug')
-          .order('name')
-        categoriesList = cats || []
+          .select('id')
+          .eq('slug', 'imagens')
+          .is('parent_id', null)
+          .maybeSingle()
+        
+        if (imagensCategory) {
+          const { data: mainCat } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .eq('id', imagensCategory.id)
+            .single()
+          
+          const { data: subCats } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .eq('parent_id', imagensCategory.id)
+            .order('order_index', { ascending: true })
+          
+          categoriesList = [
+            ...(mainCat ? [mainCat] : []),
+            ...(subCats || [])
+          ]
+        } else {
+          // Fallback: buscar todas
+          const { data: cats } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .order('name')
+          categoriesList = cats || []
+        }
       }
     }
     
@@ -151,12 +189,110 @@ export async function POST(request: NextRequest) {
     const messages: any[] = [
       {
         role: 'system',
-        content: 'Você é um especialista em criar títulos e descrições profissionais para imagens de stock e categorizar imagens adequadamente. Sempre responda em português brasileiro. Você DEVE responder APENAS com um objeto JSON válido, sem markdown, sem texto adicional. Use o formato JSON especificado nas instruções.'
+        content: isFont 
+          ? 'Você é um especialista em tipografia e categorização de fontes. Analise o nome da fonte e identifique seu estilo, categoria e características. Sempre responda em português brasileiro. Você DEVE responder APENAS com um objeto JSON válido, sem markdown, sem texto adicional.'
+          : 'Você é um especialista em criar títulos e descrições profissionais para imagens de stock e categorizar imagens adequadamente. Sempre responda em português brasileiro. Você DEVE responder APENAS com um objeto JSON válido, sem markdown, sem texto adicional. Use o formato JSON especificado nas instruções.'
       }
     ]
 
-    // Se tiver imagem em base64, usar API de visão
-    if (imageBase64) {
+    // Se for fonte, usar prompt específico para fontes
+    if (isFont) {
+      const isFamily = metadata.isFamily === true
+      const familySize = metadata.familySize || 1
+      const allFileNames = metadata.allFileNames || []
+      
+      messages.push({
+        role: 'user',
+        content: `Você está analisando ${isFamily ? `uma FAMÍLIA DE FONTES com ${familySize} variações` : 'uma FONTE TIPOGRÁFICA'}. Com base no nome do arquivo e nas informações disponíveis, identifique:
+
+1. O estilo da fonte (Sans Serif, Serif, Display, Script, etc.)
+2. ${isFamily ? 'O estilo geral da família (não o peso específico de uma variação)' : 'O PESO da fonte (Bold, Thin, Regular, Medium, Light, Heavy, Black, etc.)'}
+3. As características visuais (Modern, Vintage, Elegant, etc.)
+4. O uso recomendado (títulos, corpo de texto, decorativa, etc.)
+
+${isFamily ? `FAMÍLIA DE FONTES:
+Nome base da família: ${fileName || 'desconhecido'}
+Total de variações: ${familySize}
+Arquivos da família: ${allFileNames.length > 0 ? allFileNames.join(', ') : 'desconhecido'}
+` : `FONTE INDIVIDUAL:
+Nome do arquivo: ${fileName || 'desconhecido'}
+`}
+Formato: ${metadata.format || metadata.fileExtension || 'TTF'}
+Tamanho: ${metadata.fileSize ? (metadata.fileSize / 1024).toFixed(1) + ' KB' : 'desconhecido'}
+
+Categorias disponíveis de fontes:
+${categoriesText}
+
+INSTRUÇÕES:
+1. Analise ${isFamily ? 'os nomes dos arquivos da família' : 'o nome da fonte'} para identificar:
+   - ${isFamily ? 'Nome BASE da família (sem variações de peso ou estilo)' : 'PESO: Bold, Thin, Light, Regular, Medium, SemiBold, ExtraBold, Black, Heavy, etc.'}
+   - ESTILO: Sans Serif, Serif, Script, Display, Monospace, etc.
+   - CARACTERÍSTICAS: Modern, Vintage, Elegant, Minimalist, etc.
+
+2. Gere um título profissional e descritivo (máximo 60 caracteres) em português brasileiro
+   ${isFamily 
+     ? '- Use APENAS o nome base da família (ex: "Montserrat", "Roboto", "Playfair Display")'
+     : '- Inclua o nome da fonte e o peso se identificado (ex: "Montserrat Bold", "Roboto Thin")'
+   }
+
+3. Crie uma descrição detalhada (2-3 frases) descrevendo:
+   - O estilo tipográfico
+   ${isFamily 
+     ? '- Mencione que é uma família completa com múltiplas variações'
+     : '- O peso da fonte (se identificado)'
+   }
+   - Características visuais
+   - Uso recomendado
+
+4. Extraia 3-5 palavras-chave relevantes incluindo o peso (ex: "sans-serif", "bold", "moderno", "elegante", "títulos")
+
+5. Escolha a categoria MAIS APROPRIADA baseada no estilo${isFamily ? ' geral da família' : ' e peso identificado'}:
+   ${isFamily 
+     ? `- Para FAMÍLIAS, escolha baseado no ESTILO GERAL (Sans Serif, Serif, Script, etc.)
+   - NÃO escolha categorias de peso específico (Bold, Thin) para famílias
+   - Escolha a categoria de estilo que melhor representa a família completa`
+     : `- Se identificar peso "Bold", "Heavy", "Black" → escolha "Bold" ou "Bold & Heavy"
+   - Se identificar peso "Thin", "Light", "ExtraLight" → escolha "Thin"
+   - Se identificar estilo "Script" → escolha "Script" ou "Brush"
+   - Se identificar estilo "Serif" → escolha "Serif" ou "Elegante"
+   - E assim por diante...`
+   }
+
+${isFamily ? `EXEMPLOS DE ANÁLISE PARA FAMÍLIAS:
+- Arquivos: "Montserrat-Bold.ttf", "Montserrat-Regular.ttf", "Montserrat-Thin.ttf" 
+  → Título: "Montserrat" (SEM peso), Categoria: "Sans Serif", Estilo: Sans Serif
+- Arquivos: "PlayfairDisplay-Regular.otf", "PlayfairDisplay-Bold.otf"
+  → Título: "Playfair Display" (SEM peso), Categoria: "Serif" ou "Elegante", Estilo: Serif
+- Arquivos: "Sansita-BoldItalic.ttf", "Sansita-Regular.ttf", "Sansita-ExtraBold.ttf"
+  → Título: "Sansita" (SEM peso), Categoria: "Sans Serif" ou "Display", Estilo: Sans Serif
+` : `EXEMPLOS DE ANÁLISE PARA FONTES ÚNICAS:
+- "Montserrat-Bold.ttf" → Peso: Bold, Categoria: "Bold" ou "Bold & Heavy", Estilo: Sans Serif
+- "PlayfairDisplay-Regular.otf" → Peso: Regular, Categoria: "Serif" ou "Elegante", Estilo: Serif
+- "BrushScript-Regular.ttf" → Peso: Regular, Categoria: "Script" ou "Brush", Estilo: Script
+- "Roboto-Thin.woff" → Peso: Thin, Categoria: "Thin" ou "Sans Serif", Estilo: Sans Serif
+`}
+
+IMPORTANTE SOBRE CATEGORIAS:
+- Você DEVE escolher pelo menos 1 categoria das subcategorias de Fontes
+- Use APENAS os IDs que estão na lista acima
+${isFamily 
+  ? '- Para FAMÍLIAS: escolha categoria baseada no ESTILO GERAL, não em peso específico'
+  : '- Priorize categorias de peso (Bold, Thin) quando identificadas'
+}
+- Se a fonte se encaixa em múltiplas categorias, escolha a mais específica
+
+Responda APENAS com JSON válido (sem markdown, sem código, apenas JSON puro):
+{
+  "title": "${isFamily ? 'APENAS o nome base da família (ex: "Montserrat", "Roboto") - SEM variações de peso ou estilo' : 'título profissional da fonte incluindo peso se identificado'}",
+  "description": "${isFamily ? 'descrição do estilo geral da família e suas características' : 'descrição do estilo, peso e características da fonte'}",
+  "keywords": ["palavra1", "palavra2", ${isFamily ? '"família", "family"' : '"peso-identificado"'}, "palavra3"],
+  ${isFamily ? '' : '"font_weight": "peso identificado (Bold, Thin, Regular, etc.)",'}
+  "category_id": "uuid-da-categoria-mais-apropriada",
+  "category_ids": ["uuid-da-categoria1"]
+}`
+      })
+    } else if (imageBase64) {
+      // Se tiver imagem em base64, usar API de visão
       messages.push({
         role: 'user',
         content: [
@@ -333,7 +469,8 @@ Responda APENAS no formato JSON válido:
             hasDescription: !!parsed.description,
             keywordsCount: parsed.keywords?.length || 0,
             categoryIds: parsed.category_ids,
-            categoryId: parsed.category_id
+            categoryId: parsed.category_id,
+            fontWeight: parsed.font_weight
           })
           
           // Validar se as categorias sugeridas existem
@@ -404,7 +541,8 @@ Responda APENAS no formato JSON válido:
             description: parsed.description || generateDescriptionFromMetadata(metadata),
             keywords: parsed.keywords || [],
             category_ids: categoryIds,
-            category_id: categoryIds.length > 0 ? categoryIds[0] : null // Primeira categoria para compatibilidade
+            category_id: categoryIds.length > 0 ? categoryIds[0] : null, // Primeira categoria para compatibilidade
+            font_weight: parsed.font_weight || null // Peso da fonte identificado pela IA
           })
         } else {
           console.warn('⚠️ No JSON found in response')

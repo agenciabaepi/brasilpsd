@@ -20,7 +20,8 @@ import {
   UserPlus,
   Check,
   Grid3x3,
-  RefreshCw
+  RefreshCw,
+  Package
 } from 'lucide-react'
 import type { Resource, Profile, Collection } from '@/types/database'
 import ResourceCard from '@/components/resources/ResourceCard'
@@ -29,6 +30,8 @@ import toast from 'react-hot-toast'
 import { getS3Url } from '@/lib/aws/s3'
 import { cn } from '@/lib/utils/cn'
 import { isSystemProfileSync } from '@/lib/utils/system'
+import FontThumbnail from '@/components/fonts/FontThumbnail'
+import AudioPlayer from '@/components/audio/AudioPlayer'
 
 interface ResourceDetailClientProps {
   resource: Resource
@@ -54,6 +57,9 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   const [downloadStatus, setDownloadStatus] = useState<{ current: number; limit: number; remaining: number; allowed: boolean } | null>(initialDownloadStatus)
   const [loadingDownloadStatus, setLoadingDownloadStatus] = useState(false)
   const [resourceData, setResourceData] = useState(resource)
+  const [fontLoaded, setFontLoaded] = useState(false)
+  const [fontName, setFontName] = useState<string>('')
+  const [familyCount, setFamilyCount] = useState<number | null>(null)
   const supabase = createSupabaseClient()
 
   useEffect(() => {
@@ -103,6 +109,83 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
     loadUser()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.creator_id, initialUser])
+
+  // Carregar fonte para preview (se for fonte)
+  useEffect(() => {
+    async function loadFont() {
+      if (resource.resource_type === 'font' && resource.file_url) {
+        try {
+          const fontUrl = getS3Url(resource.file_url)
+          const fontId = `font-detail-${resource.id.replace(/-/g, '')}`
+          
+          // Verificar se o estilo já existe
+          const existingStyle = document.getElementById(`font-style-${resource.id}`)
+          if (existingStyle) {
+            setFontName(fontId)
+            setFontLoaded(true)
+            return
+          }
+          
+          // Criar @font-face dinamicamente
+          const style = document.createElement('style')
+          style.id = `font-style-${resource.id}`
+          
+          // Determinar formato da fonte
+          const fileFormat = resource.file_format?.toLowerCase() || 'ttf'
+          let fontFormat = 'truetype'
+          if (fileFormat === 'otf') fontFormat = 'opentype'
+          else if (fileFormat === 'woff') fontFormat = 'woff'
+          else if (fileFormat === 'woff2') fontFormat = 'woff2'
+          
+          style.textContent = `
+            @font-face {
+              font-family: '${fontId}';
+              src: url('${fontUrl}') format('${fontFormat}');
+              font-display: swap;
+            }
+          `
+          document.head.appendChild(style)
+          
+          // Aguardar carregamento da fonte
+          const font = new FontFace(fontId, `url(${fontUrl})`)
+          await font.load()
+          document.fonts.add(font)
+          
+          setFontName(fontId)
+          setFontLoaded(true)
+        } catch (error) {
+          console.error('Error loading font:', error)
+          setFontLoaded(false)
+        }
+      }
+    }
+    loadFont()
+  }, [resource.resource_type, resource.file_url, resource.id])
+
+  // Verificar se a fonte pertence a uma família
+  useEffect(() => {
+    async function checkFamily() {
+      if (resource.resource_type === 'font') {
+        try {
+          const familyId = resource.font_family_id || resource.id
+          
+          const { count } = await supabase
+            .from('resources')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'approved')
+            .eq('resource_type', 'font')
+            .or(`id.eq.${familyId},font_family_id.eq.${familyId}`)
+          
+          if (count && count > 1) {
+            setFamilyCount(count)
+          }
+        } catch (error) {
+          console.error('Error checking font family:', error)
+        }
+      }
+    }
+    checkFamily()
+  }, [resource.resource_type, resource.font_family_id, resource.id, supabase])
 
   // Carregar signed URL para vídeo (sempre usar preview_url com marca d'água se disponível)
   useEffect(() => {
@@ -411,9 +494,24 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
         
         {/* COLUNA ESQUERDA */}
         <div className="lg:col-span-8 space-y-8">
-          {/* Preview Image/Video */}
+          {/* Preview Image/Video/Audio */}
           <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center min-h-[400px] group relative shadow-sm">
-            {resource.resource_type === 'video' && videoUrl ? (
+            {resource.resource_type === 'audio' ? (
+              <div className="w-full p-8 md:p-12">
+                <AudioPlayer
+                  audioUrl={getS3Url(resource.file_url)}
+                  previewUrl={resource.preview_url ? getS3Url(resource.preview_url) : null}
+                  title={resource.title}
+                  artist={isOfficial ? 'BrasilPSD' : (resource.creator?.full_name || 'Desconhecido')}
+                  duration={resource.duration || undefined}
+                  resourceId={resource.id}
+                  isDownloadable={true}
+                  onDownload={handleDownload}
+                  onFavorite={handleFavorite}
+                  isFavorited={isFavorited}
+                />
+              </div>
+            ) : resource.resource_type === 'video' && videoUrl ? (
               <div 
                 className={`w-full bg-black flex items-center justify-center relative select-none ${!videoAspectRatioStyle ? 'aspect-video' : ''}`}
                 style={videoAspectRatioStyle || undefined}
@@ -611,6 +709,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 priority
                 className="max-w-full h-auto object-contain"
               />
+            ) : resource.resource_type === 'font' ? (
+              <FontPreview fontName={fontName} fontLoaded={fontLoaded} resourceTitle={resource.title} />
             ) : (
               <div className="aspect-video w-full flex flex-col items-center justify-center bg-gray-50">
                 <FileText className="h-16 w-16 text-gray-200 mb-4" />
@@ -682,7 +782,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 <div className="space-y-4">
                   <InfoRow label="Extensão de download" value="zip" />
                   <InfoRow label="Identificação" value={`#${resourceData.id.substring(0, 8)}`} />
-                  {resourceData.resource_type === 'video' && resourceData.duration && (
+                  {(resourceData.resource_type === 'video' || resourceData.resource_type === 'audio') && resourceData.duration && (
                     <InfoRow 
                       label="Duração" 
                       value={formatDuration(resourceData.duration)} 
@@ -777,6 +877,23 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 </div>
             </div>
 
+            {/* Badge de Família (se aplicável) */}
+            {resource.resource_type === 'font' && familyCount && familyCount > 1 && (
+              <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="bg-primary-500 p-2 rounded-lg">
+                    <Package className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-gray-900">Família Completa</p>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Esta fonte faz parte de uma família com {familyCount} variações. Baixe todas juntas!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Checklist */}
             <div className="space-y-4 py-6 border-y border-gray-50">
               <CheckItem text={`Arquivo ${resource.file_format?.toUpperCase()} totalmente editável`} />
@@ -832,6 +949,77 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </Link>
             ) : (
               <div className="mt-8 space-y-3">
+                {/* Botão de Download da Família (se aplicável) */}
+                {resource.resource_type === 'font' && familyCount && familyCount > 1 && (
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault()
+                      const { data: { user: authUser } } = await supabase.auth.getUser()
+                      if (!authUser) {
+                        toast.error('Você precisa estar logado para baixar')
+                        router.push('/login')
+                        return
+                      }
+
+                      setDownloading(true)
+                      try {
+                        toast.loading('Criando arquivo ZIP com a família completa...', { id: 'download-family' })
+
+                        const response = await fetch('/api/download/family', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ resourceId: resource.id }),
+                        })
+
+                        if (!response.ok) {
+                          const errorData = await response.json()
+                          throw new Error(errorData.message || 'Erro ao baixar família')
+                        }
+
+                        const blob = await response.blob()
+                        const url = window.URL.createObjectURL(blob)
+                        const link = document.createElement('a')
+                        link.href = url
+                        
+                        const contentDisposition = response.headers.get('content-disposition')
+                        const fileName = contentDisposition 
+                          ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') || 'font-family.zip'
+                          : 'font-family.zip'
+                        
+                        link.download = fileName
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                        window.URL.revokeObjectURL(url)
+
+                        toast.success('Família completa baixada com sucesso!', { id: 'download-family' })
+                      } catch (error: any) {
+                        console.error('Error downloading font family:', error)
+                        toast.error(error.message || 'Erro ao baixar família de fontes', { id: 'download-family' })
+                      } finally {
+                        setDownloading(false)
+                      }
+                    }}
+                    disabled={downloading || (downloadStatus && !downloadStatus.allowed)}
+                    className={cn(
+                      "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group shadow-lg",
+                      downloadStatus && !downloadStatus.allowed
+                        ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed shadow-gray-400/20"
+                        : "bg-primary-600 hover:bg-primary-700 text-white shadow-primary-600/20"
+                    )}
+                  >
+                    <Package className="h-5 w-5" />
+                    <span>
+                      {downloading 
+                        ? 'Baixando...' 
+                        : `Baixar Família Completa (${familyCount} fontes)`
+                      }
+                    </span>
+                  </button>
+                )}
+                
                 <button
                   onClick={handleDownload}
                   disabled={downloading || (downloadStatus && !downloadStatus.allowed)}
@@ -839,6 +1027,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                     "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group shadow-lg",
                     downloadStatus && !downloadStatus.allowed
                       ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed shadow-gray-400/20"
+                      : resource.resource_type === 'font' && familyCount && familyCount > 1
+                      ? "bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-gray-100/20"
                       : "bg-primary-500 hover:bg-primary-600 text-white shadow-primary-500/20"
                   )}
                   title={downloadStatus && !downloadStatus.allowed ? `Limite de downloads excedido. Você já fez ${downloadStatus.current} de ${downloadStatus.limit} downloads hoje.` : undefined}
@@ -852,6 +1042,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                       ? 'Baixando...' 
                       : downloadStatus && !downloadStatus.allowed
                       ? `Limite Atingido (${downloadStatus.current}/${downloadStatus.limit})`
+                      : resource.resource_type === 'font' && familyCount && familyCount > 1
+                      ? `Baixar Esta Variação${downloadStatus ? ` (${downloadStatus.remaining} restantes)` : ''}`
                       : downloadStatus
                       ? `Baixar Agora (${downloadStatus.remaining} restantes)`
                       : `Baixar Agora (${formatFileSize(resource.file_size)})`
@@ -1007,7 +1199,9 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                         >
                           <div className="relative overflow-hidden rounded-lg bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md">
                             <div className="relative w-full aspect-square overflow-hidden">
-                              {collectionResource.thumbnail_url ? (
+                              {collectionResource.resource_type === 'font' ? (
+                                <FontThumbnail resource={collectionResource} size="small" className="w-full h-full" />
+                              ) : collectionResource.thumbnail_url ? (
                                 <Image
                                   src={getS3Url(collectionResource.thumbnail_url)}
                                   alt={collectionResource.title}
@@ -1088,4 +1282,103 @@ function formatDuration(seconds: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
   return `0:${secs.toString().padStart(2, '0')}`
+}
+
+// Componente para preview de fonte com alfabeto completo
+function FontPreview({ fontName, fontLoaded, resourceTitle }: { fontName: string; fontLoaded: boolean; resourceTitle: string }) {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz'
+  const numbers = '0123456789'
+  const symbols = '!@#$%&*()[]{}<>?/|\\:;.,-_=+~`\'"'
+  
+  const fontFamily = fontLoaded && fontName ? `'${fontName}', sans-serif` : 'sans-serif'
+  
+  return (
+    <div className="w-full bg-white p-8 md:p-12">
+      {!fontLoaded && (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <p className="text-gray-500 text-sm">Carregando fonte...</p>
+        </div>
+      )}
+      
+      <div className="space-y-8">
+        {/* Título da Fonte */}
+        <div className="text-center pb-6 border-b border-gray-100">
+          <h3 
+            style={{ fontFamily }}
+            className="text-4xl md:text-5xl font-bold text-gray-900 mb-2"
+          >
+            {resourceTitle}
+          </h3>
+          <p className="text-sm text-gray-500 mt-2">Demonstrativo completo da fonte</p>
+        </div>
+
+        {/* Alfabeto Maiúsculo */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-gray-400 tracking-widest uppercase mb-3">Maiúsculas</h4>
+          <div 
+            style={{ fontFamily }}
+            className="text-3xl md:text-4xl font-normal text-gray-900 leading-relaxed tracking-wide"
+          >
+            {uppercase.split('').map((letter, i) => (
+              <span key={i} className="inline-block mr-1">{letter}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Alfabeto Minúsculo */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-gray-400 tracking-widest uppercase mb-3">Minúsculas</h4>
+          <div 
+            style={{ fontFamily }}
+            className="text-3xl md:text-4xl font-normal text-gray-900 leading-relaxed tracking-wide"
+          >
+            {lowercase.split('').map((letter, i) => (
+              <span key={i} className="inline-block mr-1">{letter}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Números */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-gray-400 tracking-widest uppercase mb-3">Números</h4>
+          <div 
+            style={{ fontFamily }}
+            className="text-3xl md:text-4xl font-normal text-gray-900 leading-relaxed tracking-wide"
+          >
+            {numbers.split('').map((num, i) => (
+              <span key={i} className="inline-block mr-2">{num}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Símbolos */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold text-gray-400 tracking-widest uppercase mb-3">Símbolos</h4>
+          <div 
+            style={{ fontFamily }}
+            className="text-2xl md:text-3xl font-normal text-gray-900 leading-relaxed tracking-wide"
+          >
+            {symbols.split('').map((symbol, i) => (
+              <span key={i} className="inline-block mr-2">{symbol}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Frase de Exemplo */}
+        <div className="space-y-2 pt-6 border-t border-gray-100">
+          <h4 className="text-xs font-semibold text-gray-400 tracking-widest uppercase mb-3">Exemplo de Texto</h4>
+          <div 
+            style={{ fontFamily }}
+            className="text-xl md:text-2xl font-normal text-gray-900 leading-relaxed"
+          >
+            <p className="mb-2">The quick brown fox jumps over the lazy dog</p>
+            <p className="mb-2">O rápido zorro marrom salta sobre o cão preguiçoso</p>
+            <p className="text-gray-600">1234567890</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

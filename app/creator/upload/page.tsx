@@ -107,6 +107,84 @@ export default function UploadResourcePage() {
           .order('name')
         setCategories(cats || [])
       }
+    } else if (resourceType === 'audio') {
+      // Buscar categoria "Áudios" ou "Audios" e suas subcategorias
+      const { data: audiosCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .or('slug.eq.audios,slug.eq.áudios,slug.eq.audio')
+        .is('parent_id', null)
+        .maybeSingle()
+      
+      if (audiosCategory) {
+        // Buscar a categoria principal
+        const { data: mainCat } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .eq('id', audiosCategory.id)
+          .single()
+        
+        // Buscar subcategorias
+        const { data: subCats } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .eq('parent_id', audiosCategory.id)
+          .order('order_index', { ascending: true })
+          .order('name', { ascending: true })
+        
+        // Combinar categoria principal e subcategorias
+        const audioCategories = [
+          ...(mainCat ? [mainCat] : []),
+          ...(subCats || [])
+        ]
+        setCategories(audioCategories)
+      } else {
+        // Fallback: buscar todas as categorias
+        const { data: cats } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .order('name')
+        setCategories(cats || [])
+      }
+    } else if (resourceType === 'font') {
+      // Buscar categoria "Fontes" e suas subcategorias
+      const { data: fontesCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .or('slug.eq.fontes,slug.eq.fonts')
+        .is('parent_id', null)
+        .maybeSingle()
+      
+      if (fontesCategory) {
+        // Buscar a categoria principal
+        const { data: mainCat } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .eq('id', fontesCategory.id)
+          .single()
+        
+        // Buscar subcategorias
+        const { data: subCats } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .eq('parent_id', fontesCategory.id)
+          .order('order_index', { ascending: true })
+          .order('name', { ascending: true })
+        
+        // Combinar categoria principal e subcategorias
+        const fontCategories = [
+          ...(mainCat ? [mainCat] : []),
+          ...(subCats || [])
+        ]
+        setCategories(fontCategories)
+      } else {
+        // Fallback: buscar todas as categorias
+        const { data: cats } = await supabase
+          .from('categories')
+          .select('id, name, parent_id')
+          .order('name')
+        setCategories(cats || [])
+      }
     } else {
       // Para outros tipos, buscar todas as categorias
       const { data: cats } = await supabase
@@ -530,8 +608,8 @@ export default function UploadResourcePage() {
       return
     }
     
-    // Validar se arquivo não-imagem tem thumbnail obrigatória
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !thumbnail) {
+    // Validar se arquivo não-imagem tem thumbnail obrigatória (áudios não precisam)
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/') && !thumbnail) {
       toast.error('⚠️ Thumbnail obrigatória: Faça upload de uma thumbnail/imagem do conteúdo para arquivos PSD, AI, EPS, etc.')
       // Scroll para a seção de thumbnail
       setTimeout(() => {
@@ -584,6 +662,17 @@ export default function UploadResourcePage() {
         }))
       } else if (videoMetadata) {
         console.log('ℹ️ Using client-extracted video metadata:', videoMetadata)
+      }
+
+      // Processar metadados de áudio se disponíveis
+      if (fileData.audioMetadata && formData.resource_type === 'audio') {
+        console.log('✅ Using server-extracted audio metadata:', fileData.audioMetadata)
+        if (fileData.audioMetadata.duration) {
+          setVideoMetadata(prev => ({
+            ...prev,
+            duration: fileData.audioMetadata.duration
+          }))
+        }
       }
       
       console.log('File uploaded successfully:', {
@@ -667,7 +756,7 @@ export default function UploadResourcePage() {
         file_format: file.name.split('.').pop() || '',
         width: videoMetadata?.width ? Number(videoMetadata.width) : null,
         height: videoMetadata?.height ? Number(videoMetadata.height) : null,
-        duration: videoMetadata?.duration ? Math.round(Number(videoMetadata.duration)) : null,
+        duration: videoMetadata?.duration ? Math.round(Number(videoMetadata.duration)) : (fileData.audioMetadata?.duration ? Math.round(Number(fileData.audioMetadata.duration)) : null),
         keywords: formData.keywords ? formData.keywords.split(',').map(k => k.trim()).filter(Boolean) : [],
         is_premium: formData.is_premium || false,
         is_official: formData.is_official || false,

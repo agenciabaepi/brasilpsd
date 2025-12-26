@@ -6,6 +6,7 @@ import { convertVideoToMp4, checkFfmpegAvailable, extractVideoMetadata } from '@
 import { addWatermarkToVideo } from '@/lib/video/watermark'
 import { extractVideoThumbnail } from '@/lib/video/thumbnail'
 import { generateVideoPreview } from '@/lib/video/preview'
+import { addWatermarkToAudio, extractAudioMetadata } from '@/lib/audio/watermark'
 
 export const maxDuration = 300 // 5 minutos para uploads grandes
 export const runtime = 'nodejs'
@@ -88,6 +89,28 @@ export async function POST(request: NextRequest) {
       } else if (!contentType || contentType === 'application/octet-stream') {
         contentType = 'video/mp4' // Default
         console.log('Using default video Content-Type:', contentType)
+      }
+    }
+
+    // Garantir Content-Type correto para áudios
+    if (type === 'resource' && file.type.startsWith('audio/')) {
+      // Mapear extensões comuns para Content-Type correto
+      const audioContentTypes: Record<string, string> = {
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'ogg': 'audio/ogg',
+        'm4a': 'audio/mp4',
+        'aac': 'audio/aac',
+        'flac': 'audio/flac',
+        'wma': 'audio/x-ms-wma',
+      }
+      
+      if (fileExtension && audioContentTypes[fileExtension]) {
+        contentType = audioContentTypes[fileExtension]
+        console.log('Set audio Content-Type to:', contentType)
+      } else if (!contentType || contentType === 'application/octet-stream') {
+        contentType = 'audio/mpeg' // Default para MP3
+        console.log('Using default audio Content-Type:', contentType)
       }
     }
 
@@ -523,6 +546,65 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 3.3. Processamento de áudio (marca d'água)
+    let audioMetadata: { duration?: number; bitrate?: number; sampleRate?: number; channels?: number } | null = null
+    
+    if (type === 'resource' && file.type.startsWith('audio/') && buffer) {
+      const ffmpegAvailable = await checkFfmpegAvailable()
+      if (ffmpegAvailable) {
+        console.log('🎵 Starting audio processing (watermark)...')
+        const processingStartTime = Date.now()
+        
+        try {
+          // Extrair metadados do áudio
+          audioMetadata = await extractAudioMetadata(buffer, fileExtension || 'mp3')
+          console.log('✅ Audio metadata extracted:', audioMetadata)
+          
+          // Criar versão com marca d'água para preview
+          const [previewResult] = await Promise.allSettled([
+            (async () => {
+              console.log('💧 Creating watermarked preview version for audio...')
+              const { join: pathJoin } = await import('path')
+              const watermarkPath = pathJoin(process.cwd(), 'public', 'marca dagua audio.mp3')
+              const watermarked = await addWatermarkToAudio(buffer, fileExtension || 'mp3', watermarkPath)
+              if (watermarked && watermarked.length > 0) {
+                const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`
+                const previewKey = `previews/${user.id}/${previewFileName}`
+                const url = await uploadFileToS3({
+                  file: watermarked,
+                  key: previewKey,
+                  contentType: 'audio/mpeg',
+                  metadata: {
+                    userId: user.id,
+                    originalName: file.name,
+                    isPreview: 'true'
+                  },
+                })
+                console.log('✅ Preview with watermark uploaded:', url)
+                return { buffer: watermarked, url }
+              }
+              return null
+            })()
+          ])
+          
+          if (previewResult.status === 'fulfilled' && previewResult.value) {
+            previewBuffer = previewResult.value.buffer
+            previewUrl = previewResult.value.url
+          } else if (previewResult.status === 'rejected') {
+            console.warn('⚠️ Failed to create watermarked preview:', previewResult.reason)
+          }
+          
+          const processingTime = ((Date.now() - processingStartTime) / 1000).toFixed(2)
+          console.log(`✅ Audio processing completed in ${processingTime}s`)
+        } catch (error: any) {
+          console.error('❌ Error during audio processing:', error.message)
+          // Continuar mesmo se o processamento falhar
+        }
+      } else {
+        console.warn('⚠️ FFmpeg not available, skipping audio processing')
+      }
+    }
+
     // 4. Upload do arquivo original (sem marca d'água) para download autorizado
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${previewExtension}`
     const fileKey = type === 'thumbnail' ? `thumbnails/${user.id}/${fileName}` : `resources/${user.id}/${fileName}`
@@ -567,6 +649,7 @@ export async function POST(request: NextRequest) {
       thumbnailUrl: thumbnailUrl || undefined, // URL do preview de vídeo (metade) ou thumbnail estático
       isAiGenerated,
       videoMetadata: videoMetadata || undefined,
+      audioMetadata: audioMetadata || undefined,
       wasProcessed: !!(previewUrl || thumbnailUrl) // Indica se foi processado
     })
   } catch (error: any) {
