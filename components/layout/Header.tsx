@@ -243,12 +243,68 @@ export default function Header({ initialUser, initialSubscription, initialCatego
 
   const isActive = (path: string) => pathname === path
 
+  // Categorias fixas que já estão no menu - não devem aparecer duplicadas
+  const fixedMenuItems = ['Home', 'Imagens', 'Coleções']
+  
+  // Encontrar categoria "Imagens" e "Coleções" no banco para verificar subcategorias
+  // Buscar por nome ou slug (case-insensitive)
+  const imagesCategory = categories.find(c => 
+    !c.parent_id && (
+      c.name.toLowerCase() === 'imagens' || 
+      c.slug.toLowerCase() === 'imagens' ||
+      c.slug.toLowerCase() === 'images'
+    )
+  )
+  const collectionsCategory = categories.find(c => 
+    !c.parent_id && (
+      c.name.toLowerCase() === 'coleções' || 
+      c.name.toLowerCase() === 'colecoes' ||
+      c.slug.toLowerCase() === 'coleções' ||
+      c.slug.toLowerCase() === 'colecoes' ||
+      c.slug.toLowerCase() === 'collections'
+    )
+  )
+  
+  // Subcategorias de Imagens
+  const imagesSubItems = imagesCategory 
+    ? categories
+        .filter(c => c.parent_id === imagesCategory.id)
+        .map(sub => ({
+          id: `subcategory-${sub.id}`,
+          name: sub.name,
+          href: `/categories/${sub.slug}`
+        }))
+    : []
+  
+  // Subcategorias de Coleções
+  const collectionsSubItems = collectionsCategory
+    ? categories
+        .filter(c => c.parent_id === collectionsCategory.id)
+        .map(sub => ({
+          id: `subcategory-${sub.id}`,
+          name: sub.name,
+          href: `/categories/${sub.slug}`
+        }))
+    : []
+  
   const menuItems = [
     { id: 'home', name: 'Home', href: '/' },
-    { id: 'images', name: 'Imagens', href: '/images' },
-    { id: 'collections', name: 'Coleções', href: '/collections' },
+    { 
+      id: 'images', 
+      name: 'Imagens', 
+      href: '/images',
+      hasDropdown: imagesSubItems.length > 0,
+      subItems: imagesSubItems
+    },
+    { 
+      id: 'collections', 
+      name: 'Coleções', 
+      href: '/collections',
+      hasDropdown: collectionsSubItems.length > 0,
+      subItems: collectionsSubItems
+    },
     ...categories
-      .filter(c => !c.parent_id)
+      .filter(c => !c.parent_id && !fixedMenuItems.includes(c.name))
       .map(parent => ({
         id: `category-${parent.id}`,
         name: parent.name,
