@@ -96,24 +96,40 @@ export default async function HomePage() {
     .limit(12)
 
   // Buscar alguns usuários com avatares para exibir na barra de estatísticas
-  const { data: userAvatars } = await supabase
-    .from('profiles')
-    .select('avatar_url, full_name')
-    .not('avatar_url', 'is', null)
-    .limit(3)
+  let processedAvatars: Array<{ avatar_url: string | null; full_name: string | null }> = []
+  
+  try {
+    const { data: userAvatars } = await supabase
+      .from('profiles')
+      .select('avatar_url, full_name')
+      .not('avatar_url', 'is', null)
+      .limit(3)
 
-  // Processar URLs dos avatares no servidor
-  const processedAvatars = (userAvatars || []).map(user => {
-    let avatarUrl = user.avatar_url
-    // Se a URL não começar com http, processar com getS3Url
-    if (avatarUrl && !avatarUrl.startsWith('http')) {
-      avatarUrl = getS3Url(avatarUrl)
-    }
-    return {
-      avatar_url: avatarUrl,
-      full_name: user.full_name
-    }
-  })
+    // Processar URLs dos avatares no servidor
+    processedAvatars = (userAvatars || []).map(user => {
+      if (!user || !user.avatar_url) {
+        return { avatar_url: null, full_name: user?.full_name || null }
+      }
+      
+      let avatarUrl = user.avatar_url
+      // Se a URL não começar com http, processar com getS3Url
+      if (avatarUrl && !avatarUrl.startsWith('http')) {
+        try {
+          avatarUrl = getS3Url(avatarUrl)
+        } catch (error) {
+          console.error('Erro ao processar URL do avatar:', error)
+          avatarUrl = user.avatar_url // Usar original em caso de erro
+        }
+      }
+      return {
+        avatar_url: avatarUrl,
+        full_name: user.full_name
+      }
+    })
+  } catch (error) {
+    console.error('Erro ao buscar avatares de usuários:', error)
+    // Se houver erro, processedAvatars permanece vazio e o componente usará placeholders
+  }
 
   return (
     <div className="bg-white">

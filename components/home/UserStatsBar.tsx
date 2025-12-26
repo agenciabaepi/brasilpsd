@@ -21,9 +21,12 @@ const avatarPlaceholders = [
 
 export default function UserStatsBar({ userAvatars = [] }: UserStatsBarProps) {
   // Usar avatares reais se disponíveis, caso contrário usar placeholders
-  const avatarsToShow = userAvatars.length >= 3 && userAvatars.every(u => u.avatar_url)
-    ? userAvatars.slice(0, 3).map(u => u.avatar_url!).filter(Boolean)
-    : avatarPlaceholders
+  const validAvatars = (userAvatars || [])
+    .filter(u => u && u.avatar_url && typeof u.avatar_url === 'string' && u.avatar_url.trim() !== '')
+    .slice(0, 3)
+    .map(u => u.avatar_url as string)
+
+  const avatarsToShow = validAvatars.length >= 3 ? validAvatars : avatarPlaceholders
 
   return (
     <div className="flex items-center justify-center mb-6">
@@ -32,7 +35,7 @@ export default function UserStatsBar({ userAvatars = [] }: UserStatsBarProps) {
         <div className="flex items-center -space-x-3">
           {avatarsToShow.map((avatar, index) => (
             <div
-              key={index}
+              key={`avatar-${index}`}
               className="relative w-9 h-9 rounded-full border-2 border-white overflow-hidden bg-gray-200 flex-shrink-0"
             >
               <Image
@@ -41,6 +44,7 @@ export default function UserStatsBar({ userAvatars = [] }: UserStatsBarProps) {
                 fill
                 className="object-cover"
                 sizes="36px"
+                unoptimized={avatar.includes('ui-avatars.com')}
               />
             </div>
           ))}
