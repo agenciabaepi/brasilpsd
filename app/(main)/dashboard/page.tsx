@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard } from 'lucide-react'
+import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard, Sparkles } from 'lucide-react'
+import Link from 'next/link'
 import type { Profile } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import Button from '@/components/ui/Button'
@@ -494,6 +495,11 @@ export default function DashboardPage() {
                             Premium {subscription.tier.toUpperCase()}
                           </span>
                         )}
+                        {user.is_creator && (
+                          <span className="text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-purple-100 text-purple-700">
+                            Criador
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-500">{user.email}</p>
                       {subscription && (
@@ -504,7 +510,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    {user.is_creator && (
+                    {user.is_creator ? (
                       <Button
                         onClick={() => router.push('/creator')}
                         className="flex items-center space-x-2 bg-primary-500 hover:bg-primary-600 text-white"
@@ -512,6 +518,16 @@ export default function DashboardPage() {
                         <LayoutDashboard className="h-4 w-4" />
                         <span>Painel do Criador</span>
                       </Button>
+                    ) : (
+                      <Link href="/creator/apply">
+                        <Button
+                          variant="primary"
+                          className="flex items-center space-x-2"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          <span>Torne-se criador</span>
+                        </Button>
+                      </Link>
                     )}
                     <button
                       onClick={handleLogout}

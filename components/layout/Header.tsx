@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import Logo from '@/components/ui/Logo'
-import { User, Heart, Upload, Menu, X, ChevronDown, Moon, Crown } from 'lucide-react'
+import { User, Heart, Upload, Menu, X, ChevronDown, Moon, Crown, Sparkles } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
@@ -307,6 +307,14 @@ export default function Header({ initialUser, initialSubscription, initialCatego
                     >
                       <Heart className="h-5 w-5" />
                     </Link>
+                    {!user.is_creator && (
+                      <Link href="/creator/apply">
+                        <Button variant="primary" size="sm" className="hidden md:flex rounded-full px-4">
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Torne-se criador
+                        </Button>
+                      </Link>
+                    )}
                     <Link href="/dashboard">
                       <Button variant="outline" size="sm" className="hidden sm:flex rounded-full px-5">
                         <User className="mr-2 h-4 w-4" />
@@ -423,6 +431,16 @@ export default function Header({ initialUser, initialSubscription, initialCatego
                 <Heart className="h-5 w-5" />
                 <span>Favoritos</span>
               </Link>
+              {!user.is_creator && (
+                <Link
+                  href="/creator/apply"
+                  className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Sparkles className="h-5 w-5" />
+                  <span>Torne-se criador</span>
+                </Link>
+              )}
               <Link
                 href="/dashboard"
                 className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-50 rounded-lg"

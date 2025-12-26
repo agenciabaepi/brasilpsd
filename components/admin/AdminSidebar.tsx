@@ -24,6 +24,7 @@ import toast from 'react-hot-toast'
 const menuItems = [
   { name: 'Painel', href: '/admin', icon: LayoutDashboard },
   { name: 'Aprovações', href: '/admin/approvals', icon: CheckSquare },
+  { name: 'Solicitações Criadores', href: '/admin/creator-applications', icon: Users },
   { name: 'Recursos', href: '/admin/resources', icon: Files },
   { name: 'Usuários', href: '/admin/users', icon: Users },
   { name: 'Assinaturas', href: '/admin/subscriptions', icon: Repeat },
