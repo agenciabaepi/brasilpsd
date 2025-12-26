@@ -1,6 +1,8 @@
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
+import PromotionalBar from '@/components/layout/PromotionalBar'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { checkAndUpdateSubscriptionStatusClient } from '@/lib/utils/subscription-check'
 
 // Usar dynamic para garantir que a sessão seja verificada, mas com cache otimizado
 export const dynamic = 'force-dynamic'
@@ -19,6 +21,10 @@ export default async function MainLayout({
   let initialSubscription = null
   
   if (session?.user) {
+    // Verificar e atualizar status da assinatura antes de buscar dados
+    const serverSupabase = createServerSupabaseClient()
+    const { isActive, subscription: activeSub } = await checkAndUpdateSubscriptionStatusClient(session.user.id, serverSupabase)
+    
     const [profileResult, subscriptionResult] = await Promise.all([
       supabase
         .from('profiles')
@@ -36,7 +42,8 @@ export default async function MainLayout({
     ])
     
     profile = profileResult.data
-    initialSubscription = subscriptionResult.data
+    // Usar a assinatura ativa encontrada pela verificação, ou a do banco
+    initialSubscription = activeSub || subscriptionResult.data
   }
 
   // Busca categorias para o menu
@@ -48,6 +55,7 @@ export default async function MainLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <PromotionalBar />
       <Header 
         initialUser={profile} 
         initialSubscription={initialSubscription}

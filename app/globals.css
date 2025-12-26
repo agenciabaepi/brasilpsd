@@ -138,3 +138,18 @@ a {
   animation: pulse-glow 2s infinite;
 }
 
+/* Animação para barra promocional - scroll infinito */
+@keyframes scroll-infinite {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+.animate-scroll-infinite {
+  animation: scroll-infinite 40s linear infinite;
+  display: flex;
+}
+

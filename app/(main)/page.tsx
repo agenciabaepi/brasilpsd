@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import HomeClient from '@/components/home/HomeClient'
 import Image from 'next/image'
 import SearchBar from '@/components/home/SearchBar'
+import UserStatsBar from '@/components/home/UserStatsBar'
 import { getS3Url } from '@/lib/aws/s3'
 
 export const dynamic = 'force-dynamic'
@@ -94,6 +95,19 @@ export default async function HomePage() {
     .order('order_index', { ascending: true })
     .limit(12)
 
+  // Buscar alguns usuários com avatares para exibir na barra de estatísticas
+  const { data: userAvatars } = await supabase
+    .from('profiles')
+    .select('avatar_url, full_name')
+    .not('avatar_url', 'is', null)
+    .limit(3)
+
+  // Processar URLs dos avatares no servidor
+  const processedAvatars = (userAvatars || []).map(user => ({
+    avatar_url: user.avatar_url ? getS3Url(user.avatar_url) : null,
+    full_name: user.full_name
+  }))
+
   return (
     <div className="bg-white">
       {/* Hero Section Simplificada (Estilo Designi) */}
@@ -112,6 +126,7 @@ export default async function HomePage() {
         
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-4xl mx-auto text-center space-y-8 relative">
+            <UserStatsBar userAvatars={processedAvatars} />
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-gray-900 tracking-tight">
               Recursos para sua <span className="text-primary-500 font-bold">criatividade.</span>
             </h1>
