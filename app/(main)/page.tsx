@@ -103,10 +103,17 @@ export default async function HomePage() {
     .limit(3)
 
   // Processar URLs dos avatares no servidor
-  const processedAvatars = (userAvatars || []).map(user => ({
-    avatar_url: user.avatar_url ? getS3Url(user.avatar_url) : null,
-    full_name: user.full_name
-  }))
+  const processedAvatars = (userAvatars || []).map(user => {
+    let avatarUrl = user.avatar_url
+    // Se a URL não começar com http, processar com getS3Url
+    if (avatarUrl && !avatarUrl.startsWith('http')) {
+      avatarUrl = getS3Url(avatarUrl)
+    }
+    return {
+      avatar_url: avatarUrl,
+      full_name: user.full_name
+    }
+  })
 
   return (
     <div className="bg-white">
