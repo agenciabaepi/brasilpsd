@@ -20,8 +20,10 @@ Adicione as seguintes variáveis no seu arquivo `.env.local`:
 SMTP_HOST=smtp.hostinger.com
 SMTP_PORT=465
 SMTP_USER=suporte@brasilpsd.com.br
-SMTP_PASSWORD=@Deusefiel7loja2025
+SMTP_PASSWORD=sua_senha_segura_aqui
 ```
+
+**⚠️ IMPORTANTE:** Nunca commite a senha real no código ou documentação. Use sempre variáveis de ambiente.
 
 **⚠️ IMPORTANTE**: 
 - Em produção (Vercel), adicione essas variáveis nas configurações do projeto

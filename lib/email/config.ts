@@ -8,19 +8,30 @@ import nodemailer from 'nodemailer'
  * - SSL/TLS: Habilitado
  */
 export function createEmailTransporter() {
-  const smtpHost = process.env.SMTP_HOST || 'smtp.hostinger.com'
-  const smtpPort = parseInt(process.env.SMTP_PORT || '465')
-  const smtpUser = process.env.SMTP_USER || 'suporte@brasilpsd.com.br'
-  const smtpPassword = process.env.SMTP_PASSWORD || '@Deusefiel7loja2025'
+  const smtpHost = process.env.SMTP_HOST
+  const smtpPort = process.env.SMTP_PORT
+  const smtpUser = process.env.SMTP_USER
+  const smtpPassword = process.env.SMTP_PASSWORD
 
-  if (!smtpUser || !smtpPassword) {
-    throw new Error('SMTP credentials não configuradas. Configure SMTP_USER e SMTP_PASSWORD nas variáveis de ambiente.')
+  if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+    throw new Error(
+      'SMTP credentials não configuradas. Configure as seguintes variáveis de ambiente:\n' +
+      '- SMTP_HOST\n' +
+      '- SMTP_PORT\n' +
+      '- SMTP_USER\n' +
+      '- SMTP_PASSWORD'
+    )
+  }
+
+  const port = parseInt(smtpPort)
+  if (isNaN(port)) {
+    throw new Error('SMTP_PORT deve ser um número válido')
   }
 
   return nodemailer.createTransport({
     host: smtpHost,
-    port: smtpPort,
-    secure: true, // true para porta 465, false para outras portas
+    port: port,
+    secure: port === 465, // true para porta 465, false para outras portas
     auth: {
       user: smtpUser,
       pass: smtpPassword,

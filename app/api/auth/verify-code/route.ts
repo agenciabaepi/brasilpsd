@@ -135,6 +135,31 @@ export async function POST(request: NextRequest) {
     
     console.log('✅ Código marcado como verificado com sucesso')
 
+    // Verificar se o usuário já existe e confirmar o email no Supabase
+    try {
+      const supabaseAdmin = createSupabaseAdmin()
+      const { data: { users } } = await supabaseAdmin.auth.admin.listUsers()
+      const existingUser = users.find(u => u.email === email)
+      
+      if (existingUser && !existingUser.email_confirmed_at) {
+        // Confirmar email no Supabase
+        const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+          existingUser.id,
+          { email_confirm: true }
+        )
+        
+        if (confirmError) {
+          console.warn('Aviso: Não foi possível confirmar email no Supabase:', confirmError)
+          // Continuar mesmo se falhar, pois o código foi verificado
+        } else {
+          console.log('✅ Email confirmado no Supabase com sucesso')
+        }
+      }
+    } catch (confirmError) {
+      console.warn('Aviso: Erro ao confirmar email no Supabase:', confirmError)
+      // Continuar mesmo se falhar, pois o código foi verificado
+    }
+
     return NextResponse.json({ 
       success: true,
       message: 'Código verificado com sucesso'

@@ -49,8 +49,18 @@ export default function VerifyEmailPage() {
       }
 
       toast.success('Email verificado com sucesso!')
-      // Após verificar código, criar a conta
-      await createAccount()
+      
+      // Verificar se a conta já existe
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        // Conta já existe, apenas redirecionar para login
+        toast.success('Email verificado! Você já pode fazer login.')
+        router.push('/login')
+      } else {
+        // Conta não existe, criar nova conta
+        await createAccount()
+      }
     } catch (error: any) {
       toast.error(error.message || 'Código inválido. Tente novamente.')
     } finally {
