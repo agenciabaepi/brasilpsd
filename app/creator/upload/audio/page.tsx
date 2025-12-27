@@ -27,15 +27,15 @@ export default function UploadAudioPage() {
     collection_id: '',
   })
 
-  const [file, setFile] = useState<File | null>(null)
-  const [audioPreview, setAudioPreview] = useState<string | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [duration, setDuration] = useState<number | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [audioPreviews, setAudioPreviews] = useState<Map<number, string>>(new Map())
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null)
+  const [durations, setDurations] = useState<Map<number, number>>(new Map())
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isAiProcessing, setIsAiProcessing] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map())
   
   const router = useRouter()
   const supabase = createSupabaseClient()
@@ -117,60 +117,94 @@ export default function UploadAudioPage() {
   }, [supabase])
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const selectedFile = e.target.files?.[0]
-    if (!selectedFile) return
+    const selectedFiles = Array.from(e.target.files || [])
+    if (selectedFiles.length === 0) return
 
-    // Validar formato de áudio
+    // Validar formato de áudio para todos os arquivos
     const validExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.wma']
-    const fileExtension = selectedFile.name.toLowerCase().substring(selectedFile.name.lastIndexOf('.'))
-    
-    if (!validExtensions.includes(fileExtension)) {
-      toast.error(`Formato inválido: ${fileExtension}. Use MP3, WAV, OGG, M4A, AAC, FLAC ou WMA.`)
-      return
-    }
+    const invalidFiles: string[] = []
+    const tooLargeFiles: string[] = []
 
-    if (selectedFile.size > 50 * 1024 * 1024) {
-      toast.error(`Arquivo muito grande (máx. 50MB): ${selectedFile.name}`)
-      return
-    }
-
-    setFile(selectedFile)
-    
-    // Criar preview do áudio
-    const audioUrl = URL.createObjectURL(selectedFile)
-    setAudioPreview(audioUrl)
-
-    // Extrair duração do áudio
-    const audio = new Audio(audioUrl)
-    audio.addEventListener('loadedmetadata', () => {
-      setDuration(Math.round(audio.duration))
+    selectedFiles.forEach(file => {
+      const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+      if (!validExtensions.includes(fileExtension)) {
+        invalidFiles.push(file.name)
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        tooLargeFiles.push(file.name)
+      }
     })
 
-    // Auto-preencher título se vazio
-    if (!formData.title) {
-      const fileName = selectedFile.name.replace(/\.[^/.]+$/, '')
+    if (invalidFiles.length > 0) {
+      toast.error(`Formato inválido: ${invalidFiles.join(', ')}. Use MP3, WAV, OGG, M4A, AAC, FLAC ou WMA.`)
+      return
+    }
+
+    if (tooLargeFiles.length > 0) {
+      toast.error(`Arquivos muito grandes (máx. 50MB): ${tooLargeFiles.join(', ')}`)
+      return
+    }
+
+    setFiles(selectedFiles)
+    
+    // Criar previews para todos os áudios
+    const newPreviews = new Map<number, string>()
+    const newDurations = new Map<number, number>()
+    
+    selectedFiles.forEach((file, index) => {
+      const audioUrl = URL.createObjectURL(file)
+      newPreviews.set(index, audioUrl)
+      
+      // Extrair duração do áudio
+      const audio = new Audio(audioUrl)
+      audio.addEventListener('loadedmetadata', () => {
+        setDurations(prev => {
+          const updated = new Map(prev)
+          updated.set(index, Math.round(audio.duration))
+          return updated
+        })
+      })
+    })
+    
+    setAudioPreviews(newPreviews)
+
+    // Auto-preencher título se vazio (usar primeiro arquivo)
+    if (!formData.title && selectedFiles.length > 0) {
+      const fileName = selectedFiles[0].name.replace(/\.[^/.]+$/, '')
       setFormData(prev => ({ ...prev, title: fileName }))
     }
 
-    // Detectar automaticamente categoria e informações pela IA
-    setTimeout(() => {
-      generateContentWithAI(selectedFile)
-    }, 100)
+    // Detectar automaticamente categoria e informações pela IA (usar primeiro arquivo)
+    if (selectedFiles.length > 0) {
+      setTimeout(() => {
+        generateContentWithAI(selectedFiles[0])
+      }, 100)
+    }
   }
 
-  function togglePlay() {
-    if (!audioRef.current) return
+  function togglePlay(index: number) {
+    const audio = audioRefs.current.get(index)
+    if (!audio) return
 
-    if (isPlaying) {
-      audioRef.current.pause()
+    // Pausar todos os outros áudios
+    audioRefs.current.forEach((otherAudio, otherIndex) => {
+      if (otherIndex !== index && !otherAudio.paused) {
+        otherAudio.pause()
+        setPlayingIndex(null)
+      }
+    })
+
+    if (playingIndex === index) {
+      audio.pause()
+      setPlayingIndex(null)
     } else {
-      audioRef.current.play()
+      audio.play()
+      setPlayingIndex(index)
     }
-    setIsPlaying(!isPlaying)
   }
 
   async function generateContentWithAI(audioFile?: File) {
-    const fileToAnalyze = audioFile || file
+    const fileToAnalyze = audioFile || files[0]
     if (!fileToAnalyze) {
       toast.error('Selecione um arquivo de áudio primeiro')
       return
@@ -190,7 +224,7 @@ export default function UploadAudioPage() {
         fileExtension: fileExtension.toUpperCase(),
         fileSize,
         format: fileExtension,
-        duration: duration || undefined
+        duration: durations.get(0) || undefined
       }
 
       // Buscar categorias de áudios
@@ -272,13 +306,13 @@ export default function UploadAudioPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     
-    if (!file) {
-      toast.error('Selecione um arquivo de áudio')
+    if (files.length === 0) {
+      toast.error('Selecione pelo menos um arquivo de áudio')
       return
     }
 
     if (!formData.title.trim()) {
-      toast.error('Digite um título para o áudio')
+      toast.error('Digite um título para o(s) áudio(s)')
       return
     }
 
@@ -289,74 +323,91 @@ export default function UploadAudioPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Usuário não autenticado')
 
-      // 1. Upload do arquivo
-      const uploadFormData = new FormData()
-      uploadFormData.append('file', file)
-      uploadFormData.append('type', 'resource')
-
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData,
-      })
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json()
-        throw new Error(errorData.error || 'Erro ao fazer upload do áudio')
-      }
-
-      const uploadData = await uploadResponse.json()
-      setUploadProgress(50)
-
       const keywordsArray = formData.keywords
         ? formData.keywords.split(',').map(k => k.trim()).filter(k => k)
         : []
 
-      // 2. Criar recurso no banco
       // Se for oficial, usar o perfil do sistema como criador
       const creatorId = formData.is_official ? getSystemProfileIdSync() : user.id
 
-      const { data: resource, error: resourceError } = await supabase
-        .from('resources')
-        .insert({
-          title: formData.title,
-          description: formData.description || null,
-          resource_type: 'audio',
-          category_id: formData.category_id || null,
-          creator_id: creatorId,
-          file_url: uploadData.url,
-          preview_url: uploadData.previewUrl || null, // Versão com marca d'água
-          file_size: file.size,
-          file_format: file.name.split('.').pop()?.toLowerCase() || 'mp3',
-          duration: duration || uploadData.audioMetadata?.duration || null,
-          keywords: keywordsArray.length > 0 ? keywordsArray : null,
-          is_premium: formData.is_premium,
-          is_official: formData.is_official,
-          status: userProfile?.is_admin ? 'approved' : 'pending',
+      const totalFiles = files.length
+      let uploadedCount = 0
+
+      // Processar cada arquivo
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const fileProgress = (i / totalFiles) * 100
+        setUploadProgress(fileProgress)
+
+        // 1. Upload do arquivo
+        const uploadFormData = new FormData()
+        uploadFormData.append('file', file)
+        uploadFormData.append('type', 'resource')
+
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: uploadFormData,
         })
-        .select()
-        .single()
 
-      if (resourceError) throw resourceError
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json()
+          throw new Error(errorData.error || `Erro ao fazer upload de ${file.name}`)
+        }
 
-      setUploadProgress(80)
+        const uploadData = await uploadResponse.json()
+        uploadedCount++
 
-      // 3. Adicionar à coleção se selecionada
-      if (formData.collection_id && resource) {
-        const { error: collectionError } = await supabase
-          .from('collection_resources')
+        // Título específico para este áudio (usar nome do arquivo se múltiplos)
+        const audioTitle = files.length > 1 
+          ? file.name.replace(/\.[^/.]+$/, '')
+          : formData.title
+
+        // 2. Criar recurso no banco
+        const { data: resource, error: resourceError } = await supabase
+          .from('resources')
           .insert({
-            collection_id: formData.collection_id,
-            resource_id: resource.id,
-            order_index: 0,
+            title: audioTitle,
+            description: formData.description || null,
+            resource_type: 'audio',
+            category_id: formData.category_id || null,
+            creator_id: creatorId,
+            file_url: uploadData.url,
+            preview_url: uploadData.previewUrl || null, // Versão com marca d'água
+            file_size: file.size,
+            file_format: file.name.split('.').pop()?.toLowerCase() || 'mp3',
+            duration: durations.get(i) || uploadData.audioMetadata?.duration || null,
+            keywords: keywordsArray.length > 0 ? keywordsArray : null,
+            is_premium: formData.is_premium,
+            is_official: formData.is_official,
+            status: userProfile?.is_admin ? 'approved' : 'pending',
           })
+          .select()
+          .single()
 
-        if (collectionError) {
-          console.error('Error adding to collection:', collectionError)
+        if (resourceError) throw resourceError
+
+        // 3. Adicionar à coleção se selecionada (apenas o primeiro)
+        if (formData.collection_id && resource && i === 0) {
+          const { error: collectionError } = await supabase
+            .from('collection_resources')
+            .insert({
+              collection_id: formData.collection_id,
+              resource_id: resource.id,
+              order_index: 0,
+            })
+
+          if (collectionError) {
+            console.error('Error adding to collection:', collectionError)
+          }
         }
       }
 
       setUploadProgress(100)
-      toast.success('Áudio enviado com sucesso! Aguardando aprovação.')
+      toast.success(
+        files.length > 1 
+          ? `${files.length} áudios enviados com sucesso! Aguardando aprovação.`
+          : 'Áudio enviado com sucesso! Aguardando aprovação.'
+      )
       
       // Limpar formulário
       setFormData({
@@ -368,9 +419,10 @@ export default function UploadAudioPage() {
         is_official: false,
         collection_id: '',
       })
-      setFile(null)
-      setAudioPreview(null)
-      setDuration(null)
+      setFiles([])
+      setAudioPreviews(new Map())
+      setDurations(new Map())
+      setPlayingIndex(null)
       
       // Redirecionar após 1 segundo
       setTimeout(() => {
@@ -378,7 +430,7 @@ export default function UploadAudioPage() {
       }, 1000)
     } catch (error: any) {
       console.error('Upload error:', error)
-      toast.error(error.message || 'Erro ao fazer upload do áudio')
+      toast.error(error.message || 'Erro ao fazer upload do(s) áudio(s)')
     } finally {
       setIsUploading(false)
       setUploadProgress(0)
@@ -440,19 +492,22 @@ export default function UploadAudioPage() {
           <div className="flex items-center mb-6">
             <Music className="h-6 w-6 text-primary-500 mr-3" />
             <h2 className="text-lg font-semibold text-gray-900 tracking-tighter">
-              Arquivo de Áudio
+              {files.length > 1 ? `Arquivos de Áudio (${files.length})` : 'Arquivo de Áudio'}
             </h2>
           </div>
 
-          {!file ? (
+          {files.length === 0 ? (
             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors group">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                 <UploadIcon className="w-12 h-12 mb-4 text-gray-400 group-hover:text-primary-500 transition-colors" />
                 <p className="mb-2 text-sm font-semibold text-gray-500">
-                  <span className="font-bold text-primary-500">Clique para fazer upload</span> ou arraste o arquivo
+                  <span className="font-bold text-primary-500">Clique para fazer upload</span> ou arraste os arquivos
                 </p>
                 <p className="text-xs text-gray-400">
-                  Formatos suportados: MP3, WAV, OGG, M4A, AAC, FLAC, WMA (máx. 50MB)
+                  Formatos suportados: MP3, WAV, OGG, M4A, AAC, FLAC, WMA (máx. 50MB cada)
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Você pode selecionar múltiplos arquivos
                 </p>
               </div>
               <input
@@ -460,75 +515,106 @@ export default function UploadAudioPage() {
                 className="hidden"
                 accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.wma"
                 onChange={handleFileSelect}
+                multiple
               />
             </label>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center space-x-3 flex-1">
-                  <Music className="h-8 w-8 text-primary-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{file.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB • {file.name.split('.').pop()?.toUpperCase()}
-                      {duration && ` • ${formatTime(duration)}`}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFile(null)
-                    setAudioPreview(null)
-                    setDuration(null)
-                    if (audioRef.current) {
-                      audioRef.current.pause()
-                      audioRef.current.src = ''
-                    }
-                    setIsPlaying(false)
-                  }}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Preview do Áudio */}
-              {audioPreview && (
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex items-center gap-4">
+              {files.map((file, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <Music className="h-8 w-8 text-primary-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB • {file.name.split('.').pop()?.toUpperCase()}
+                          {durations.get(index) && ` • ${formatTime(durations.get(index)!)}`}
+                        </p>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={togglePlay}
-                      className="flex-shrink-0 w-12 h-12 rounded-full bg-primary-500 hover:bg-primary-600 flex items-center justify-center transition-colors"
+                      onClick={() => {
+                        const newFiles = files.filter((_, i) => i !== index)
+                        setFiles(newFiles)
+                        const newPreviews = new Map(audioPreviews)
+                        newPreviews.delete(index)
+                        setAudioPreviews(newPreviews)
+                        const newDurations = new Map(durations)
+                        newDurations.delete(index)
+                        setDurations(newDurations)
+                        const audio = audioRefs.current.get(index)
+                        if (audio) {
+                          audio.pause()
+                          audioRefs.current.delete(index)
+                        }
+                        if (playingIndex === index) {
+                          setPlayingIndex(null)
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
                     >
-                      {isPlaying ? (
-                        <Pause className="w-5 h-5 text-white" />
-                      ) : (
-                        <Play className="w-5 h-5 text-white ml-0.5" />
-                      )}
+                      <X className="h-5 w-5" />
                     </button>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">{formData.title || file.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {duration ? formatTime(duration) : 'Carregando...'}
-                      </p>
-                    </div>
                   </div>
-                  <audio
-                    ref={audioRef}
-                    src={audioPreview}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onEnded={() => setIsPlaying(false)}
-                    onLoadedMetadata={(e) => {
-                      const audio = e.currentTarget
-                      setDuration(Math.round(audio.duration))
-                    }}
-                    className="hidden"
-                  />
+
+                  {/* Preview do Áudio */}
+                  {audioPreviews.get(index) && (
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => togglePlay(index)}
+                          className="flex-shrink-0 w-12 h-12 rounded-full bg-primary-500 hover:bg-primary-600 flex items-center justify-center transition-colors"
+                        >
+                          {playingIndex === index ? (
+                            <Pause className="w-5 h-5 text-white" />
+                          ) : (
+                            <Play className="w-5 h-5 text-white ml-0.5" />
+                          )}
+                        </button>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-gray-900">{files.length > 1 ? file.name.replace(/\.[^/.]+$/, '') : (formData.title || file.name)}</p>
+                          <p className="text-xs text-gray-500">
+                            {durations.get(index) ? formatTime(durations.get(index)!) : 'Carregando...'}
+                          </p>
+                        </div>
+                      </div>
+                      <audio
+                        ref={(el) => {
+                          if (el) {
+                            audioRefs.current.set(index, el)
+                          } else {
+                            audioRefs.current.delete(index)
+                          }
+                        }}
+                        src={audioPreviews.get(index) || undefined}
+                        onPlay={() => setPlayingIndex(index)}
+                        onPause={() => {
+                          if (playingIndex === index) {
+                            setPlayingIndex(null)
+                          }
+                        }}
+                        onEnded={() => {
+                          if (playingIndex === index) {
+                            setPlayingIndex(null)
+                          }
+                        }}
+                        onLoadedMetadata={(e) => {
+                          const audio = e.currentTarget
+                          setDurations(prev => {
+                            const updated = new Map(prev)
+                            updated.set(index, Math.round(audio.duration))
+                            return updated
+                          })
+                        }}
+                        className="hidden"
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
           )}
         </Card>
@@ -539,10 +625,10 @@ export default function UploadAudioPage() {
             <h2 className="text-lg font-semibold text-gray-900 tracking-tighter">
               Informações do Áudio
             </h2>
-            {file && (
+            {files.length > 0 && (
               <Button
                 type="button"
-                onClick={() => generateContentWithAI(file)}
+                onClick={() => generateContentWithAI(files[0])}
                 disabled={isAiProcessing}
                 variant="outline"
                 className="flex items-center gap-2"
@@ -740,11 +826,15 @@ export default function UploadAudioPage() {
           <Button
             type="submit"
             variant="primary"
-            disabled={isUploading || !file}
+            disabled={isUploading || files.length === 0}
             isLoading={isUploading}
             className="min-w-[200px]"
           >
-            {isUploading ? `Enviando... ${uploadProgress}%` : 'Enviar Áudio'}
+            {isUploading 
+              ? `Enviando... ${Math.round(uploadProgress)}%` 
+              : files.length > 1 
+                ? `Enviar ${files.length} Áudios`
+                : 'Enviar Áudio'}
           </Button>
         </div>
       </form>
