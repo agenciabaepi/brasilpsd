@@ -35,11 +35,70 @@ export default function AudioPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [audioData, setAudioData] = useState<Uint8Array | null>(null)
   
   const audioRef = useRef<HTMLAudioElement>(null)
   const watermarkRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const dataArrayRef = useRef<Uint8Array | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
 
+
+  // Configurar Web Audio API para análise de espectro
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    // Criar AudioContext
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    
+    const audioContext = audioContextRef.current
+    const analyser = audioContext.createAnalyser()
+    analyser.fftSize = 256 // Usar 128 barras (fftSize / 2)
+    analyser.smoothingTimeConstant = 0.8
+    
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+    dataArrayRef.current = dataArray
+    analyserRef.current = analyser
+
+    // Conectar áudio ao analisador
+    try {
+      const source = audioContext.createMediaElementSource(audio)
+      source.connect(analyser)
+      analyser.connect(audioContext.destination)
+    } catch (error) {
+      console.error('Error setting up audio analyser:', error)
+    }
+
+    // Função para atualizar visualização
+    const updateVisualization = () => {
+      if (!analyserRef.current || !dataArrayRef.current) return
+
+      analyserRef.current.getByteFrequencyData(dataArrayRef.current)
+      setAudioData(new Uint8Array(dataArrayRef.current))
+      
+      if (isPlaying || audioContext.state === 'running') {
+        animationFrameRef.current = requestAnimationFrame(updateVisualization)
+      }
+    }
+
+    // Iniciar visualização quando estiver tocando
+    if (isPlaying) {
+      updateVisualization()
+    }
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      // Não fechar o AudioContext para evitar problemas de reinicialização
+    }
+  }, [isPlaying])
 
   // Configurar áudio de marca d'água (apenas se não houver previewUrl)
   useEffect(() => {
@@ -198,21 +257,42 @@ export default function AudioPlayer({
               className="absolute inset-0 bg-gradient-to-r from-green-500 to-green-600 transition-all duration-100"
               style={{ width: `${progressPercent}%` }}
             />
-            {/* Simulação de waveform */}
+            {/* Waveform real baseado em dados de áudio */}
             <div className="absolute inset-0 flex items-center justify-center gap-[1px] md:gap-[2px] px-1.5 md:px-2">
-              {Array.from({ length: 50 }).map((_, i) => {
-                const barHeight = Math.random() * 60 + 20
-                const isActive = (i / 50) * 100 < progressPercent
-                return (
-                  <div
-                    key={i}
-                    className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
-                      isActive ? 'bg-white' : 'bg-gray-300'
-                    }`}
-                    style={{ height: `${barHeight}%` }}
-                  />
-                )
-              })}
+              {audioData && audioData.length > 0 ? (
+                // Usar dados reais de áudio
+                Array.from({ length: Math.min(50, audioData.length) }).map((_, i) => {
+                  // Mapear índices para distribuir uniformemente
+                  const dataIndex = Math.floor((i / 50) * audioData.length)
+                  const value = audioData[dataIndex]
+                  // Converter valor (0-255) para altura (20-80%)
+                  const barHeight = 20 + (value / 255) * 60
+                  const isActive = (i / 50) * 100 < progressPercent
+                  return (
+                    <div
+                      key={i}
+                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
+                        isActive ? 'bg-white' : 'bg-gray-300'
+                      }`}
+                      style={{ height: `${barHeight}%` }}
+                    />
+                  )
+                })
+              ) : (
+                // Fallback: barras estáticas quando não há dados
+                Array.from({ length: 50 }).map((_, i) => {
+                  const isActive = (i / 50) * 100 < progressPercent
+                  return (
+                    <div
+                      key={i}
+                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
+                        isActive ? 'bg-white' : 'bg-gray-300'
+                      }`}
+                      style={{ height: '40%' }}
+                    />
+                  )
+                })
+              )}
             </div>
           </div>
         </div>
