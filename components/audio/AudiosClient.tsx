@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import AudioPlayer from './AudioPlayer'
+import SubscriptionModal from '@/components/premium/SubscriptionModal'
 import type { Resource } from '@/types/database'
 import { Search, Filter, Check, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -21,6 +22,8 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [categories, setCategories] = useState<any[]>([])
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false)
+  const [selectedResource, setSelectedResource] = useState<Resource & { creator?: any } | null>(null)
   
   const [filters, setFilters] = useState({
     category: 'all',
@@ -246,6 +249,16 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
       const downloadData = await response.json()
 
       if (!response.ok || downloadData.error) {
+        // Se for erro de assinatura necessária, mostrar modal
+        if (response.status === 403 && (
+          downloadData.error === 'Assinatura necessária' || 
+          downloadData.message?.includes('Premium') ||
+          downloadData.message?.includes('assinatura')
+        )) {
+          setSelectedResource(resource)
+          setSubscriptionModalOpen(true)
+          return
+        }
         throw new Error(downloadData.error || downloadData.message || 'Erro ao baixar')
       }
 
@@ -492,6 +505,29 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
           </div>
         </main>
       </div>
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        isOpen={subscriptionModalOpen}
+        onClose={() => {
+          setSubscriptionModalOpen(false)
+          setSelectedResource(null)
+        }}
+        resourceTitle={selectedResource?.title}
+        resourcePreview={
+          selectedResource && (
+            <AudioPlayer
+              audioUrl={selectedResource.file_url}
+              previewUrl={selectedResource.preview_url}
+              title={selectedResource.title}
+              artist={getArtistName(selectedResource)}
+              duration={selectedResource.duration || undefined}
+              isDownloadable={false}
+            />
+          )
+        }
+        resourceType="audio"
+      />
     </div>
   )
 }

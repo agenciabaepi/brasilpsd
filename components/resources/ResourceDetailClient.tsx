@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils/cn'
 import { isSystemProfileSync } from '@/lib/utils/system'
 import FontThumbnail from '@/components/fonts/FontThumbnail'
 import AudioPlayer from '@/components/audio/AudioPlayer'
+import SubscriptionModal from '@/components/premium/SubscriptionModal'
 
 interface ResourceDetailClientProps {
   resource: Resource
