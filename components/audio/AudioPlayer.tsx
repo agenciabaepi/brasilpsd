@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Play, Pause, Volume2, VolumeX, Download, Heart, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import WaveSurfer from 'wavesurfer.js'
 
 interface AudioPlayerProps {
   audioUrl: string
@@ -35,108 +36,87 @@ export default function AudioPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [audioData, setAudioData] = useState<Uint8Array | null>(null)
   
-  const audioRef = useRef<HTMLAudioElement>(null)
-  const watermarkRef = useRef<HTMLAudioElement>(null)
-  const progressRef = useRef<HTMLDivElement>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
-  const dataArrayRef = useRef<Uint8Array | null>(null)
-  const animationFrameRef = useRef<number | null>(null)
-  const isAudioContextSetupRef = useRef(false)
+  const waveformRef = useRef<HTMLDivElement>(null)
+  const wavesurferRef = useRef<ReturnType<typeof WaveSurfer.create> | null>(null)
+  const watermarkRef = useRef<HTMLAudioElement | null>(null)
 
-  // Configurar Web Audio API para análise de espectro (apenas uma vez)
+  // Configurar Wavesurfer
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || isAudioContextSetupRef.current) return
+    if (!waveformRef.current) return
 
-    // Criar AudioContext apenas uma vez
-    const initAudioContext = async () => {
-      try {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-        }
-        
-        const audioContext = audioContextRef.current
-        
-        // Retomar contexto se estiver suspenso
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume()
-        }
-        
-        // Criar analisador
-        const analyser = audioContext.createAnalyser()
-        analyser.fftSize = 256
-        analyser.smoothingTimeConstant = 0.8
-        
-        const bufferLength = analyser.frequencyBinCount
-        const dataArray = new Uint8Array(bufferLength)
-        dataArrayRef.current = dataArray
-        analyserRef.current = analyser
+    const urlToUse = previewUrl || audioUrl
 
-        // Conectar áudio ao analisador (CRÍTICO: só pode ser feito UMA vez)
-        sourceRef.current = audioContext.createMediaElementSource(audio)
-        sourceRef.current.connect(analyser)
-        analyser.connect(audioContext.destination)
-        
-        isAudioContextSetupRef.current = true
-      } catch (error) {
-        console.error('Error setting up audio analyser:', error)
-        // Se der erro, continuar sem visualização mas áudio ainda funciona
-        isAudioContextSetupRef.current = true // Marcar como setup para não tentar novamente
-      }
-    }
+    // Criar instância do Wavesurfer
+    const wavesurfer = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: '#d1d5db', // cinza claro para parte não tocada
+      progressColor: '#374151', // cinza escuro para parte tocada
+      cursorColor: 'transparent',
+      barWidth: 2,
+      barRadius: 1,
+      barGap: 2,
+      height: 48,
+      normalize: true,
+      url: urlToUse,
+      interact: true, // Permite clicar na waveform para navegar
+    })
 
-    initAudioContext()
-  }, []) // Executar apenas uma vez no mount
+    wavesurferRef.current = wavesurfer
 
-  // Atualizar visualização quando estiver tocando
-  useEffect(() => {
-    if (!isPlaying || !analyserRef.current || !dataArrayRef.current) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-        animationFrameRef.current = null
-      }
-      return
-    }
+    // Event listeners
+    wavesurfer.on('play', () => {
+      setIsPlaying(true)
+      setIsLoading(false)
+    })
 
-    const updateVisualization = () => {
-      if (!analyserRef.current || !dataArrayRef.current || !isPlaying) {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current)
-          animationFrameRef.current = null
-        }
-        return
-      }
+    wavesurfer.on('pause', () => {
+      setIsPlaying(false)
+    })
 
-      analyserRef.current.getByteFrequencyData(dataArrayRef.current)
-      setAudioData(new Uint8Array(dataArrayRef.current))
-      
-      if (isPlaying) {
-        animationFrameRef.current = requestAnimationFrame(updateVisualization)
-      }
-    }
+    wavesurfer.on('timeupdate', (currentTime) => {
+      setCurrentTime(currentTime)
+    })
 
-    updateVisualization()
+    wavesurfer.on('ready', () => {
+      setDuration(wavesurfer.getDuration())
+      setIsLoading(false)
+    })
+
+    wavesurfer.on('loading', () => {
+      setIsLoading(true)
+    })
+
+    wavesurfer.on('error', (error) => {
+      console.error('Wavesurfer error:', error)
+      setIsLoading(false)
+      toast.error('Erro ao carregar áudio')
+    })
+
+    // Configurar volume inicial
+    wavesurfer.setVolume(isMuted ? 0 : volume)
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-        animationFrameRef.current = null
-      }
+      wavesurfer.destroy()
+      wavesurferRef.current = null
     }
-  }, [isPlaying])
+  }, [audioUrl, previewUrl])
 
-  // Configurar áudio de marca d'água (apenas se não houver previewUrl)
+  // Atualizar volume quando mudar
+  useEffect(() => {
+    const wavesurfer = wavesurferRef.current
+    if (wavesurfer) {
+      wavesurfer.setVolume(isMuted ? 0 : volume)
+    }
+  }, [volume, isMuted])
+
+  // Sincronizar marca d'água quando não há previewUrl
   useEffect(() => {
     if (previewUrl) {
       // Se houver previewUrl, a marca d'água já está no áudio processado
       if (watermarkRef.current) {
         watermarkRef.current.pause()
         watermarkRef.current.src = ''
-        watermarkRef.current = null
       }
       return
     }
@@ -180,18 +160,18 @@ export default function AudioPlayer({
   }, [isPlaying, previewUrl])
 
   const togglePlay = async () => {
-    const audio = audioRef.current
-    if (!audio) return
+    const wavesurfer = wavesurferRef.current
+    if (!wavesurfer) return
 
     setIsLoading(true)
     try {
-      if (isPlaying) {
-        audio.pause()
-        if (watermarkRef.current) {
+      await wavesurfer.playPause()
+      if (watermarkRef.current && !previewUrl) {
+        if (wavesurfer.isPlaying()) {
+          watermarkRef.current.play().catch(() => {})
+        } else {
           watermarkRef.current.pause()
         }
-      } else {
-        await audio.play()
       }
     } catch (error) {
       console.error('Error playing audio:', error)
@@ -200,43 +180,31 @@ export default function AudioPlayer({
     }
   }
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const audio = audioRef.current
-    if (!audio || !progressRef.current) return
-
-    const rect = progressRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const percent = Math.max(0, Math.min(1, x / rect.width))
-    const newTime = percent * duration
-
-    audio.currentTime = newTime
-    setCurrentTime(newTime)
-  }
-
   const toggleMute = () => {
-    const audio = audioRef.current
-    if (!audio) return
+    const wavesurfer = wavesurferRef.current
+    if (!wavesurfer) return
     
     const newMuted = !isMuted
     setIsMuted(newMuted)
-    audio.muted = newMuted
+    wavesurfer.setVolume(newMuted ? 0 : volume)
   }
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current
-    if (!audio) return
+    const wavesurfer = wavesurferRef.current
+    if (!wavesurfer) return
     
     const newVolume = parseFloat(e.target.value)
     setVolume(newVolume)
-    audio.volume = newVolume
     
     // Se o volume for 0, mutar automaticamente
     if (newVolume === 0) {
       setIsMuted(true)
-      audio.muted = true
+      wavesurfer.setVolume(0)
     } else if (isMuted) {
       setIsMuted(false)
-      audio.muted = false
+      wavesurfer.setVolume(newVolume)
+    } else {
+      wavesurfer.setVolume(newVolume)
     }
   }
 
@@ -246,8 +214,6 @@ export default function AudioPlayer({
     const secs = Math.floor(seconds % 60)
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
-
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
     <div className="w-full bg-white rounded-lg border border-gray-100 p-3 md:p-4">
@@ -275,53 +241,12 @@ export default function AudioPlayer({
           )}
         </div>
 
-        {/* Waveform/Progress Bar - Cinza como no Envato */}
+        {/* Waveform usando Wavesurfer.js */}
         <div className="flex-1 min-w-0 mx-2 md:mx-3">
           <div
-            ref={progressRef}
-            onClick={handleSeek}
-            className="h-10 md:h-11 lg:h-12 bg-transparent rounded cursor-pointer relative overflow-hidden"
-          >
-            {/* Waveform real baseado em dados de áudio */}
-            <div className="absolute inset-0 flex items-center justify-center gap-[1px] md:gap-[2px] px-1.5 md:px-2">
-              {audioData && audioData.length > 0 ? (
-                // Usar dados reais de áudio
-                Array.from({ length: Math.min(60, audioData.length) }).map((_, i) => {
-                  // Mapear índices para distribuir uniformemente
-                  const dataIndex = Math.floor((i / 60) * audioData.length)
-                  const value = audioData[dataIndex]
-                  // Converter valor (0-255) para altura (30-90%)
-                  const barHeight = 30 + (value / 255) * 60
-                  const isPlayed = (i / 60) * 100 < progressPercent
-                  return (
-                    <div
-                      key={i}
-                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
-                        isPlayed ? 'bg-gray-700' : 'bg-gray-300'
-                      }`}
-                      style={{ height: `${barHeight}%` }}
-                    />
-                  )
-                })
-              ) : (
-                // Fallback: barras estáticas quando não há dados (geralmente no carregamento inicial)
-                Array.from({ length: 60 }).map((_, i) => {
-                  // Simular altura variada baseada em posição para visual mais interessante
-                  const baseHeight = 40 + Math.sin(i * 0.3) * 20
-                  const isPlayed = (i / 60) * 100 < progressPercent
-                  return (
-                    <div
-                      key={i}
-                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
-                        isPlayed ? 'bg-gray-700' : 'bg-gray-300'
-                      }`}
-                      style={{ height: `${baseHeight}%` }}
-                    />
-                  )
-                })
-              )}
-            </div>
-          </div>
+            ref={waveformRef}
+            className="w-full h-12 cursor-pointer"
+          />
         </div>
 
         {/* Duration */}
@@ -338,9 +263,9 @@ export default function AudioPlayer({
         <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
           <button
             onClick={() => {
-              const audio = audioRef.current
-              if (audio) {
-                audio.currentTime = 0
+              const wavesurfer = wavesurferRef.current
+              if (wavesurfer) {
+                wavesurfer.seekTo(0)
                 setCurrentTime(0)
               }
               if (watermarkRef.current) {
@@ -379,47 +304,6 @@ export default function AudioPlayer({
         </div>
       </div>
 
-      {/* Audio element - precisa estar no DOM para funcionar */}
-      <audio 
-        ref={audioRef}
-        preload="metadata"
-        src={previewUrl || audioUrl}
-        onTimeUpdate={(e) => {
-          const audio = e.currentTarget
-          setCurrentTime(audio.currentTime)
-        }}
-        onLoadedMetadata={(e) => {
-          const audio = e.currentTarget
-          setDuration(audio.duration || 0)
-        }}
-        onPlay={() => {
-          setIsPlaying(true)
-          setIsLoading(false)
-        }}
-        onPause={() => {
-          setIsPlaying(false)
-          setIsLoading(false)
-        }}
-        onEnded={() => {
-          setIsPlaying(false)
-          setIsLoading(false)
-          setCurrentTime(0)
-        }}
-        onCanPlay={() => {
-          setIsLoading(false)
-        }}
-        onPlaying={() => {
-          setIsLoading(false)
-        }}
-        onWaiting={() => {
-          setIsLoading(true)
-        }}
-        onError={(e) => {
-          console.error('Audio error:', e)
-          setIsLoading(false)
-          toast.error('Erro ao carregar áudio')
-        }}
-      />
     </div>
   )
 }

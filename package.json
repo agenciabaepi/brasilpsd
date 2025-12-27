@@ -38,6 +38,7 @@
     "react-hot-toast": "^2.4.1",
     "sharp": "^0.34.5",
     "tailwind-merge": "^2.2.0",
+    "wavesurfer.js": "^7.12.1",
     "zod": "^3.22.4",
     "zustand": "^4.5.0"
   },
