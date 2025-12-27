@@ -112,34 +112,39 @@ export default function SubscriptionModal({
 
           {/* CTA Buttons */}
           <div className="space-y-3">
-            <button
-              onClick={handleSubscribe}
-              className={cn(
-                "w-full py-4 px-6 rounded-xl font-semibold text-white transition-all",
-                "bg-primary-500 hover:bg-primary-600 shadow-lg hover:shadow-xl",
-                "transform hover:scale-[1.02] active:scale-[0.98]"
-              )}
-            >
-              Inscreva-se para fazer o download
-            </button>
-
             {isLoggedIn ? (
-              <p className="text-center text-sm text-gray-500">
-                Já tem uma conta? <button
-                  onClick={handleLogin}
-                  className="text-primary-500 hover:text-primary-600 font-medium underline"
-                >
-                  Faça login
-                </button>
-              </p>
-            ) : (
+              // Se estiver logado, mostrar apenas botão de assinatura
               <button
-                onClick={handleLogin}
-                className="w-full py-3 px-6 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                onClick={handleSubscribe}
+                className={cn(
+                  "w-full py-4 px-6 rounded-xl font-semibold text-white transition-all",
+                  "bg-primary-500 hover:bg-primary-600 shadow-lg hover:shadow-xl",
+                  "transform hover:scale-[1.02] active:scale-[0.98]"
+                )}
               >
-                <LogIn className="h-4 w-4" />
-                Já tem uma conta? Inicie a sessão
+                Assinar para fazer o download
               </button>
+            ) : (
+              // Se não estiver logado, mostrar opções de inscrever e login
+              <>
+                <button
+                  onClick={handleSubscribe}
+                  className={cn(
+                    "w-full py-4 px-6 rounded-xl font-semibold text-white transition-all",
+                    "bg-primary-500 hover:bg-primary-600 shadow-lg hover:shadow-xl",
+                    "transform hover:scale-[1.02] active:scale-[0.98]"
+                  )}
+                >
+                  Inscreva-se para fazer o download
+                </button>
+                <button
+                  onClick={handleLogin}
+                  className="w-full py-3 px-6 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Já tem uma conta? Inicie a sessão
+                </button>
+              </>
             )}
           </div>
         </div>
