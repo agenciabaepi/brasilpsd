@@ -72,6 +72,7 @@ export default function AudioPlayer({
 
     wavesurfer.on('pause', () => {
       setIsPlaying(false)
+      setIsLoading(false)
     })
 
     wavesurfer.on('timeupdate', (currentTime) => {
@@ -87,9 +88,20 @@ export default function AudioPlayer({
       setIsLoading(true)
     })
 
+    wavesurfer.on('finish', () => {
+      setIsPlaying(false)
+      setIsLoading(false)
+      setCurrentTime(0)
+      if (watermarkRef.current) {
+        watermarkRef.current.pause()
+        watermarkRef.current.currentTime = 0
+      }
+    })
+
     wavesurfer.on('error', (error) => {
       console.error('Wavesurfer error:', error)
       setIsLoading(false)
+      setIsPlaying(false)
       toast.error('Erro ao carregar áudio')
     })
 
@@ -163,20 +175,21 @@ export default function AudioPlayer({
     const wavesurfer = wavesurferRef.current
     if (!wavesurfer) return
 
-    setIsLoading(true)
     try {
-      await wavesurfer.playPause()
-      if (watermarkRef.current && !previewUrl) {
-        if (wavesurfer.isPlaying()) {
+      if (wavesurfer.isPlaying()) {
+        wavesurfer.pause()
+      } else {
+        setIsLoading(true)
+        await wavesurfer.play()
+        if (watermarkRef.current && !previewUrl) {
           watermarkRef.current.play().catch(() => {})
-        } else {
-          watermarkRef.current.pause()
         }
       }
     } catch (error) {
       console.error('Error playing audio:', error)
       toast.error('Erro ao reproduzir áudio')
       setIsLoading(false)
+      setIsPlaying(false)
     }
   }
 
