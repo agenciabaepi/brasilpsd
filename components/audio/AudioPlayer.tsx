@@ -156,8 +156,15 @@ export default function AudioPlayer({
       toast.error('Erro ao carregar áudio')
     })
 
-    // Configurar volume inicial
-    wavesurfer.setVolume(isMuted ? 0 : volume)
+      // Configurar volume inicial
+      wavesurfer.setVolume(isMuted ? 0 : volume)
+    }).catch((error) => {
+      console.error('Error getting secure audio URL:', error)
+      if (isMountedRef.current) {
+        toast.error('Erro ao carregar áudio')
+        setIsLoading(false)
+      }
+    })
 
     return () => {
       isMountedRef.current = false
