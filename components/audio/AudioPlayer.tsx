@@ -166,7 +166,7 @@ export default function AudioPlayer({
       }
       wavesurferRef.current = null
     }
-  }, [audioUrl, previewUrl])
+  }, [audioUrl, previewUrl, resourceId])
 
   // Atualizar volume quando mudar
   useEffect(() => {
