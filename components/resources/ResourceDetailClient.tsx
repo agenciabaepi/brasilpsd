@@ -1406,6 +1406,7 @@ function FontPreview({ fontName, fontLoaded, resourceTitle }: { fontName: string
               title={resource.title}
               artist={resource.is_official ? 'BrasilPSD' : resource.creator?.full_name || 'Desconhecido'}
               duration={resource.duration || undefined}
+              resourceId={resource.id}
               isDownloadable={false}
             />
           ) : resource.thumbnail_url ? (
