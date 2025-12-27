@@ -233,27 +233,84 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Se não tem assinatura ativa, bloquear
-    if (!activeSubscription) {
-      console.warn('⚠️ Usuário sem assinatura ativa:', user.id)
+    // ========================================================================
+    // 4. VERIFICAR SE RECURSO EXISTE E ESTÁ APROVADO (ANTES DE VERIFICAR ASSINATURA)
+    // ========================================================================
+    const { data: resource, error: resourceError } = await supabase
+      .from('resources')
+      .select('id, status, creator_id, file_url, is_premium')
+      .eq('id', resourceId)
+      .single()
+
+    if (resourceError || !resource) {
+      console.error('❌ Download failed: Resource not found', { 
+        resourceId, 
+        error: resourceError 
+      })
       return NextResponse.json(
-        {
-          error: 'Assinatura não encontrada',
-          message: 'Você precisa de uma assinatura ativa para baixar recursos.',
-          suggestion: 'Acesse /premium para assinar um plano.'
+        { 
+          error: 'Recurso não encontrado',
+          message: 'O recurso que você está tentando baixar não existe ou foi removido.'
+        },
+        { status: 404 }
+      )
+    }
+
+    // Verificar se recurso está aprovado OU se é o criador/admin
+    const isCreator = resource.creator_id === user.id
+    const isAdmin = profile.is_admin
+
+    if (resource.status !== 'approved' && !isCreator && !isAdmin) {
+      console.warn('⚠️ Download blocked: Resource not approved', {
+        userId: user.id,
+        resourceId,
+        status: resource.status
+      })
+      
+      const statusMessages: Record<string, string> = {
+        pending: 'Este recurso ainda está aguardando aprovação e não está disponível para download.',
+        rejected: 'Este recurso foi rejeitado e não está disponível para download.',
+        draft: 'Este recurso ainda está em rascunho e não está disponível para download.'
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'Recurso não disponível',
+          message: statusMessages[resource.status] || 'Este recurso não está disponível para download no momento.'
         },
         { status: 403 }
       )
     }
 
-    console.log('✅ Assinatura ativa encontrada:', {
-      subscriptionId: activeSubscription.id,
-      tier: activeSubscription.tier,
-      periodEnd: activeSubscription.current_period_end
-    })
+    // ========================================================================
+    // 5. VERIFICAR ASSINATURA APENAS SE RECURSO FOR PREMIUM
+    // ========================================================================
+    // Se o recurso é premium, verificar assinatura
+    if (resource.is_premium) {
+      // Se não tem assinatura ativa, bloquear
+      if (!activeSubscription) {
+        console.warn('⚠️ Usuário sem assinatura ativa tentando baixar recurso premium:', user.id)
+        return NextResponse.json(
+          {
+            error: 'Assinatura necessária',
+            message: 'Este recurso é exclusivo para membros Premium. Você precisa de uma assinatura ativa para baixá-lo.',
+            suggestion: 'Acesse /premium para assinar um plano.'
+          },
+          { status: 403 }
+        )
+      }
+
+      console.log('✅ Assinatura ativa encontrada para recurso premium:', {
+        subscriptionId: activeSubscription.id,
+        tier: activeSubscription.tier,
+        periodEnd: activeSubscription.current_period_end
+      })
+    } else {
+      console.log('✅ Recurso gratuito, não requer assinatura')
+    }
 
     // ========================================================================
-    // 4. VERIFICAR LIMITE DE DOWNLOADS (usando função helper que conta corretamente)
+    // 6. VERIFICAR LIMITE DE DOWNLOADS (usando função helper que conta corretamente)
     // ========================================================================
     console.log('🔍 Checking download limit for user:', user.id)
     
@@ -297,80 +354,25 @@ export async function POST(request: NextRequest) {
         lite: 'Você atingiu seu limite diário de 3 downloads. Faça upgrade para baixar mais recursos!',
         pro: 'Você atingiu seu limite diário de 10 downloads. Faça upgrade para baixar mais recursos!',
         plus: 'Você atingiu seu limite diário de 20 downloads. Tente novamente amanhã!',
-        ultra: 'Você atingiu seu limite diário de 20 downloads. Tente novamente amanhã!'
       }
-      
-      const planMessage = planMessages[profile.subscription_tier || 'free'] || 
-                         `Você já fez ${downloadStatusData.current} de ${downloadStatusData.limit} downloads hoje. Tente novamente amanhã.`
+
+      const tier = activeSubscription?.tier || 'free'
       
       return NextResponse.json(
         {
           error: 'Limite de downloads excedido',
-          message: planMessage,
+          message: planMessages[tier] || 'Você atingiu seu limite diário de downloads.',
           current_count: downloadStatusData.current,
           limit_count: downloadStatusData.limit,
-          remaining: downloadStatusData.remaining,
-          suggestion: downloadStatusData.limit < 20 ? 'Considere fazer upgrade do seu plano para baixar mais recursos!' : undefined
+          remaining: downloadStatusData.remaining
         },
         { status: 403 }
       )
     }
 
-    console.log('✅ Download limit check passed:', {
-      userId: user.id,
-      current: downloadStatusData.current,
-      limit: downloadStatusData.limit,
-      remaining: downloadStatusData.remaining
-    })
-
     // ========================================================================
-    // 5. VERIFICAR SE RECURSO EXISTE E ESTÁ APROVADO
+    // 7. REGISTRAR DOWNLOAD (com validação e transação atômica)
     // ========================================================================
-    const { data: resource, error: resourceError } = await supabase
-      .from('resources')
-      .select('id, status, creator_id, file_url')
-      .eq('id', resourceId)
-      .single()
-
-    if (resourceError || !resource) {
-      console.error('❌ Download failed: Resource not found', { 
-        resourceId, 
-        error: resourceError 
-      })
-      return NextResponse.json(
-        { 
-          error: 'Recurso não encontrado',
-          message: 'O recurso que você está tentando baixar não existe ou foi removido.'
-        },
-        { status: 404 }
-      )
-    }
-
-    // Verificar se recurso está aprovado OU se é o criador/admin
-    const isCreator = resource.creator_id === user.id
-    const isAdmin = profile.is_admin
-
-    if (resource.status !== 'approved' && !isCreator && !isAdmin) {
-      console.warn('⚠️ Download blocked: Resource not approved', {
-        userId: user.id,
-        resourceId,
-        status: resource.status
-      })
-      
-      const statusMessages: Record<string, string> = {
-        pending: 'Este recurso ainda está aguardando aprovação e não está disponível para download.',
-        rejected: 'Este recurso foi rejeitado e não está disponível para download.',
-        draft: 'Este recurso ainda está em rascunho e não está disponível para download.'
-      }
-      
-      return NextResponse.json(
-        { 
-          error: 'Recurso não disponível',
-          message: statusMessages[resource.status] || 'Este recurso não está disponível para download no momento.'
-        },
-        { status: 403 }
-      )
-    }
 
     // ========================================================================
     // 6. REGISTRAR DOWNLOAD (com validação e transação atômica)
