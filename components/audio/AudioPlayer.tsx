@@ -40,11 +40,13 @@ export default function AudioPlayer({
   const waveformRef = useRef<HTMLDivElement>(null)
   const wavesurferRef = useRef<ReturnType<typeof WaveSurfer.create> | null>(null)
   const watermarkRef = useRef<HTMLAudioElement | null>(null)
+  const isMountedRef = useRef(true)
 
   // Configurar Wavesurfer
   useEffect(() => {
     if (!waveformRef.current) return
 
+    isMountedRef.current = true
     const urlToUse = previewUrl || audioUrl
 
     // Criar instância do Wavesurfer
@@ -66,29 +68,35 @@ export default function AudioPlayer({
 
     // Event listeners
     wavesurfer.on('play', () => {
+      if (!isMountedRef.current) return
       setIsPlaying(true)
       setIsLoading(false)
     })
 
     wavesurfer.on('pause', () => {
+      if (!isMountedRef.current) return
       setIsPlaying(false)
       setIsLoading(false)
     })
 
     wavesurfer.on('timeupdate', (currentTime) => {
+      if (!isMountedRef.current) return
       setCurrentTime(currentTime)
     })
 
     wavesurfer.on('ready', () => {
+      if (!isMountedRef.current) return
       setDuration(wavesurfer.getDuration())
       setIsLoading(false)
     })
 
     wavesurfer.on('loading', () => {
+      if (!isMountedRef.current) return
       setIsLoading(true)
     })
 
     wavesurfer.on('finish', () => {
+      if (!isMountedRef.current) return
       setIsPlaying(false)
       setIsLoading(false)
       setCurrentTime(0)
@@ -99,6 +107,17 @@ export default function AudioPlayer({
     })
 
     wavesurfer.on('error', (error) => {
+      // Ignorar erros de abort que são esperados durante cleanup
+      if (error?.name === 'AbortError' || 
+          error?.message?.includes('aborted') ||
+          error?.message?.includes('BodyStreamBuffer was aborted')) {
+        // Não mostrar erro para aborts esperados (componente desmontado)
+        return
+      }
+      
+      // Só mostrar erro se o componente ainda estiver montado
+      if (!isMountedRef.current) return
+      
       console.error('Wavesurfer error:', error)
       setIsLoading(false)
       setIsPlaying(false)
@@ -109,14 +128,17 @@ export default function AudioPlayer({
     wavesurfer.setVolume(isMuted ? 0 : volume)
 
     return () => {
-      // Verificar se wavesurfer ainda existe antes de destruir
-      if (wavesurferRef.current && !wavesurferRef.current.destroyed) {
-        try {
+      isMountedRef.current = false
+      
+      // Parar o áudio antes de destruir
+      try {
+        if (wavesurferRef.current && !wavesurferRef.current.destroyed) {
+          wavesurferRef.current.pause()
           wavesurferRef.current.destroy()
-        } catch (error) {
-          // Ignorar erros de destruição (pode já estar destruído)
-          console.warn('Wavesurfer cleanup warning:', error)
         }
+      } catch (error) {
+        // Ignorar erros de destruição silenciosamente
+        // (erros de abort são esperados quando o componente é desmontado)
       }
       wavesurferRef.current = null
     }
