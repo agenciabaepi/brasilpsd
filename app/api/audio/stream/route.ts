@@ -171,9 +171,10 @@ export async function GET(request: NextRequest) {
       // Gerar URL assinada válida por 1 hora
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
 
-      // Redirecionar para a URL assinada
-      return NextResponse.redirect(signedUrl, {
-        status: 302,
+      // Retornar URL assinada diretamente (Wavesurfer precisa de URL direta)
+      return NextResponse.json({
+        url: signedUrl
+      }, {
         headers: {
           'Cache-Control': 'private, max-age=3600',
         }
