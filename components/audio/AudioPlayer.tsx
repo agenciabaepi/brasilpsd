@@ -40,18 +40,6 @@ export default function AudioPlayer({
   const watermarkRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
 
-  // Configurar áudio principal - atualizar URL quando mudar
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    // Usar preview com marca d'água se disponível
-    const urlToUse = previewUrl || audioUrl
-    if (audio.src !== urlToUse) {
-      audio.src = urlToUse
-      audio.load()
-    }
-  }, [audioUrl, previewUrl])
 
   // Configurar áudio de marca d'água (apenas se não houver previewUrl)
   useEffect(() => {
@@ -315,6 +303,7 @@ export default function AudioPlayer({
       <audio 
         ref={audioRef}
         preload="metadata"
+        src={previewUrl || audioUrl}
         onTimeUpdate={(e) => {
           const audio = e.currentTarget
           setCurrentTime(audio.currentTime)
@@ -323,11 +312,32 @@ export default function AudioPlayer({
           const audio = e.currentTarget
           setDuration(audio.duration || 0)
         }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPlay={() => {
+          setIsPlaying(true)
+          setIsLoading(false)
+        }}
+        onPause={() => {
+          setIsPlaying(false)
+          setIsLoading(false)
+        }}
         onEnded={() => {
           setIsPlaying(false)
+          setIsLoading(false)
           setCurrentTime(0)
+        }}
+        onCanPlay={() => {
+          setIsLoading(false)
+        }}
+        onPlaying={() => {
+          setIsLoading(false)
+        }}
+        onWaiting={() => {
+          setIsLoading(true)
+        }}
+        onError={(e) => {
+          console.error('Audio error:', e)
+          setIsLoading(false)
+          toast.error('Erro ao carregar áudio')
         }}
       />
     </div>
