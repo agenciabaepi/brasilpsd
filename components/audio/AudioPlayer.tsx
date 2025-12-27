@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Play, Pause, Volume2, VolumeX, Download, Heart, RotateCcw } from 'lucide-react'
-import { createSupabaseClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 
 interface AudioPlayerProps {
@@ -36,69 +35,42 @@ export default function AudioPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [showWatermark, setShowWatermark] = useState(false)
   
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const watermarkRef = useRef<HTMLAudioElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const watermarkRef = useRef<HTMLAudioElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
 
-  // Inicializar áudio principal
+  // Configurar áudio principal - atualizar URL quando mudar
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio()
-      audioRef.current.addEventListener('loadedmetadata', () => {
-        setDuration(audioRef.current?.duration || 0)
-      })
-      audioRef.current.addEventListener('timeupdate', () => {
-        setCurrentTime(audioRef.current?.currentTime || 0)
-      })
-      audioRef.current.addEventListener('ended', () => {
-        setIsPlaying(false)
-        setCurrentTime(0)
-        if (watermarkRef.current) {
-          watermarkRef.current.pause()
-          watermarkRef.current.currentTime = 0
-        }
-      })
-      audioRef.current.addEventListener('play', () => {
-        setIsPlaying(true)
-      })
-      audioRef.current.addEventListener('pause', () => {
-        setIsPlaying(false)
-      })
-    }
+    const audio = audioRef.current
+    if (!audio) return
 
-    // Sempre usar o preview com marca d'água se disponível (para reprodução no site)
-    // O download sempre será do arquivo original sem marca d'água
+    // Usar preview com marca d'água se disponível
     const urlToUse = previewUrl || audioUrl
-    if (audioRef.current && audioRef.current.src !== urlToUse) {
-      audioRef.current.src = urlToUse
-      if (previewUrl) {
-        setShowWatermark(true)
-      }
-    }
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.src = ''
-      }
+    if (audio.src !== urlToUse) {
+      audio.src = urlToUse
+      audio.load()
     }
   }, [audioUrl, previewUrl])
 
-  // Inicializar áudio de marca d'água (sobrepor) - apenas se não houver previewUrl
-  // Se houver previewUrl, a marca d'água já está no áudio processado
+  // Configurar áudio de marca d'água (apenas se não houver previewUrl)
   useEffect(() => {
-    // Se não houver previewUrl, usar marca d'água separada
-    if (!previewUrl && !watermarkRef.current) {
-      watermarkRef.current = new Audio('/marca dagua audio.mp3')
-      watermarkRef.current.loop = true
-      watermarkRef.current.volume = 0.25 // Volume baixo para não interferir muito
-    } else if (previewUrl && watermarkRef.current) {
-      // Se houver previewUrl, limpar marca d'água separada
-      watermarkRef.current.pause()
-      watermarkRef.current.src = ''
-      watermarkRef.current = null
+    if (previewUrl) {
+      // Se houver previewUrl, a marca d'água já está no áudio processado
+      if (watermarkRef.current) {
+        watermarkRef.current.pause()
+        watermarkRef.current.src = ''
+      }
+      return
+    }
+
+    // Criar elemento de áudio de marca d'água
+    if (!watermarkRef.current) {
+      const watermarkAudio = document.createElement('audio')
+      watermarkAudio.src = '/marca dagua audio.mp3'
+      watermarkAudio.loop = true
+      watermarkAudio.volume = 0.25
+      watermarkRef.current = watermarkAudio
     }
 
     return () => {
@@ -109,65 +81,77 @@ export default function AudioPlayer({
     }
   }, [previewUrl])
 
-  // Sincronizar marca d'água com o áudio principal (apenas se não houver previewUrl)
+  // Sincronizar marca d'água com o áudio principal
   useEffect(() => {
-    if (isPlaying && !previewUrl && watermarkRef.current) {
-      watermarkRef.current.play().catch(() => {
-        // Ignorar erros de autoplay
-      })
-    } else if (!isPlaying && watermarkRef.current) {
-      watermarkRef.current.pause()
+    if (!previewUrl && watermarkRef.current) {
+      if (isPlaying) {
+        watermarkRef.current.play().catch(() => {
+          // Ignorar erros de autoplay
+        })
+      } else {
+        watermarkRef.current.pause()
+      }
     }
   }, [isPlaying, previewUrl])
 
   const togglePlay = async () => {
-    if (!audioRef.current) return
+    const audio = audioRef.current
+    if (!audio) return
 
     setIsLoading(true)
     try {
       if (isPlaying) {
-        audioRef.current.pause()
+        audio.pause()
         if (watermarkRef.current) {
           watermarkRef.current.pause()
         }
       } else {
-        await audioRef.current.play()
-        if (previewUrl && watermarkRef.current) {
-          await watermarkRef.current.play()
-        }
+        await audio.play()
       }
     } catch (error) {
       console.error('Error playing audio:', error)
       toast.error('Erro ao reproduzir áudio')
-    } finally {
       setIsLoading(false)
     }
   }
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !progressRef.current) return
+    const audio = audioRef.current
+    if (!audio || !progressRef.current) return
 
     const rect = progressRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const percent = x / rect.width
+    const percent = Math.max(0, Math.min(1, x / rect.width))
     const newTime = percent * duration
 
-    audioRef.current.currentTime = newTime
+    audio.currentTime = newTime
     setCurrentTime(newTime)
   }
 
   const toggleMute = () => {
-    if (!audioRef.current) return
+    const audio = audioRef.current
+    if (!audio) return
+    
     const newMuted = !isMuted
     setIsMuted(newMuted)
-    audioRef.current.muted = newMuted
+    audio.muted = newMuted
   }
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    if (!audio) return
+    
     const newVolume = parseFloat(e.target.value)
     setVolume(newVolume)
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume
+    audio.volume = newVolume
+    
+    // Se o volume for 0, mutar automaticamente
+    if (newVolume === 0) {
+      setIsMuted(true)
+      audio.muted = true
+    } else if (isMuted) {
+      setIsMuted(false)
+      audio.muted = false
     }
   }
 
@@ -251,11 +235,13 @@ export default function AudioPlayer({
         <div className="flex items-center gap-0.5 md:gap-1.5 flex-shrink-0">
           <button
             onClick={() => {
+              const audio = audioRef.current
+              if (audio) {
+                audio.currentTime = 0
+                setCurrentTime(0)
+              }
               if (watermarkRef.current) {
                 watermarkRef.current.currentTime = 0
-              }
-              if (audioRef.current) {
-                audioRef.current.currentTime = 0
               }
             }}
             className="p-1.5 md:p-2 text-gray-400 hover:text-gray-600 transition-colors"
@@ -290,10 +276,10 @@ export default function AudioPlayer({
         </div>
 
         {/* Volume Control - apenas em telas médias/grandes */}
-        <div className="hidden md:flex items-center gap-1.5 md:gap-2 flex-shrink-0 w-16 md:w-20 lg:w-24">
+        <div className="hidden md:flex items-center gap-1.5 md:gap-2 flex-shrink-0 w-20 md:w-24">
           <button
             onClick={toggleMute}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-1 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
           >
             {isMuted ? (
               <VolumeX className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -316,9 +302,25 @@ export default function AudioPlayer({
         </div>
       </div>
 
-      {/* Hidden audio elements */}
-      <audio ref={audioRef} preload="metadata" />
+      {/* Audio element - precisa estar no DOM para funcionar */}
+      <audio 
+        ref={audioRef}
+        preload="metadata"
+        onTimeUpdate={(e) => {
+          const audio = e.currentTarget
+          setCurrentTime(audio.currentTime)
+        }}
+        onLoadedMetadata={(e) => {
+          const audio = e.currentTarget
+          setDuration(audio.duration || 0)
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false)
+          setCurrentTime(0)
+        }}
+      />
     </div>
   )
 }
-
