@@ -319,80 +319,72 @@ export default function AudioPlayer({
           <span>{formatTime(duration)}</span>
         </div>
 
-        {/* BPM (placeholder) - apenas em telas maiores */}
-        <div className="hidden lg:block flex-shrink-0 text-xs md:text-sm text-gray-400 min-w-[60px] text-center px-1 md:px-2">
-          -- BPM
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-0.5 md:gap-1.5 flex-shrink-0">
-          <button
-            onClick={() => {
-              const audio = audioRef.current
-              if (audio) {
-                audio.currentTime = 0
-                setCurrentTime(0)
-              }
-              if (watermarkRef.current) {
-                watermarkRef.current.currentTime = 0
-              }
-            }}
-            className="p-1.5 md:p-2 text-gray-400 hover:text-gray-600 transition-colors"
-            title="Repetir"
-          >
-            <RotateCcw className="w-3.5 h-3.5 md:w-4 md:h-4" />
-          </button>
-          
+        {/* Actions - Colocadas em linha separada abaixo em telas menores, ou ao lado em telas maiores */}
+        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {onFavorite && (
             <button
               onClick={onFavorite}
-              className={`p-1.5 md:p-2 transition-colors ${
+              className={`p-2 transition-colors ${
                 isFavorited
                   ? 'text-red-500 hover:text-red-600'
                   : 'text-gray-400 hover:text-gray-600'
               }`}
               title="Favoritar"
             >
-              <Heart className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isFavorited ? 'fill-current' : ''}`} />
+              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`} />
             </button>
           )}
 
           {isDownloadable && onDownload && (
             <button
               onClick={onDownload}
-              className="p-1.5 md:p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               title="Download"
             >
-              <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <Download className="w-4 h-4" />
             </button>
           )}
         </div>
-
-        {/* Volume Control - apenas em telas médias/grandes */}
-        <div className="hidden md:flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-[80px] max-w-[100px]">
-          <button
-            onClick={toggleMute}
-            className="p-1 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            {isMuted ? (
-              <VolumeX className="w-3.5 h-3.5 md:w-4 md:h-4" />
-            ) : (
-              <Volume2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-            )}
-          </button>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={handleVolumeChange}
-            className="flex-1 min-w-0 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            style={{
-              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${volume * 100}%, #e5e7eb ${volume * 100}%, #e5e7eb 100%)`
-            }}
-          />
+      </div>
+      
+      {/* Info e controles adicionais em linha separada para telas menores */}
+      <div className="mt-3 md:hidden flex items-center justify-between">
+        <div className="flex-1 min-w-0 mr-2">
+          <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
+          {artist && (
+            <div className="text-xs text-gray-500 truncate">Por {artist}</div>
+          )}
         </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {onFavorite && (
+            <button
+              onClick={onFavorite}
+              className={`p-1.5 transition-colors ${
+                isFavorited
+                  ? 'text-red-500 hover:text-red-600'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`} />
+            </button>
+          )}
+          {isDownloadable && onDownload && (
+            <button
+              onClick={onDownload}
+              className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Track Info - Apenas em telas médias/grandes */}
+      <div className="hidden md:block mt-2">
+        <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
+        {artist && (
+          <div className="text-xs text-gray-500 truncate mt-0.5">Por {artist}</div>
+        )}
       </div>
 
       {/* Audio element - precisa estar no DOM para funcionar */}
