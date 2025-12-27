@@ -251,57 +251,45 @@ export default function AudioPlayer({
 
   return (
     <div className="w-full bg-white rounded-lg border border-gray-100 p-3 md:p-4">
-      <div className="flex items-center gap-2 md:gap-3 lg:gap-4 overflow-hidden">
-        {/* Play Button */}
+      <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+        {/* Play Button - Verde circular como na imagem */}
         <button
           onClick={togglePlay}
           disabled={isLoading}
-          className="flex-shrink-0 w-10 h-10 md:w-11 md:h-11 rounded-full border-2 border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 flex items-center justify-center transition-all disabled:opacity-50"
+          className="flex-shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-all disabled:opacity-50 shadow-sm"
         >
           {isLoading ? (
-            <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : isPlaying ? (
-            <Pause className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
+            <Pause className="w-5 h-5 md:w-6 md:h-6 text-white" />
           ) : (
-            <Play className="w-4 h-4 md:w-5 md:h-5 text-gray-700 ml-0.5" />
+            <Play className="w-5 h-5 md:w-6 md:h-6 text-white ml-0.5" />
           )}
         </button>
 
-        {/* Track Info */}
-        <div className="flex-shrink-0 min-w-[120px] md:min-w-[160px] lg:min-w-[200px] max-w-[220px]">
-          <div className="text-sm md:text-base font-semibold text-gray-900 truncate leading-tight">{title}</div>
-          {artist && (
-            <div className="text-xs md:text-sm text-gray-500 truncate mt-0.5">Por {artist}</div>
-          )}
-        </div>
-
         {/* Waveform/Progress Bar */}
-        <div className="flex-1 min-w-0 mx-1 md:mx-2 lg:mx-3">
+        <div className="flex-1 min-w-0">
           <div
             ref={progressRef}
             onClick={handleSeek}
-            className="h-10 md:h-11 lg:h-12 bg-gray-100 rounded cursor-pointer relative overflow-hidden"
+            className="h-12 md:h-14 bg-gray-100 rounded cursor-pointer relative overflow-hidden"
           >
-            <div
-              className="absolute inset-0 bg-gradient-to-r from-green-500 to-green-600 transition-all duration-100"
-              style={{ width: `${progressPercent}%` }}
-            />
             {/* Waveform real baseado em dados de áudio */}
-            <div className="absolute inset-0 flex items-center justify-center gap-[1px] md:gap-[2px] px-1.5 md:px-2">
+            <div className="absolute inset-0 flex items-center justify-center gap-[2px] md:gap-[3px] px-2 md:px-3">
               {audioData && audioData.length > 0 ? (
                 // Usar dados reais de áudio
                 Array.from({ length: Math.min(50, audioData.length) }).map((_, i) => {
                   // Mapear índices para distribuir uniformemente
                   const dataIndex = Math.floor((i / 50) * audioData.length)
                   const value = audioData[dataIndex]
-                  // Converter valor (0-255) para altura (20-80%)
-                  const barHeight = 20 + (value / 255) * 60
+                  // Converter valor (0-255) para altura (25-75%)
+                  const barHeight = 25 + (value / 255) * 50
                   const isActive = (i / 50) * 100 < progressPercent
                   return (
                     <div
                       key={i}
-                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
-                        isActive ? 'bg-white' : 'bg-gray-300'
+                      className={`w-[2px] md:w-[3px] rounded-full transition-all ${
+                        isActive ? 'bg-green-600' : 'bg-gray-400'
                       }`}
                       style={{ height: `${barHeight}%` }}
                     />
@@ -314,10 +302,10 @@ export default function AudioPlayer({
                   return (
                     <div
                       key={i}
-                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
-                        isActive ? 'bg-white' : 'bg-gray-300'
+                      className={`w-[2px] md:w-[3px] rounded-full transition-all ${
+                        isActive ? 'bg-green-600' : 'bg-gray-400'
                       }`}
-                      style={{ height: '40%' }}
+                      style={{ height: '50%' }}
                     />
                   )
                 })
@@ -327,8 +315,7 @@ export default function AudioPlayer({
         </div>
 
         {/* Duration */}
-        <div className="flex-shrink-0 text-xs md:text-sm text-gray-500 font-mono whitespace-nowrap px-1 md:px-2">
-          <span className="hidden sm:inline">{formatTime(currentTime)} / </span>
+        <div className="flex-shrink-0 text-sm md:text-base text-gray-900 font-medium whitespace-nowrap px-2 md:px-3">
           <span>{formatTime(duration)}</span>
         </div>
 
