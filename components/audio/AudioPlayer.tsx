@@ -42,34 +42,33 @@ export default function AudioPlayer({
   const progressRef = useRef<HTMLDivElement>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const dataArrayRef = useRef<Uint8Array | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const isAudioContextSetupRef = useRef(false)
 
-
-  // Configurar Web Audio API para análise de espectro
+  // Configurar Web Audio API para análise de espectro (apenas uma vez)
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || isAudioContextSetupRef.current) return
 
-    let source: MediaElementAudioSourceNode | null = null
-
-    // Criar AudioContext
+    // Criar AudioContext apenas uma vez
     const initAudioContext = async () => {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-      }
-      
-      // Retomar contexto se estiver suspenso (necessário após interação do usuário)
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume()
-      }
-      
-      const audioContext = audioContextRef.current
-      
-      // Criar analisador se ainda não existe
-      if (!analyserRef.current) {
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+        }
+        
+        const audioContext = audioContextRef.current
+        
+        // Retomar contexto se estiver suspenso
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume()
+        }
+        
+        // Criar analisador
         const analyser = audioContext.createAnalyser()
-        analyser.fftSize = 256 // 128 barras (fftSize / 2)
+        analyser.fftSize = 256
         analyser.smoothingTimeConstant = 0.8
         
         const bufferLength = analyser.frequencyBinCount
@@ -77,24 +76,37 @@ export default function AudioPlayer({
         dataArrayRef.current = dataArray
         analyserRef.current = analyser
 
-        // Conectar áudio ao analisador (só pode ser feito uma vez)
-        try {
-          source = audioContext.createMediaElementSource(audio)
-          source.connect(analyser)
-          analyser.connect(audioContext.destination)
-        } catch (error) {
-          console.error('Error setting up audio analyser:', error)
-        }
+        // Conectar áudio ao analisador (CRÍTICO: só pode ser feito UMA vez)
+        sourceRef.current = audioContext.createMediaElementSource(audio)
+        sourceRef.current.connect(analyser)
+        analyser.connect(audioContext.destination)
+        
+        isAudioContextSetupRef.current = true
+      } catch (error) {
+        console.error('Error setting up audio analyser:', error)
+        // Se der erro, continuar sem visualização mas áudio ainda funciona
+        isAudioContextSetupRef.current = true // Marcar como setup para não tentar novamente
       }
     }
 
     initAudioContext()
+  }, []) // Executar apenas uma vez no mount
 
-    // Função para atualizar visualização
+  // Atualizar visualização quando estiver tocando
+  useEffect(() => {
+    if (!isPlaying || !analyserRef.current || !dataArrayRef.current) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
+      return
+    }
+
     const updateVisualization = () => {
-      if (!analyserRef.current || !dataArrayRef.current) {
-        if (isPlaying) {
-          animationFrameRef.current = requestAnimationFrame(updateVisualization)
+      if (!analyserRef.current || !dataArrayRef.current || !isPlaying) {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+          animationFrameRef.current = null
         }
         return
       }
@@ -107,16 +119,7 @@ export default function AudioPlayer({
       }
     }
 
-    // Iniciar visualização quando estiver tocando
-    if (isPlaying) {
-      updateVisualization()
-    } else {
-      // Limpar dados quando pausar
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-        animationFrameRef.current = null
-      }
-    }
+    updateVisualization()
 
     return () => {
       if (animationFrameRef.current) {
