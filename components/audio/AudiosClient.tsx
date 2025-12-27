@@ -69,7 +69,6 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
             ...(subCats || [])
           ]
           setCategories(audioCategories)
-          console.log('✅ Audio categories loaded:', audioCategories.length)
         } else {
           console.warn('⚠️ Audio category not found')
         }

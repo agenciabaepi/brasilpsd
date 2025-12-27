@@ -41,12 +41,48 @@ export default function AudioPlayer({
   const wavesurferRef = useRef<ReturnType<typeof WaveSurfer.create> | null>(null)
   const watermarkRef = useRef<HTMLAudioElement | null>(null)
   const isMountedRef = useRef(true)
+  const isLoadingUrlRef = useRef(false)
+  const hasPersistentErrorRef = useRef(false)
+  const lastResourceKeyRef = useRef<string>('')
+  const initializationStartedRef = useRef<string>('')
 
   // Configurar Wavesurfer
   useEffect(() => {
+    // Verificações iniciais - ordem importa!
     if (!waveformRef.current) return
 
+    // Criar uma chave única para este recurso PRIMEIRO
+    const currentResourceKey = `${resourceId || ''}-${audioUrl}-${previewUrl || ''}`
+    
+    // Se o recurso mudou, resetar o erro persistente e o loading state
+    if (currentResourceKey !== lastResourceKeyRef.current) {
+      hasPersistentErrorRef.current = false
+      isLoadingUrlRef.current = false
+      initializationStartedRef.current = ''
+      lastResourceKeyRef.current = currentResourceKey
+    }
+    
+    // VERIFICAR ERRO PERSISTENTE ANTES DE QUALQUER OUTRA COISA
+    // Se já houve erro persistente para este recurso, não tentar novamente
+    if (hasPersistentErrorRef.current && currentResourceKey === lastResourceKeyRef.current) {
+      setIsLoading(false)
+      setIsPlaying(false)
+      return
+    }
+    
+    // Se já existe uma instância do Wavesurfer válida para este recurso, não recriar
+    if (wavesurferRef.current && !wavesurferRef.current.destroyed && currentResourceKey === lastResourceKeyRef.current) {
+      return
+    }
+
+    // Prevenir múltiplas inicializações simultâneas (incluindo dupla execução do React Strict Mode)
+    if (isLoadingUrlRef.current || initializationStartedRef.current === currentResourceKey) {
+      return
+    }
+
     isMountedRef.current = true
+    isLoadingUrlRef.current = true
+    initializationStartedRef.current = currentResourceKey
     
     // Função para obter URL segura do áudio
     const getSecureAudioUrl = async () => {
@@ -69,8 +105,24 @@ export default function AudioPlayer({
       const response = await fetch(`/api/audio/stream?resourceId=${resourceId}&key=${encodeURIComponent(key)}&type=${type}`)
       
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Erro ao obter URL do áudio')
+        const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        const errorMessage = errorData.error || 'Erro ao obter URL do áudio'
+        
+        // Marcar erro persistente para não tentar novamente (especialmente para 403/401)
+        // Estes erros indicam problemas de autenticação/autorização que não serão resolvidos
+        // apenas tentando novamente com o mesmo recurso
+        if (response.status === 403 || response.status === 401) {
+          // IMPORTANTE: Só marcar como erro persistente se for o mesmo recurso
+          // Isso previne que um erro em um recurso bloqueie outros recursos
+          // currentResourceKey está no escopo do useEffect, então está disponível aqui
+          hasPersistentErrorRef.current = true
+          isLoadingUrlRef.current = false
+          initializationStartedRef.current = '' // Reset para permitir nova tentativa se o recurso mudar
+          // Retornar null para indicar que não há URL disponível
+          return null
+        }
+        
+        throw new Error(errorMessage)
       }
       
       const data = await response.json()
@@ -78,96 +130,153 @@ export default function AudioPlayer({
     }
 
     // Carregar URL segura e criar Wavesurfer
-    getSecureAudioUrl().then((urlToUse) => {
-      if (!waveformRef.current || !isMountedRef.current) return
+    getSecureAudioUrl()
+      .then((urlToUse) => {
+        // Verificar se ainda está montado ANTES de qualquer coisa
+        if (!isMountedRef.current) {
+          isLoadingUrlRef.current = false
+          initializationStartedRef.current = ''
+          return
+        }
+        
+        isLoadingUrlRef.current = false
+        initializationStartedRef.current = '' // Reset após sucesso
+        
+        // Se não há URL (erro persistente), não continuar
+        if (!urlToUse) {
+          setIsLoading(false)
+          setIsPlaying(false)
+          return
+        }
+        
+        // Verificar novamente se ainda está montado e se temos uma URL válida
+        if (!waveformRef.current || !isMountedRef.current) {
+          return
+        }
+        
+        // Verificar se já existe uma instância do Wavesurfer (pode ter sido criada em outra execução)
+        if (wavesurferRef.current && !wavesurferRef.current.destroyed) {
+          return
+        }
 
-      // Criar instância do Wavesurfer
-      const wavesurfer = WaveSurfer.create({
-        container: waveformRef.current,
-        waveColor: '#d1d5db', // cinza claro para parte não tocada
-        progressColor: '#374151', // cinza escuro para parte tocada
-        cursorColor: 'transparent',
-        barWidth: 2,
-        barRadius: 1,
-        barGap: 2,
-        height: 48,
-        normalize: true,
-        url: urlToUse,
-        interact: true, // Permite clicar na waveform para navegar
+        // Criar instância do Wavesurfer
+        const wavesurfer = WaveSurfer.create({
+          container: waveformRef.current,
+          waveColor: '#d1d5db', // cinza claro para parte não tocada
+          progressColor: '#374151', // cinza escuro para parte tocada
+          cursorColor: 'transparent',
+          barWidth: 2,
+          barRadius: 1,
+          barGap: 2,
+          height: 48,
+          normalize: true,
+          url: urlToUse,
+          interact: true, // Permite clicar na waveform para navegar
+        })
+
+        wavesurferRef.current = wavesurfer
+
+        // Event listeners
+        wavesurfer.on('play', () => {
+          if (!isMountedRef.current) return
+          setIsPlaying(true)
+          setIsLoading(false)
+        })
+
+        wavesurfer.on('pause', () => {
+          if (!isMountedRef.current) return
+          setIsPlaying(false)
+          setIsLoading(false)
+        })
+
+        wavesurfer.on('timeupdate', (currentTime) => {
+          if (!isMountedRef.current) return
+          setCurrentTime(currentTime)
+        })
+
+        wavesurfer.on('ready', () => {
+          if (!isMountedRef.current) return
+          setDuration(wavesurfer.getDuration())
+          setIsLoading(false)
+        })
+
+        wavesurfer.on('loading', () => {
+          if (!isMountedRef.current) return
+          setIsLoading(true)
+        })
+
+        wavesurfer.on('finish', () => {
+          if (!isMountedRef.current) return
+          setIsPlaying(false)
+          setIsLoading(false)
+          setCurrentTime(0)
+          if (watermarkRef.current) {
+            watermarkRef.current.pause()
+            watermarkRef.current.currentTime = 0
+          }
+        })
+
+        wavesurfer.on('error', (error) => {
+          // Ignorar erros de abort que são esperados durante cleanup
+          if (error?.name === 'AbortError' || 
+              error?.message?.includes('aborted') ||
+              error?.message?.includes('BodyStreamBuffer was aborted')) {
+            // Não mostrar erro para aborts esperados (componente desmontado)
+            return
+          }
+          
+          // Só mostrar erro se o componente ainda estiver montado
+          if (!isMountedRef.current) return
+          
+          console.error('Wavesurfer error:', error)
+          setIsLoading(false)
+          setIsPlaying(false)
+          toast.error('Erro ao carregar áudio')
+        })
+
+        // Configurar volume inicial
+        wavesurfer.setVolume(isMuted ? 0 : volume)
       })
-
-    wavesurferRef.current = wavesurfer
-
-    // Event listeners
-    wavesurfer.on('play', () => {
-      if (!isMountedRef.current) return
-      setIsPlaying(true)
-      setIsLoading(false)
-    })
-
-    wavesurfer.on('pause', () => {
-      if (!isMountedRef.current) return
-      setIsPlaying(false)
-      setIsLoading(false)
-    })
-
-    wavesurfer.on('timeupdate', (currentTime) => {
-      if (!isMountedRef.current) return
-      setCurrentTime(currentTime)
-    })
-
-    wavesurfer.on('ready', () => {
-      if (!isMountedRef.current) return
-      setDuration(wavesurfer.getDuration())
-      setIsLoading(false)
-    })
-
-    wavesurfer.on('loading', () => {
-      if (!isMountedRef.current) return
-      setIsLoading(true)
-    })
-
-    wavesurfer.on('finish', () => {
-      if (!isMountedRef.current) return
-      setIsPlaying(false)
-      setIsLoading(false)
-      setCurrentTime(0)
-      if (watermarkRef.current) {
-        watermarkRef.current.pause()
-        watermarkRef.current.currentTime = 0
-      }
-    })
-
-    wavesurfer.on('error', (error) => {
-      // Ignorar erros de abort que são esperados durante cleanup
-      if (error?.name === 'AbortError' || 
-          error?.message?.includes('aborted') ||
-          error?.message?.includes('BodyStreamBuffer was aborted')) {
-        // Não mostrar erro para aborts esperados (componente desmontado)
-        return
-      }
-      
-      // Só mostrar erro se o componente ainda estiver montado
-      if (!isMountedRef.current) return
-      
-      console.error('Wavesurfer error:', error)
-      setIsLoading(false)
-      setIsPlaying(false)
-      toast.error('Erro ao carregar áudio')
-    })
-
-      // Configurar volume inicial
-      wavesurfer.setVolume(isMuted ? 0 : volume)
-    }).catch((error) => {
-      console.error('Error getting secure audio URL:', error)
-      if (isMountedRef.current) {
-        toast.error('Erro ao carregar áudio')
+      .catch((error) => {
+        // Verificar se ainda está montado
+        if (!isMountedRef.current) {
+          isLoadingUrlRef.current = false
+          initializationStartedRef.current = ''
+          return
+        }
+        
+        // Resetar flags de loading
+        isLoadingUrlRef.current = false
+        initializationStartedRef.current = '' // Reset após erro
+        
+        // Sempre atualizar o estado de loading, mesmo para erros persistentes
         setIsLoading(false)
-      }
-    })
+        setIsPlaying(false)
+        
+        // Não mostrar toast para erros de autenticação/autorização (403/401)
+        // pois o usuário já deve estar ciente do problema
+        // E não tentar novamente se for erro persistente
+        if (!hasPersistentErrorRef.current) {
+          const errorMessage = error.message || 'Erro ao carregar áudio'
+          
+          // Só mostrar toast se não for erro de autenticação/autorização
+          if (!errorMessage.includes('Não autorizado') && 
+              !errorMessage.includes('Assinatura necessária') &&
+              !errorMessage.includes('não disponível')) {
+            toast.error(errorMessage)
+          }
+        }
+      })
 
     return () => {
       isMountedRef.current = false
+      // Resetar flags de loading apenas se o componente estiver sendo desmontado
+      // ou se as dependências mudaram (o que causará uma nova execução do effect)
+      isLoadingUrlRef.current = false
+      initializationStartedRef.current = ''
+      
+      // NÃO resetar hasPersistentErrorRef aqui - isso é feito no início do effect
+      // quando o recurso muda (currentResourceKey !== lastResourceKeyRef.current)
       
       // Parar o áudio antes de destruir
       try {
