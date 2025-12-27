@@ -61,6 +61,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   const [fontLoaded, setFontLoaded] = useState(false)
   const [fontName, setFontName] = useState<string>('')
   const [familyCount, setFamilyCount] = useState<number | null>(null)
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false)
   const supabase = createSupabaseClient()
 
   useEffect(() => {
@@ -429,6 +430,17 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
       const downloadData = await response.json()
 
       if (downloadData.error) {
+        // Se for erro de assinatura necessária, mostrar modal
+        if (response.status === 403 && (
+          downloadData.error === 'Assinatura necessária' || 
+          downloadData.error === 'Assinatura não encontrada' ||
+          downloadData.message?.includes('Premium') ||
+          downloadData.message?.includes('assinatura')
+        )) {
+          setSubscriptionModalOpen(true)
+          return
+        }
+        
         // Se for erro de limite excedido, atualizar o status e mostrar mensagem
         if (response.status === 403 && downloadData.message) {
           // Atualizar status localmente quando limite é excedido
@@ -1380,6 +1392,35 @@ function FontPreview({ fontName, fontLoaded, resourceTitle }: { fontName: string
           </div>
         </div>
       </div>
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        isOpen={subscriptionModalOpen}
+        onClose={() => setSubscriptionModalOpen(false)}
+        resourceTitle={resource.title}
+        resourcePreview={
+          resource.resource_type === 'audio' ? (
+            <AudioPlayer
+              audioUrl={resource.file_url}
+              previewUrl={resource.preview_url}
+              title={resource.title}
+              artist={resource.is_official ? 'BrasilPSD' : resource.creator?.full_name || 'Desconhecido'}
+              duration={resource.duration || undefined}
+              isDownloadable={false}
+            />
+          ) : resource.thumbnail_url ? (
+            <div className="relative w-full h-64 bg-gray-100">
+              <Image
+                src={resource.thumbnail_url}
+                alt={resource.title}
+                fill
+                className="object-cover"
+              />
+            </div>
+          ) : null
+        }
+        resourceType={resource.resource_type as 'audio' | 'image' | 'video' | 'font' | 'psd' | 'ai'}
+      />
     </div>
   )
 }
