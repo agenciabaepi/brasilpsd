@@ -53,7 +53,7 @@ export async function addWatermarkToAudio(
     }
 
     return new Promise((resolve) => {
-      ffmpeg(tempInputPath)
+      const command = ffmpeg(tempInputPath)
         .input(finalWatermarkPath) // Adicionar áudio de marca d'água como segundo input
         .inputOptions([
           '-stream_loop', '-1' // Fazer loop infinito da marca d'água
@@ -66,11 +66,24 @@ export async function addWatermarkToAudio(
         .outputOptions([
           '-map [out]',
           '-acodec libmp3lame', // Usar MP3 para compatibilidade
-          '-b:a 128k', // Bitrate de 128kbps para manter qualidade mas reduzir tamanho
+          '-b:a 96k', // Reduzir bitrate para 96kbps para processamento mais rápido
+          '-ar 44100', // Sample rate fixo para processamento mais rápido
+          '-ac 2', // Estereo fixo
+          '-q:a 5', // Qualidade rápida (0-9, onde 5 é balanceado)
+          '-threads 0', // Usar todos os threads disponíveis
           '-y', // Sobrescrever arquivo de saída se existir
         ])
         .format(inputFormat === 'mp3' ? 'mp3' : 'mp3') // Sempre converter para MP3 para compatibilidade
         .output(tempOutputPath)
+      
+      // Timeout de 60 segundos para não travar muito tempo
+      const timeout = setTimeout(() => {
+        command.kill('SIGKILL')
+        console.error('❌ Audio watermark processing timeout after 60s')
+        resolve(null)
+      }, 60000)
+      
+      command
         .on('start', (commandLine) => {
           console.log('💧 FFmpeg audio watermark command:', commandLine)
         })
@@ -80,6 +93,7 @@ export async function addWatermarkToAudio(
           }
         })
         .on('error', async (err) => {
+          clearTimeout(timeout)
           console.error('❌ FFmpeg audio watermark error:', err.message)
           // Limpar arquivos temporários
           try {
@@ -89,6 +103,7 @@ export async function addWatermarkToAudio(
           resolve(null)
         })
         .on('end', async () => {
+          clearTimeout(timeout)
           try {
             console.log('✅ Audio watermark completed, reading output file...')
             const outputBuffer = await readFile(tempOutputPath)
