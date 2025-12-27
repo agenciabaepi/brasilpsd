@@ -252,60 +252,70 @@ export default function AudioPlayer({
   return (
     <div className="w-full bg-white rounded-lg border border-gray-100 p-3 md:p-4">
       <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-        {/* Play Button - Verde circular como na imagem */}
+        {/* Play Button - Cinza como no Envato */}
         <button
           onClick={togglePlay}
           disabled={isLoading}
-          className="flex-shrink-0 w-11 h-11 md:w-12 md:h-12 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-all disabled:opacity-50 shadow-sm"
+          className="flex-shrink-0 w-10 h-10 md:w-11 md:h-11 rounded-full border border-gray-300 bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all disabled:opacity-50"
         >
           {isLoading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
           ) : isPlaying ? (
-            <Pause className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            <Pause className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
           ) : (
-            <Play className="w-5 h-5 md:w-6 md:h-6 text-white ml-0.5" />
+            <Play className="w-4 h-4 md:w-5 md:h-5 text-gray-900 ml-0.5" />
           )}
         </button>
 
-        {/* Waveform/Progress Bar */}
-        <div className="flex-1 min-w-0">
+        {/* Track Info */}
+        <div className="flex-shrink-0 min-w-[140px] md:min-w-[180px] max-w-[220px]">
+          <div className="text-sm md:text-base font-semibold text-gray-900 truncate leading-tight">{title}</div>
+          {artist && (
+            <div className="text-xs md:text-sm text-gray-500 truncate mt-0.5">Por {artist}</div>
+          )}
+        </div>
+
+        {/* Waveform/Progress Bar - Cinza como no Envato */}
+        <div className="flex-1 min-w-0 mx-2 md:mx-3">
           <div
             ref={progressRef}
             onClick={handleSeek}
-            className="h-12 md:h-14 bg-gray-100 rounded cursor-pointer relative overflow-hidden"
+            className="h-10 md:h-11 lg:h-12 bg-transparent rounded cursor-pointer relative overflow-hidden"
           >
             {/* Waveform real baseado em dados de áudio */}
-            <div className="absolute inset-0 flex items-center justify-center gap-[2px] md:gap-[3px] px-2 md:px-3">
+            <div className="absolute inset-0 flex items-center justify-center gap-[1px] md:gap-[2px] px-1.5 md:px-2">
               {audioData && audioData.length > 0 ? (
                 // Usar dados reais de áudio
-                Array.from({ length: Math.min(50, audioData.length) }).map((_, i) => {
+                Array.from({ length: Math.min(60, audioData.length) }).map((_, i) => {
                   // Mapear índices para distribuir uniformemente
-                  const dataIndex = Math.floor((i / 50) * audioData.length)
+                  const dataIndex = Math.floor((i / 60) * audioData.length)
                   const value = audioData[dataIndex]
-                  // Converter valor (0-255) para altura (25-75%)
-                  const barHeight = 25 + (value / 255) * 50
-                  const isActive = (i / 50) * 100 < progressPercent
+                  // Converter valor (0-255) para altura (30-90%)
+                  const barHeight = 30 + (value / 255) * 60
+                  const isPlayed = (i / 60) * 100 < progressPercent
                   return (
                     <div
                       key={i}
-                      className={`w-[2px] md:w-[3px] rounded-full transition-all ${
-                        isActive ? 'bg-green-600' : 'bg-gray-400'
+                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
+                        isPlayed ? 'bg-gray-700' : 'bg-gray-300'
                       }`}
                       style={{ height: `${barHeight}%` }}
                     />
                   )
                 })
               ) : (
-                // Fallback: barras estáticas quando não há dados
-                Array.from({ length: 50 }).map((_, i) => {
-                  const isActive = (i / 50) * 100 < progressPercent
+                // Fallback: barras estáticas quando não há dados (geralmente no carregamento inicial)
+                Array.from({ length: 60 }).map((_, i) => {
+                  // Simular altura variada baseada em posição para visual mais interessante
+                  const baseHeight = 40 + Math.sin(i * 0.3) * 20
+                  const isPlayed = (i / 60) * 100 < progressPercent
                   return (
                     <div
                       key={i}
-                      className={`w-[2px] md:w-[3px] rounded-full transition-all ${
-                        isActive ? 'bg-green-600' : 'bg-gray-400'
+                      className={`w-[1.5px] md:w-[2px] rounded-full transition-all ${
+                        isPlayed ? 'bg-gray-700' : 'bg-gray-300'
                       }`}
-                      style={{ height: '50%' }}
+                      style={{ height: `${baseHeight}%` }}
                     />
                   )
                 })
@@ -315,19 +325,41 @@ export default function AudioPlayer({
         </div>
 
         {/* Duration */}
-        <div className="flex-shrink-0 text-sm md:text-base text-gray-900 font-medium whitespace-nowrap px-2 md:px-3">
-          <span>{formatTime(duration)}</span>
+        <div className="flex-shrink-0 text-xs md:text-sm text-gray-600 font-mono whitespace-nowrap px-2">
+          {formatTime(duration)}
         </div>
 
-        {/* Actions - Colocadas em linha separada abaixo em telas menores, ou ao lado em telas maiores */}
-        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+        {/* BPM (placeholder) - apenas em telas maiores */}
+        <div className="hidden lg:block flex-shrink-0 text-xs md:text-sm text-gray-400 min-w-[60px] text-center px-2">
+          -- BPM
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+          <button
+            onClick={() => {
+              const audio = audioRef.current
+              if (audio) {
+                audio.currentTime = 0
+                setCurrentTime(0)
+              }
+              if (watermarkRef.current) {
+                watermarkRef.current.currentTime = 0
+              }
+            }}
+            className="p-1.5 md:p-2 text-gray-600 hover:text-gray-900 transition-colors"
+            title="Repetir"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          
           {onFavorite && (
             <button
               onClick={onFavorite}
-              className={`p-2 transition-colors ${
+              className={`p-1.5 md:p-2 transition-colors ${
                 isFavorited
                   ? 'text-red-500 hover:text-red-600'
-                  : 'text-gray-400 hover:text-gray-600'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
               title="Favoritar"
             >
@@ -338,53 +370,13 @@ export default function AudioPlayer({
           {isDownloadable && onDownload && (
             <button
               onClick={onDownload}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1.5 md:p-2 text-gray-600 hover:text-gray-900 transition-colors"
               title="Download"
             >
               <Download className="w-4 h-4" />
             </button>
           )}
         </div>
-      </div>
-      
-      {/* Info e controles adicionais em linha separada para telas menores */}
-      <div className="mt-3 md:hidden flex items-center justify-between">
-        <div className="flex-1 min-w-0 mr-2">
-          <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
-          {artist && (
-            <div className="text-xs text-gray-500 truncate">Por {artist}</div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {onFavorite && (
-            <button
-              onClick={onFavorite}
-              className={`p-1.5 transition-colors ${
-                isFavorited
-                  ? 'text-red-500 hover:text-red-600'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`} />
-            </button>
-          )}
-          {isDownloadable && onDownload && (
-            <button
-              onClick={onDownload}
-              className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
-      
-      {/* Track Info - Apenas em telas médias/grandes */}
-      <div className="hidden md:block mt-2">
-        <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
-        {artist && (
-          <div className="text-xs text-gray-500 truncate mt-0.5">Por {artist}</div>
-        )}
       </div>
 
       {/* Audio element - precisa estar no DOM para funcionar */}
