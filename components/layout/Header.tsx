@@ -243,32 +243,19 @@ export default function Header({ initialUser, initialSubscription, initialCatego
 
   const isActive = (path: string) => pathname === path
 
-  // Categorias fixas que já estão no menu - não devem aparecer duplicadas
-  const fixedMenuItems = ['Home', 'Imagens', 'Fontes', 'Áudios', 'Coleções']
+  // Buscar apenas categorias principais (sem parent_id)
+  const mainCategories = categories.filter(c => !c.parent_id).sort((a, b) => a.order_index - b.order_index)
   
-  // Encontrar categoria "Imagens" e "Coleções" no banco para verificar subcategorias
-  // Buscar por nome ou slug (case-insensitive)
-  const imagesCategory = categories.find(c => 
-    !c.parent_id && (
-      c.name.toLowerCase() === 'imagens' || 
-      c.slug.toLowerCase() === 'imagens' ||
-      c.slug.toLowerCase() === 'images'
-    )
-  )
-  const collectionsCategory = categories.find(c => 
-    !c.parent_id && (
-      c.name.toLowerCase() === 'coleções' || 
-      c.name.toLowerCase() === 'colecoes' ||
-      c.slug.toLowerCase() === 'coleções' ||
-      c.slug.toLowerCase() === 'colecoes' ||
-      c.slug.toLowerCase() === 'collections'
-    )
+  // Encontrar categoria PSD para verificar subcategorias
+  const psdCategory = mainCategories.find(c => 
+    c.slug.toLowerCase() === 'psd' || c.name.toLowerCase() === 'psd'
   )
   
-  // Subcategorias de Imagens
-  const imagesSubItems = imagesCategory 
+  // Subcategorias de PSD (única categoria com subcategorias)
+  const psdSubItems = psdCategory 
     ? categories
-        .filter(c => c.parent_id === imagesCategory.id)
+        .filter(c => c.parent_id === psdCategory.id)
+        .sort((a, b) => a.order_index - b.order_index)
         .map(sub => ({
           id: `subcategory-${sub.id}`,
           name: sub.name,
@@ -276,69 +263,30 @@ export default function Header({ initialUser, initialSubscription, initialCatego
         }))
     : []
   
-  // Subcategorias de Coleções
-  const collectionsSubItems = collectionsCategory
-    ? categories
-        .filter(c => c.parent_id === collectionsCategory.id)
-        .map(sub => ({
-          id: `subcategory-${sub.id}`,
-          name: sub.name,
-          href: `/categories/${sub.slug}`
-        }))
-    : []
-  
+  // Construir menu com todas as categorias principais
+  // Mapear slugs para rotas específicas quando existirem, senão usar /categories/{slug}
+  const getCategoryHref = (slug: string) => {
+    const routeMap: Record<string, string> = {
+      'imagens': '/images',
+      'fontes': '/fonts',
+      'audios': '/audios'
+    }
+    return routeMap[slug.toLowerCase()] || `/categories/${slug}`
+  }
+
   const menuItems = [
-    { id: 'home', name: 'Home', href: '/' },
-    { 
-      id: 'images', 
-      name: 'Imagens', 
-      href: '/images',
-      hasDropdown: imagesSubItems.length > 0,
-      subItems: imagesSubItems
-    },
-    { id: 'fonts', name: 'Fontes', href: '/fonts' },
-    { id: 'audios', name: 'Áudios', href: '/audios' },
-    { 
-      id: 'collections', 
-      name: 'Coleções', 
-      href: '/collections',
-      hasDropdown: collectionsSubItems.length > 0,
-      subItems: collectionsSubItems
-    },
-    ...categories
-      .filter(c => {
-        // Filtrar categorias que não devem aparecer no menu principal
-        if (!c.parent_id && fixedMenuItems.includes(c.name)) return false
-        
-        // Encontrar categorias de fontes e áudios
-        const fontesCategory = categories.find(cat => !cat.parent_id && (cat.slug === 'fontes' || cat.slug === 'fonts' || cat.name.toLowerCase() === 'fontes'))
-        const audiosCategory = categories.find(cat => !cat.parent_id && (cat.slug === 'audios' || cat.slug === 'audio' || cat.name.toLowerCase() === 'áudios' || cat.name.toLowerCase() === 'audios'))
-        
-        // Excluir a categoria principal de fontes
-        if (fontesCategory && c.id === fontesCategory.id) return false
-        // Excluir a categoria principal de áudios
-        if (audiosCategory && c.id === audiosCategory.id) return false
-        // Excluir subcategorias de fontes
-        if (fontesCategory && c.parent_id === fontesCategory.id) return false
-        // Excluir subcategorias de áudios
-        if (audiosCategory && c.parent_id === audiosCategory.id) return false
-        
-        return true
-      })
-      .filter(c => !c.parent_id) // Apenas categorias principais
-      .map(parent => ({
-        id: `category-${parent.id}`,
-        name: parent.name,
-        href: `/categories/${parent.slug}`,
-        hasDropdown: categories.some(c => c.parent_id === parent.id),
-        subItems: categories
-          .filter(c => c.parent_id === parent.id)
-          .map(sub => ({
-            id: `subcategory-${sub.id}`,
-            name: sub.name,
-            href: `/categories/${sub.slug}`
-          }))
-      })),
+    ...mainCategories.map(category => {
+      // Apenas PSD tem dropdown com subcategorias
+      const isPSD = category.slug.toLowerCase() === 'psd'
+      return {
+        id: `category-${category.id}`,
+        name: category.name,
+        href: getCategoryHref(category.slug),
+        hasDropdown: isPSD && psdSubItems.length > 0,
+        subItems: isPSD ? psdSubItems : []
+      }
+    }),
+    { id: 'collections', name: 'Coleções', href: '/collections' }
   ]
 
   return (

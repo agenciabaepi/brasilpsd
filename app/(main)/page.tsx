@@ -7,6 +7,7 @@ import HomeClient from '@/components/home/HomeClient'
 import Image from 'next/image'
 import SearchBar from '@/components/home/SearchBar'
 import UserStatsBar from '@/components/home/UserStatsBar'
+import CategoryCarousel from '@/components/home/CategoryCarousel'
 import { getS3Url } from '@/lib/aws/s3'
 
 export const dynamic = 'force-dynamic'
@@ -95,7 +96,64 @@ export default async function HomePage() {
     })
   )
 
-  // 6. Categorias Dinâmicas
+  // 6. Buscar categorias principais para os cards (Mockups, PSDs, Vídeos, Fontes, Áudios)
+  // Buscar todas as categorias principais primeiro
+  const { data: allCategories } = await supabase
+    .from('categories')
+    .select('id, name, slug')
+    .is('parent_id', null)
+  
+  // Mapear categorias encontradas por slug/nome
+  const categoryMap = new Map<string, any>()
+  allCategories?.forEach(cat => {
+    const slugLower = cat.slug.toLowerCase()
+    const nameLower = cat.name.toLowerCase()
+    
+    // Mapear por slug
+    if (slugLower.includes('mockup')) categoryMap.set('mockups', cat)
+    if (slugLower.includes('psd') || slugLower === 'psd') categoryMap.set('psd', cat)
+    if (slugLower.includes('video') || slugLower === 'videos') categoryMap.set('videos', cat)
+    if (slugLower.includes('fonte') || slugLower === 'fontes' || slugLower === 'fonts') categoryMap.set('fontes', cat)
+    if (slugLower.includes('audio') || slugLower === 'audios' || slugLower === 'áudios') categoryMap.set('audios', cat)
+    
+    // Mapear por nome também
+    if (nameLower.includes('mockup')) categoryMap.set('mockups', cat)
+    if (nameLower.includes('psd')) categoryMap.set('psd', cat)
+    if (nameLower.includes('vídeo') || nameLower.includes('video')) categoryMap.set('videos', cat)
+    if (nameLower.includes('fonte')) categoryMap.set('fontes', cat)
+    if (nameLower.includes('áudio') || nameLower.includes('audio')) categoryMap.set('audios', cat)
+  })
+  
+  // Definir categorias padrão (sempre exibir 5)
+  const mainCategories = [
+    {
+      id: categoryMap.get('mockups')?.id || null,
+      name: categoryMap.get('mockups')?.name || 'Mockups',
+      slug: categoryMap.get('mockups')?.slug || 'mockups'
+    },
+    {
+      id: categoryMap.get('psd')?.id || null,
+      name: categoryMap.get('psd')?.name || 'PSDs',
+      slug: categoryMap.get('psd')?.slug || 'psd'
+    },
+    {
+      id: categoryMap.get('videos')?.id || null,
+      name: categoryMap.get('videos')?.name || 'Vídeos',
+      slug: categoryMap.get('videos')?.slug || 'videos'
+    },
+    {
+      id: categoryMap.get('fontes')?.id || null,
+      name: categoryMap.get('fontes')?.name || 'Fontes',
+      slug: categoryMap.get('fontes')?.slug || 'fontes'
+    },
+    {
+      id: categoryMap.get('audios')?.id || null,
+      name: categoryMap.get('audios')?.name || 'Áudios',
+      slug: categoryMap.get('audios')?.slug || 'audios'
+    }
+  ]
+
+  // 7. Categorias Dinâmicas para a seção final
   const { data: categories } = await supabase
     .from('categories')
     .select('*')
@@ -176,6 +234,117 @@ export default async function HomePage() {
                 </Link>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Categories Quick Access */}
+      <section className="py-12 bg-white border-b border-gray-100">
+        <div className="container mx-auto px-4">
+          {/* Mobile: Carrossel com scroll automático */}
+          <div className="md:hidden">
+            <CategoryCarousel categories={mainCategories} />
+          </div>
+
+          {/* Desktop: Grid normal */}
+          <div className="hidden md:grid md:grid-cols-5 gap-4">
+            {mainCategories.map((category, index) => {
+              const slugLower = (category.slug?.toLowerCase() || '').trim()
+              const nameLower = (category.name?.toLowerCase() || '').trim()
+
+              // Determinar tipo por slug ou nome ou ordem
+              let categoryType = 'default'
+              if (slugLower === 'mockups' || slugLower.includes('mockup') || nameLower.includes('mockup')) {
+                categoryType = 'mockups'
+              } else if (slugLower === 'psd' || slugLower.includes('psd') || nameLower.includes('psd')) {
+                categoryType = 'psd'
+              } else if (slugLower === 'videos' || slugLower.includes('video') || nameLower.includes('vídeo') || nameLower.includes('video')) {
+                categoryType = 'videos'
+              } else if (slugLower === 'fontes' || slugLower === 'fonts' || slugLower.includes('fonte') || nameLower.includes('fonte')) {
+                categoryType = 'fontes'
+              } else if (slugLower === 'audios' || slugLower === 'áudios' || slugLower.includes('audio') || nameLower.includes('áudio') || nameLower.includes('audio')) {
+                categoryType = 'audios'
+              } else {
+                const types = ['mockups', 'psd', 'videos', 'fontes', 'audios']
+                categoryType = types[index] || 'default'
+              }
+
+              // Renderizar ícone baseado no tipo
+              let iconElement
+              let gradientClass
+
+              if (categoryType === 'mockups') {
+                gradientClass = 'from-green-400 to-green-600'
+                iconElement = null
+              } else if (categoryType === 'psd') {
+                gradientClass = 'from-blue-400 to-blue-600'
+                iconElement = (
+                  <div className="w-16 h-16 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/50">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center shadow-md">
+                      <span className="text-white font-bold text-lg">PS</span>
+                    </div>
+                  </div>
+                )
+              } else if (categoryType === 'videos') {
+                gradientClass = 'from-purple-400 to-purple-600'
+                iconElement = (
+                  <div className="w-16 h-16 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/50">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-md relative overflow-hidden">
+                      <div className="w-0 h-0 border-l-[10px] border-l-white border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent ml-0.5"></div>
+                    </div>
+                  </div>
+                )
+              } else if (categoryType === 'fontes') {
+                gradientClass = 'from-pink-400 to-pink-600'
+                iconElement = (
+                  <div className="w-16 h-16 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/50">
+                    <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-pink-700 rounded-lg flex items-center justify-center shadow-md">
+                      <span className="text-white font-bold text-lg">Aa</span>
+                    </div>
+                  </div>
+                )
+              } else if (categoryType === 'audios') {
+                gradientClass = 'from-orange-400 to-orange-600'
+                iconElement = (
+                  <div className="w-16 h-16 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/50">
+                    <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg flex items-center justify-center shadow-md relative px-2">
+                      <div className="flex space-x-1 items-end">
+                        <div className="w-1 bg-white rounded-full h-3"></div>
+                        <div className="w-1 bg-white rounded-full h-4"></div>
+                        <div className="w-1 bg-white rounded-full h-2.5"></div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              } else {
+                gradientClass = 'from-gray-400 to-gray-600'
+                iconElement = (
+                  <div className="w-16 h-16 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/50">
+                    <div className="w-10 h-10 bg-gradient-to-br from-gray-500 to-gray-700 rounded-lg flex items-center justify-center shadow-md">
+                      <span className="text-white font-bold text-lg">?</span>
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <CategoryCard
+                  key={category.id}
+                  title={category.name}
+                  href={`/categories/${category.slug}`}
+                  icon={
+                    categoryType === 'mockups' ? null : (
+                      <div className={`w-24 h-24 bg-gradient-to-br ${gradientClass} rounded-3xl flex items-center justify-center shadow-xl`}>
+                        {iconElement}
+                      </div>
+                    )
+                  }
+                  backgroundImage={categoryType === 'mockups' ? '/images/mockup.jpg' : undefined}
+                  hoverImage={categoryType === 'mockups' ? '/images/mockup-verso.jpg' : undefined}
+                  showTitle={categoryType !== 'mockups'}
+                />
+              )
+            })}
           </div>
         </div>
       </section>
@@ -307,6 +476,55 @@ export default async function HomePage() {
         </div>
       </section>
     </div>
+  )
+}
+
+function CategoryCard({ title, href, icon, backgroundImage, hoverImage, showTitle = true }: { title: string, href: string, icon: any, backgroundImage?: string, hoverImage?: string, showTitle?: boolean }) {
+  return (
+    <Link href={href} className="group block aspect-square">
+      <div className={`rounded-3xl border border-gray-200 p-6 hover:border-primary-300 transition-all w-full h-full aspect-square flex flex-col relative overflow-hidden ${backgroundImage ? '' : 'bg-white hover:shadow-xl'}`}>
+        {backgroundImage && (
+          <>
+            <Image
+              src={backgroundImage}
+              alt={title}
+              fill
+              className="object-cover transition-opacity duration-300 group-hover:opacity-0"
+              sizes="(max-width: 768px) 50vw, 20vw"
+            />
+            {hoverImage && (
+              <Image
+                src={hoverImage}
+                alt={title}
+                fill
+                className="object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                sizes="(max-width: 768px) 50vw, 20vw"
+              />
+            )}
+          </>
+        )}
+        <div className={`relative z-10 flex flex-col h-full ${backgroundImage ? 'text-white' : ''}`}>
+          {icon && (
+            <div className="mb-6 flex justify-center">
+              {icon}
+            </div>
+          )}
+          {showTitle && (
+            <h3 className={`text-lg font-bold mb-8 group-hover:text-primary-300 transition-colors ${backgroundImage ? 'text-white' : 'text-gray-900 group-hover:text-primary-600'}`}>
+              {title}
+            </h3>
+          )}
+          {!showTitle && !icon && (
+            <div className="flex-1" />
+          )}
+          <div className={showTitle ? 'mt-auto' : 'mt-auto flex justify-start'}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-900 group-hover:bg-primary-600 transition-colors shadow-md">
+              <ChevronRight className="h-5 w-5 text-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
   )
 }
 

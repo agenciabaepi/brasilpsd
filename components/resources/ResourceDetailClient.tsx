@@ -1266,6 +1266,36 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
           </div>
         </div>
       )}
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        isOpen={subscriptionModalOpen}
+        onClose={() => setSubscriptionModalOpen(false)}
+        resourceTitle={resource.title}
+        resourcePreview={
+          resource.resource_type === 'audio' ? (
+            <AudioPlayer
+              audioUrl={resource.file_url}
+              previewUrl={resource.preview_url}
+              title={resource.title}
+              artist={resource.is_official ? 'BrasilPSD' : resource.creator?.full_name || 'Desconhecido'}
+              duration={resource.duration || undefined}
+              resourceId={resource.id}
+              isDownloadable={false}
+            />
+          ) : resource.thumbnail_url ? (
+            <div className="relative w-full h-64 bg-gray-100">
+              <Image
+                src={resource.thumbnail_url}
+                alt={resource.title}
+                fill
+                className="object-cover"
+              />
+            </div>
+          ) : null
+        }
+        resourceType={resource.resource_type as 'audio' | 'image' | 'video' | 'font' | 'psd' | 'ai'}
+      />
     </div>
   )
 }
@@ -1392,36 +1422,6 @@ function FontPreview({ fontName, fontLoaded, resourceTitle }: { fontName: string
           </div>
         </div>
       </div>
-
-      {/* Subscription Modal */}
-      <SubscriptionModal
-        isOpen={subscriptionModalOpen}
-        onClose={() => setSubscriptionModalOpen(false)}
-        resourceTitle={resource.title}
-        resourcePreview={
-          resource.resource_type === 'audio' ? (
-            <AudioPlayer
-              audioUrl={resource.file_url}
-              previewUrl={resource.preview_url}
-              title={resource.title}
-              artist={resource.is_official ? 'BrasilPSD' : resource.creator?.full_name || 'Desconhecido'}
-              duration={resource.duration || undefined}
-              resourceId={resource.id}
-              isDownloadable={false}
-            />
-          ) : resource.thumbnail_url ? (
-            <div className="relative w-full h-64 bg-gray-100">
-              <Image
-                src={resource.thumbnail_url}
-                alt={resource.title}
-                fill
-                className="object-cover"
-              />
-            </div>
-          ) : null
-        }
-        resourceType={resource.resource_type as 'audio' | 'image' | 'video' | 'font' | 'psd' | 'ai'}
-      />
     </div>
   )
 }

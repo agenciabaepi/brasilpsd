@@ -68,130 +68,60 @@ export default function UploadResourcePage() {
 
   // Função para carregar categorias baseado no tipo de recurso
   async function loadCategoriesForType(resourceType: ResourceType) {
-    if (resourceType === 'image') {
-      // Buscar categoria "Imagens" e suas subcategorias
-      const { data: imagensCategory } = await supabase
+    // Mapear resource_type para slug da categoria
+    const categorySlugMap: Record<string, string> = {
+      'image': 'imagens',
+      'audio': 'audios',
+      'font': 'fontes',
+      'psd': 'psd',
+      'ai': 'vetores',
+      'video': 'videos'
+    }
+    
+    const categorySlug = categorySlugMap[resourceType]
+    
+    if (categorySlug) {
+      // Buscar categoria principal
+      const { data: mainCategory } = await supabase
         .from('categories')
-        .select('id')
-        .eq('slug', 'imagens')
+        .select('id, name, parent_id, slug')
+        .eq('slug', categorySlug)
         .is('parent_id', null)
         .maybeSingle()
       
-      if (imagensCategory) {
-        // Buscar a categoria principal
-        const { data: mainCat } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('id', imagensCategory.id)
-          .single()
-        
-        // Buscar subcategorias
-        const { data: subCats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('parent_id', imagensCategory.id)
-          .order('order_index', { ascending: true })
-          .order('name', { ascending: true })
-        
-        // Combinar categoria principal e subcategorias
-        const imageCategories = [
-          ...(mainCat ? [mainCat] : []),
-          ...(subCats || [])
-        ]
-        setCategories(imageCategories)
+      if (mainCategory) {
+        // Para PSD, incluir também as subcategorias
+        if (resourceType === 'psd') {
+          const { data: subCats } = await supabase
+            .from('categories')
+            .select('id, name, parent_id, slug')
+            .eq('parent_id', mainCategory.id)
+            .order('order_index', { ascending: true })
+          
+          setCategories([
+            mainCategory,
+            ...(subCats || [])
+          ])
+        } else {
+          // Para outros tipos, apenas a categoria principal
+          setCategories([mainCategory])
+        }
       } else {
-        // Fallback: buscar todas as categorias
+        // Fallback: buscar todas as categorias principais
         const { data: cats } = await supabase
           .from('categories')
-          .select('id, name, parent_id')
-          .order('name')
-        setCategories(cats || [])
-      }
-    } else if (resourceType === 'audio') {
-      // Buscar categoria "Áudios" ou "Audios" e suas subcategorias
-      const { data: audiosCategory } = await supabase
-        .from('categories')
-        .select('id')
-        .or('slug.eq.audios,slug.eq.áudios,slug.eq.audio')
-        .is('parent_id', null)
-        .maybeSingle()
-      
-      if (audiosCategory) {
-        // Buscar a categoria principal
-        const { data: mainCat } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('id', audiosCategory.id)
-          .single()
-        
-        // Buscar subcategorias
-        const { data: subCats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('parent_id', audiosCategory.id)
+          .select('id, name, parent_id, slug')
+          .is('parent_id', null)
           .order('order_index', { ascending: true })
-          .order('name', { ascending: true })
-        
-        // Combinar categoria principal e subcategorias
-        const audioCategories = [
-          ...(mainCat ? [mainCat] : []),
-          ...(subCats || [])
-        ]
-        setCategories(audioCategories)
-      } else {
-        // Fallback: buscar todas as categorias
-        const { data: cats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .order('name')
-        setCategories(cats || [])
-      }
-    } else if (resourceType === 'font') {
-      // Buscar categoria "Fontes" e suas subcategorias
-      const { data: fontesCategory } = await supabase
-        .from('categories')
-        .select('id')
-        .or('slug.eq.fontes,slug.eq.fonts')
-        .is('parent_id', null)
-        .maybeSingle()
-      
-      if (fontesCategory) {
-        // Buscar a categoria principal
-        const { data: mainCat } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('id', fontesCategory.id)
-          .single()
-        
-        // Buscar subcategorias
-        const { data: subCats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('parent_id', fontesCategory.id)
-          .order('order_index', { ascending: true })
-          .order('name', { ascending: true })
-        
-        // Combinar categoria principal e subcategorias
-        const fontCategories = [
-          ...(mainCat ? [mainCat] : []),
-          ...(subCats || [])
-        ]
-        setCategories(fontCategories)
-      } else {
-        // Fallback: buscar todas as categorias
-        const { data: cats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .order('name')
         setCategories(cats || [])
       }
     } else {
-      // Para outros tipos, buscar todas as categorias
+      // Para outros tipos, buscar todas as categorias principais
       const { data: cats } = await supabase
         .from('categories')
-        .select('id, name, parent_id')
-        .order('name')
-      
+        .select('id, name, parent_id, slug')
+        .is('parent_id', null)
+        .order('order_index', { ascending: true })
       setCategories(cats || [])
     }
   }
