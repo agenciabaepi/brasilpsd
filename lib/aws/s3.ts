@@ -15,6 +15,39 @@ const s3Client = new S3Client({
   },
 })
 
+/**
+ * Sanitiza o nome do arquivo para uso em headers HTTP
+ * Remove caracteres inválidos que podem causar erros em headers
+ */
+function sanitizeMetadataValue(value: string): string {
+  if (!value) return ''
+  
+  // Remover caracteres de controle e caracteres inválidos para headers HTTP
+  // Headers HTTP não podem conter: \r, \n, caracteres de controle (0x00-0x1F), etc.
+  return value
+    .replace(/[\r\n\t]/g, ' ') // Substituir quebras de linha e tabs por espaço
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remover caracteres de controle
+    .replace(/[^\x20-\x7E]/g, '') // Manter apenas caracteres ASCII imprimíveis
+    .trim()
+    .substring(0, 1024) // Limitar tamanho (S3 metadata tem limite)
+}
+
+/**
+ * Sanitiza metadata antes de enviar para S3
+ * Garante que todos os valores sejam válidos para headers HTTP
+ */
+function sanitizeMetadata(metadata?: Record<string, string>): Record<string, string> | undefined {
+  if (!metadata) return undefined
+  
+  const sanitized: Record<string, string> = {}
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value) {
+      sanitized[key] = sanitizeMetadataValue(value)
+    }
+  }
+  return sanitized
+}
+
 export interface UploadFileParams {
   file: Buffer | Uint8Array
   key: string
@@ -41,7 +74,7 @@ export async function uploadFileToS3({
     Key: key,
     Body: file,
     ContentType: contentType,
-    Metadata: metadata,
+    Metadata: sanitizeMetadata(metadata),
     // Removendo ACL pública explícita para evitar erros se o bucket não permitir ACLs
   })
 
@@ -102,7 +135,7 @@ export async function getPresignedUploadUrl(
     Bucket: BUCKET_NAME,
     Key: key,
     ContentType: contentType,
-    Metadata: metadata,
+    Metadata: sanitizeMetadata(metadata),
   })
 
   return await getSignedUrl(s3Client, command, { expiresIn })
