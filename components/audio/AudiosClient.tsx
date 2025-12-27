@@ -32,7 +32,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
   const supabase = createSupabaseClient()
   const router = useRouter()
 
-  // Carregar categorias de áudio
+  // Carregar categorias de áudio (carregar primeiro)
   useEffect(() => {
     async function loadCategories() {
       try {
@@ -48,30 +48,34 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
           // Buscar a categoria principal
           const { data: mainCat } = await supabase
             .from('categories')
-            .select('id, name, parent_id')
+            .select('id, name, parent_id, order_index')
             .eq('id', audiosCategory.id)
             .single()
           
-          // Buscar subcategorias
+          // Buscar subcategorias ordenadas
           const { data: subCats } = await supabase
             .from('categories')
-            .select('id, name, parent_id')
+            .select('id, name, parent_id, order_index')
             .eq('parent_id', audiosCategory.id)
             .order('order_index', { ascending: true })
             .order('name', { ascending: true })
           
-          // Combinar categoria principal e subcategorias
+          // Combinar categoria principal e subcategorias (categoria principal primeiro)
           const audioCategories = [
             ...(mainCat ? [mainCat] : []),
             ...(subCats || [])
           ]
           setCategories(audioCategories)
+          console.log('✅ Audio categories loaded:', audioCategories.length)
+        } else {
+          console.warn('⚠️ Audio category not found')
         }
       } catch (error) {
-        console.error('Error loading categories:', error)
+        console.error('❌ Error loading categories:', error)
       }
     }
 
+    // Carregar categorias primeiro (antes dos favoritos)
     loadCategories()
     loadFavorites()
   }, [supabase])
@@ -299,7 +303,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
           </div>
 
           <div className="space-y-6">
-            {/* Categorias */}
+            {/* Categorias - PRIMEIRO */}
             <FilterSection title="Categorias">
               <div className="space-y-1">
                 <FilterItem 
@@ -307,28 +311,33 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
                   active={filters.category === 'all'}
                   onClick={() => setFilters({...filters, category: 'all'})}
                 />
-                {categories
-                  .filter(c => !c.parent_id)
-                  .map((parent) => (
-                    <div key={parent.id} className="space-y-1">
-                      <FilterItem 
-                        label={parent.name}
-                        active={filters.category === parent.id}
-                        onClick={() => setFilters({...filters, category: parent.id})}
-                      />
-                      {categories
-                        .filter(c => c.parent_id === parent.id)
-                        .map((sub) => (
-                          <FilterItem 
-                            key={sub.id}
-                            label={sub.name}
-                            active={filters.category === sub.id}
-                            onClick={() => setFilters({...filters, category: sub.id})}
-                            isSubItem
-                          />
-                        ))}
-                    </div>
-                  ))}
+                {categories.length > 0 ? (
+                  categories
+                    .filter(c => !c.parent_id)
+                    .map((parent) => (
+                      <div key={parent.id} className="space-y-1">
+                        <FilterItem 
+                          label={parent.name}
+                          active={filters.category === parent.id}
+                          onClick={() => setFilters({...filters, category: parent.id})}
+                        />
+                        {categories
+                          .filter(c => c.parent_id === parent.id)
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map((sub) => (
+                            <FilterItem 
+                              key={sub.id}
+                              label={sub.name}
+                              active={filters.category === sub.id}
+                              onClick={() => setFilters({...filters, category: sub.id})}
+                              isSubItem
+                            />
+                          ))}
+                      </div>
+                    ))
+                ) : (
+                  <p className="text-xs text-gray-400 px-3 py-2">Carregando categorias...</p>
+                )}
               </div>
             </FilterSection>
 
