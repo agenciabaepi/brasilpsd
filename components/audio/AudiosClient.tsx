@@ -306,7 +306,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
   ]
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white overflow-x-hidden">
       {/* Mobile Filter Overlay */}
       {isSidebarOpen && (
         <div 
@@ -315,7 +315,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
         />
       )}
       
-      <div className="max-w-[1600px] mx-auto flex">
+      <div className="max-w-[1600px] mx-auto flex overflow-x-hidden">
         
         {/* SIDEBAR FILTERS - Desktop */}
         <aside className={cn(
@@ -558,7 +558,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 p-4 md:p-8 lg:p-12">
+        <main className="flex-1 p-3 md:p-8 lg:p-12 min-w-0 overflow-x-hidden">
           {/* Header */}
           <div className="mb-6 md:mb-8">
             <div className="flex items-center justify-between mb-2">
@@ -629,7 +629,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
           )}
 
           {/* Audio List */}
-          <div className="space-y-3">
+          <div className="space-y-2 md:space-y-3">
             {loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto" />
@@ -640,21 +640,30 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
                 <p className="text-gray-500">Nenhum áudio encontrado</p>
               </div>
             ) : (
-              audios.map((audio) => (
-                <AudioPlayer
-                  key={audio.id}
-                  audioUrl={audio.file_url}
-                  previewUrl={audio.preview_url}
-                  title={audio.title}
-                  artist={getArtistName(audio)}
-                  duration={audio.duration || undefined}
-                  resourceId={audio.id}
-                  isDownloadable={true}
-                  onDownload={() => handleDownload(audio)}
-                  onFavorite={() => handleFavorite(audio.id)}
-                  isFavorited={favorites.has(audio.id)}
-                />
-              ))
+              <div className="space-y-2 md:space-y-4">
+                {audios.map((audio) => (
+                  <AudioPlayer
+                    key={audio.id}
+                    audioUrl={audio.file_url}
+                    previewUrl={audio.preview_url}
+                    title={audio.title}
+                    artist={getArtistName(audio)}
+                    duration={audio.duration || undefined}
+                    resourceId={audio.id}
+                    isDownloadable={true}
+                    onDownload={() => handleDownload(audio)}
+                    onFavorite={() => handleFavorite(audio.id)}
+                    isFavorited={favorites.has(audio.id)}
+                    isPlaying={playingId === audio.id}
+                    onPlayStart={() => setPlayingId(audio.id)}
+                    onPlayStop={() => {
+                      if (playingId === audio.id) {
+                        setPlayingId(null)
+                      }
+                    }}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </main>
@@ -677,6 +686,13 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
               artist={getArtistName(selectedResource)}
               duration={selectedResource.duration || undefined}
               isDownloadable={false}
+              isPlaying={playingId === selectedResource.id}
+              onPlayStart={() => setPlayingId(selectedResource.id)}
+              onPlayStop={() => {
+                if (playingId === selectedResource.id) {
+                  setPlayingId(null)
+                }
+              }}
             />
           )
         }

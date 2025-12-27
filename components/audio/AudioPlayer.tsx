@@ -16,6 +16,9 @@ interface AudioPlayerProps {
   onDownload?: () => void
   onFavorite?: () => void
   isFavorited?: boolean
+  isPlaying?: boolean // Controlado externamente
+  onPlayStart?: () => void // Callback quando começa a tocar
+  onPlayStop?: () => void // Callback quando para
 }
 
 export default function AudioPlayer({
@@ -28,7 +31,10 @@ export default function AudioPlayer({
   isDownloadable = false,
   onDownload,
   onFavorite,
-  isFavorited = false
+  isFavorited = false,
+  isPlaying: externalIsPlaying,
+  onPlayStart,
+  onPlayStop
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -223,10 +229,12 @@ export default function AudioPlayer({
           normalize: true,
           url: urlToUse,
           interact: true, // Permite clicar na waveform para navegar
-          backend: 'WebAudio', // Usar WebAudio para melhor performance
+          backend: 'MediaElement', // MediaElement permite tocar antes da waveform estar pronta
           mediaControls: false, // Desabilitar controles de mídia nativos
           autoplay: false,
           dragToSeek: true,
+          // Otimizações para áudios longos
+          splitChannels: false, // Não separar canais (mais rápido)
         })
 
         wavesurferRef.current = wavesurfer
@@ -236,12 +244,20 @@ export default function AudioPlayer({
           if (!isMountedRef.current) return
           setIsPlaying(true)
           setIsLoading(false)
+          // Notificar que este áudio começou a tocar
+          if (onPlayStart) {
+            onPlayStart()
+          }
         })
 
         wavesurfer.on('pause', () => {
           if (!isMountedRef.current) return
           setIsPlaying(false)
           setIsLoading(false)
+          // Notificar que este áudio parou
+          if (onPlayStop) {
+            onPlayStop()
+          }
         })
 
         wavesurfer.on('timeupdate', (currentTime) => {
@@ -255,9 +271,13 @@ export default function AudioPlayer({
           setIsLoading(false)
         })
 
-        wavesurfer.on('loading', () => {
+        wavesurfer.on('loading', (progress) => {
           if (!isMountedRef.current) return
-          setIsLoading(true)
+          // Manter loading apenas se ainda não estiver pronto
+          // Mas permitir que o áudio comece a tocar mesmo durante o carregamento
+          if (progress < 100) {
+            setIsLoading(true)
+          }
         })
 
         wavesurfer.on('finish', () => {
@@ -461,7 +481,14 @@ export default function AudioPlayer({
     try {
       if (wavesurfer.isPlaying()) {
         wavesurfer.pause()
+        if (onPlayStop) {
+          onPlayStop()
+        }
       } else {
+        // Notificar que este áudio vai começar a tocar (pausa outros)
+        if (onPlayStart) {
+          onPlayStart()
+        }
         setIsLoading(true)
         await wavesurfer.play()
         if (watermarkRef.current && !previewUrl) {
@@ -473,8 +500,30 @@ export default function AudioPlayer({
       toast.error('Erro ao reproduzir áudio')
       setIsLoading(false)
       setIsPlaying(false)
+      if (onPlayStop) {
+        onPlayStop()
+      }
     }
   }
+  
+  // Sincronizar com estado externo (para pausar quando outro começar)
+  useEffect(() => {
+    const wavesurfer = wavesurferRef.current
+    if (!wavesurfer || wavesurfer.destroyed) return
+    
+    // Se externalIsPlaying está definido e é false, mas o wavesurfer está tocando, pausar e zerar
+    // Isso acontece quando outro áudio começou a tocar
+    if (externalIsPlaying !== undefined && !externalIsPlaying && wavesurfer.isPlaying()) {
+      wavesurfer.pause()
+      wavesurfer.seekTo(0) // Zerar o tempo (voltar para o início)
+      setCurrentTime(0)
+      setIsPlaying(false)
+      if (watermarkRef.current) {
+        watermarkRef.current.pause()
+        watermarkRef.current.currentTime = 0 // Zerar a marca d'água também
+      }
+    }
+  }, [externalIsPlaying])
 
   const toggleMute = () => {
     const wavesurfer = wavesurferRef.current
@@ -512,48 +561,48 @@ export default function AudioPlayer({
   }
 
   return (
-    <div className="w-full bg-white rounded-lg border border-gray-100 p-3 md:p-4">
+    <div className="w-full bg-white rounded-lg border border-gray-100 p-2.5 md:p-4 overflow-hidden">
       {/* Mobile: Layout empilhado */}
-      <div className="md:hidden space-y-3">
+      <div className="md:hidden space-y-2">
         {/* Linha 1: Play + Info + Duração */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0 w-full">
           <button
             onClick={togglePlay}
             disabled={isLoading}
-            className="flex-shrink-0 w-10 h-10 rounded-full border border-gray-300 bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all disabled:opacity-50"
+            className="flex-shrink-0 w-8 h-8 rounded-full border border-gray-300 bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all disabled:opacity-50"
           >
             {isLoading ? (
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
             ) : isPlaying ? (
-              <Pause className="w-4 h-4 text-gray-900" />
+              <Pause className="w-3 h-3 text-gray-900" />
             ) : (
-              <Play className="w-4 h-4 text-gray-900 ml-0.5" />
+              <Play className="w-3 h-3 text-gray-900 ml-0.5" />
             )}
           </button>
           
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
+          <div className="flex-1 min-w-0 overflow-hidden pr-1">
+            <div className="text-sm font-semibold text-gray-900 truncate leading-tight">{title}</div>
             {artist && (
-              <div className="text-xs text-gray-500 truncate">Por {artist}</div>
+              <div className="text-xs text-gray-500 truncate mt-0.5">Por {artist}</div>
             )}
           </div>
           
-          <div className="flex-shrink-0 text-xs text-gray-600 font-mono">
+          <div className="flex-shrink-0 text-xs text-gray-600 font-mono whitespace-nowrap">
             {formatTime(duration)}
           </div>
         </div>
 
         {/* Linha 2: Waveform - Mobile */}
-        <div className="w-full md:hidden">
+        <div className="w-full md:hidden overflow-hidden">
           <div
             ref={waveformRef}
-            className="w-full h-10 cursor-pointer"
+            className="w-full h-8 cursor-pointer"
             id={waveformId}
           />
         </div>
 
         {/* Linha 3: Ações */}
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           <button
             onClick={() => {
               const wavesurfer = wavesurferRef.current
@@ -565,28 +614,28 @@ export default function AudioPlayer({
                 watermarkRef.current.currentTime = 0
               }
             }}
-            className="p-2 text-gray-600 hover:text-gray-900"
+            className="p-1 text-gray-600 hover:text-gray-900 active:opacity-70"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
           
           {onFavorite && (
             <button
               onClick={onFavorite}
-              className={`p-2 ${
-                isFavorited ? 'text-red-500' : 'text-gray-600 hover:text-gray-900'
+              className={`p-1 active:opacity-70 ${
+                isFavorited ? 'text-red-500 hover:text-red-600' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`} />
+              <Heart className={`w-3.5 h-3.5 ${isFavorited ? 'fill-current' : ''}`} />
             </button>
           )}
 
           {isDownloadable && onDownload && (
             <button
               onClick={onDownload}
-              className="p-2 text-gray-600 hover:text-gray-900"
+              className="p-1 text-gray-600 hover:text-gray-900 active:opacity-70"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
