@@ -21,7 +21,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [categories, setCategories] = useState<any[]>([])
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Fechado por padrão em mobile
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false)
   const [selectedResource, setSelectedResource] = useState<Resource & { creator?: any } | null>(null)
   
@@ -307,9 +307,17 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Mobile Filter Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      
       <div className="max-w-[1600px] mx-auto flex">
         
-        {/* SIDEBAR FILTERS */}
+        {/* SIDEBAR FILTERS - Desktop */}
         <aside className={cn(
           "w-72 flex-shrink-0 border-r border-gray-100 p-8 h-[calc(100vh-64px)] sticky top-16 overflow-y-auto hidden lg:block transition-all",
           !isSidebarOpen && "-ml-72 opacity-0"
@@ -358,7 +366,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
                       </div>
                     ))
                 ) : (
-                  <p className="text-xs text-gray-400 px-3 py-2">Carregando categorias...</p>
+                  <div className="text-sm text-gray-500 py-2">Carregando categorias...</div>
                 )}
               </div>
             </FilterSection>
@@ -366,12 +374,12 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
             {/* Licença */}
             <FilterSection title="Licença">
               <div className="space-y-1">
-                {licenses.map((l) => (
-                  <FilterItem 
-                    key={l.id}
-                    label={l.label}
-                    active={filters.license === l.id}
-                    onClick={() => setFilters({...filters, license: l.id})}
+                {licenses.map((license) => (
+                  <FilterItem
+                    key={license.id}
+                    label={license.label}
+                    active={filters.license === license.id}
+                    onClick={() => setFilters({...filters, license: license.id})}
                   />
                 ))}
               </div>
@@ -380,12 +388,12 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
             {/* Duração */}
             <FilterSection title="Duração">
               <div className="space-y-1">
-                {durations.map((d) => (
-                  <FilterItem 
-                    key={d.id}
-                    label={d.label}
-                    active={filters.duration === d.id}
-                    onClick={() => setFilters({...filters, duration: d.id})}
+                {durations.map((duration) => (
+                  <FilterItem
+                    key={duration.id}
+                    label={duration.label}
+                    active={filters.duration === duration.id}
+                    onClick={() => setFilters({...filters, duration: duration.id})}
                   />
                 ))}
               </div>
@@ -394,22 +402,154 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
             {/* Formato */}
             <FilterSection title="Formato">
               <div className="space-y-1">
-                {formats.map((f) => (
-                  <FilterItem 
-                    key={f.id}
-                    label={f.label}
-                    active={filters.format === f.id}
-                    onClick={() => setFilters({...filters, format: f.id})}
+                {formats.map((format) => (
+                  <FilterItem
+                    key={format.id}
+                    label={format.label}
+                    active={filters.format === format.id}
+                    onClick={() => setFilters({...filters, format: format.id})}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+          </div>
+        </aside>
+
+        {/* SIDEBAR FILTERS - Mobile Drawer */}
+        <aside className={cn(
+          "lg:hidden fixed top-0 left-0 w-80 h-full bg-white z-50 shadow-xl transform transition-transform duration-300 ease-in-out overflow-y-auto",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
+          <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex items-center justify-between z-10">
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-gray-900" />
+              <h2 className="text-base font-bold text-gray-900 tracking-tight">Filtros</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {Object.values(filters).filter(v => v !== 'all').length} aplicados
+              </span>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-2 text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Categorias - PRIMEIRO */}
+            <FilterSection title="Categorias">
+              <div className="space-y-1">
+                <FilterItem 
+                  label="Todas as Categorias"
+                  active={filters.category === 'all'}
+                  onClick={() => {
+                    setFilters({...filters, category: 'all'})
+                    setIsSidebarOpen(false)
+                  }}
+                />
+                {categories.length > 0 ? (
+                  categories
+                    .filter(c => !c.parent_id)
+                    .map((parent) => (
+                      <div key={parent.id} className="space-y-1">
+                        <FilterItem 
+                          label={parent.name}
+                          active={filters.category === parent.id}
+                          onClick={() => {
+                            setFilters({...filters, category: parent.id})
+                            setIsSidebarOpen(false)
+                          }}
+                        />
+                        {categories
+                          .filter(c => c.parent_id === parent.id)
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map((sub) => (
+                            <FilterItem 
+                              key={sub.id}
+                              label={sub.name}
+                              active={filters.category === sub.id}
+                              onClick={() => {
+                                setFilters({...filters, category: sub.id})
+                                setIsSidebarOpen(false)
+                              }}
+                              isSubItem
+                            />
+                          ))}
+                      </div>
+                    ))
+                ) : (
+                  <div className="text-sm text-gray-500 py-2">Carregando categorias...</div>
+                )}
+              </div>
+            </FilterSection>
+
+            {/* Licença */}
+            <FilterSection title="Licença">
+              <div className="space-y-1">
+                {licenses.map((license) => (
+                  <FilterItem
+                    key={license.id}
+                    label={license.label}
+                    active={filters.license === license.id}
+                    onClick={() => {
+                      setFilters({...filters, license: license.id})
+                      setIsSidebarOpen(false)
+                    }}
                   />
                 ))}
               </div>
             </FilterSection>
 
-            {/* Limpar filtros */}
+            {/* Duração */}
+            <FilterSection title="Duração">
+              <div className="space-y-1">
+                {durations.map((duration) => (
+                  <FilterItem
+                    key={duration.id}
+                    label={duration.label}
+                    active={filters.duration === duration.id}
+                    onClick={() => {
+                      setFilters({...filters, duration: duration.id})
+                      setIsSidebarOpen(false)
+                    }}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+
+            {/* Formato */}
+            <FilterSection title="Formato">
+              <div className="space-y-1">
+                {formats.map((format) => (
+                  <FilterItem
+                    key={format.id}
+                    label={format.label}
+                    active={filters.format === format.id}
+                    onClick={() => {
+                      setFilters({...filters, format: format.id})
+                      setIsSidebarOpen(false)
+                    }}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+
+            {/* Botão Limpar Filtros - Mobile */}
             {Object.values(filters).some(v => v !== 'all') && (
               <button
-                onClick={() => setFilters({category: 'all', license: 'all', duration: 'all', format: 'all'})}
-                className="w-full mt-4 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-all"
+                onClick={() => {
+                  setFilters({
+                    category: 'all',
+                    license: 'all',
+                    duration: 'all',
+                    format: 'all'
+                  })
+                  setIsSidebarOpen(false)
+                }}
+                className="w-full mt-6 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Limpar Filtros
               </button>
@@ -418,23 +558,38 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 p-8 lg:p-12">
+        <main className="flex-1 p-4 md:p-8 lg:p-12">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">Biblioteca de Áudios</h1>
-            <p className="text-gray-700 text-base">
+          <div className="mb-6 md:mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Biblioteca de Áudios</h1>
+              {/* Mobile Filter Button */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="lg:hidden flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Filter className="h-4 w-4" />
+                <span>Filtros</span>
+                {Object.values(filters).filter(v => v !== 'all').length > 0 && (
+                  <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {Object.values(filters).filter(v => v !== 'all').length}
+                  </span>
+                )}
+              </button>
+            </div>
+            <p className="text-gray-700 text-sm md:text-base">
               Encontramos aproximadamente {audios.length} {audios.length === 1 ? 'áudio' : 'áudios'}.
             </p>
           </div>
 
           {/* Search Bar */}
-          <div className="mb-6">
+          <div className="mb-4 md:mb-6">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Buscar áudios..."
-                className="w-full h-12 pl-12 pr-4 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                className="w-full h-10 md:h-12 pl-10 md:pl-12 pr-4 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />

@@ -150,7 +150,8 @@ export default function AudioPlayer({
         }
         
         // Verificar novamente se ainda está montado e se temos uma URL válida
-        if (!waveformRef.current || !isMountedRef.current) {
+        const container = waveformRef.current
+        if (!container || !isMountedRef.current) {
           return
         }
         
@@ -161,7 +162,7 @@ export default function AudioPlayer({
 
         // Criar instância do Wavesurfer
         const wavesurfer = WaveSurfer.create({
-          container: waveformRef.current,
+          container: container,
           waveColor: '#d1d5db', // cinza claro para parte não tocada
           progressColor: '#374151', // cinza escuro para parte tocada
           cursorColor: 'transparent',
@@ -408,8 +409,86 @@ export default function AudioPlayer({
 
   return (
     <div className="w-full bg-white rounded-lg border border-gray-100 p-3 md:p-4">
-      <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-        {/* Play Button - Cinza como no Envato */}
+      {/* Mobile: Layout empilhado */}
+      <div className="md:hidden space-y-3">
+        {/* Linha 1: Play + Info + Duração */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={togglePlay}
+            disabled={isLoading}
+            className="flex-shrink-0 w-10 h-10 rounded-full border border-gray-300 bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-all disabled:opacity-50"
+          >
+            {isLoading ? (
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+            ) : isPlaying ? (
+              <Pause className="w-4 h-4 text-gray-900" />
+            ) : (
+              <Play className="w-4 h-4 text-gray-900 ml-0.5" />
+            )}
+          </button>
+          
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
+            {artist && (
+              <div className="text-xs text-gray-500 truncate">Por {artist}</div>
+            )}
+          </div>
+          
+          <div className="flex-shrink-0 text-xs text-gray-600 font-mono">
+            {formatTime(duration)}
+          </div>
+        </div>
+
+        {/* Linha 2: Waveform - Mobile */}
+        <div className="w-full md:hidden">
+          <div
+            ref={waveformRef}
+            className="w-full h-10 cursor-pointer"
+          />
+        </div>
+
+        {/* Linha 3: Ações */}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => {
+              const wavesurfer = wavesurferRef.current
+              if (wavesurfer) {
+                wavesurfer.seekTo(0)
+                setCurrentTime(0)
+              }
+              if (watermarkRef.current) {
+                watermarkRef.current.currentTime = 0
+              }
+            }}
+            className="p-2 text-gray-600 hover:text-gray-900"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          
+          {onFavorite && (
+            <button
+              onClick={onFavorite}
+              className={`p-2 ${
+                isFavorited ? 'text-red-500' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`} />
+            </button>
+          )}
+
+          {isDownloadable && onDownload && (
+            <button
+              onClick={onDownload}
+              className="p-2 text-gray-600 hover:text-gray-900"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop: Layout horizontal */}
+      <div className="hidden md:flex items-center gap-3 md:gap-4 overflow-hidden">
         <button
           onClick={togglePlay}
           disabled={isLoading}
@@ -424,7 +503,6 @@ export default function AudioPlayer({
           )}
         </button>
 
-        {/* Track Info */}
         <div className="flex-shrink-0 min-w-[140px] md:min-w-[180px] max-w-[220px]">
           <div className="text-sm md:text-base font-semibold text-gray-900 truncate leading-tight">{title}</div>
           {artist && (
@@ -432,25 +510,20 @@ export default function AudioPlayer({
           )}
         </div>
 
-        {/* Waveform usando Wavesurfer.js */}
         <div className="flex-1 min-w-0 mx-2 md:mx-3">
           <div
-            ref={waveformRef}
-            className="w-full h-12 cursor-pointer"
+            className="w-full h-12 cursor-pointer hidden md:block"
           />
         </div>
 
-        {/* Duration */}
         <div className="flex-shrink-0 text-xs md:text-sm text-gray-600 font-mono whitespace-nowrap px-2">
           {formatTime(duration)}
         </div>
 
-        {/* BPM (placeholder) - apenas em telas maiores */}
         <div className="hidden lg:block flex-shrink-0 text-xs md:text-sm text-gray-400 min-w-[60px] text-center px-2">
           -- BPM
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
           <button
             onClick={() => {
@@ -494,7 +567,6 @@ export default function AudioPlayer({
           )}
         </div>
       </div>
-
     </div>
   )
 }
