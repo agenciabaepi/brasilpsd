@@ -60,6 +60,7 @@ export default function AudioPlayer({
       if (watermarkRef.current) {
         watermarkRef.current.pause()
         watermarkRef.current.src = ''
+        watermarkRef.current = null
       }
       return
     }
@@ -69,8 +70,16 @@ export default function AudioPlayer({
       const watermarkAudio = document.createElement('audio')
       watermarkAudio.src = '/marca dagua audio.mp3'
       watermarkAudio.loop = true
-      watermarkAudio.volume = 0.25
+      watermarkAudio.volume = 0.5 // Aumentado de 0.25 para 0.5
       watermarkRef.current = watermarkAudio
+      
+      // Garantir que o loop está ativo
+      watermarkAudio.addEventListener('ended', () => {
+        if (watermarkAudio.loop) {
+          watermarkAudio.currentTime = 0
+          watermarkAudio.play().catch(() => {})
+        }
+      })
     }
 
     return () => {

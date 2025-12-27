@@ -55,11 +55,13 @@ export async function addWatermarkToAudio(
     return new Promise((resolve) => {
       ffmpeg(tempInputPath)
         .input(finalWatermarkPath) // Adicionar áudio de marca d'água como segundo input
+        .inputOptions([
+          '-stream_loop', '-1' // Fazer loop infinito da marca d'água
+        ])
         .complexFilter([
-          // Misturar os dois áudios: o original em volume normal e a marca d'água em volume baixo
-          // amix=inputs=2:duration=longest:dropout_transition=2
-          // -af "amix=inputs=2:duration=longest:dropout_transition=2,volume=0.5"
-          '[0:a][1:a]amix=inputs=2:duration=longest:dropout_transition=2,volume=0.8[out]'
+          // Aumentar volume da marca d'água para 0.5 (50%) e misturar com o áudio original
+          // O stream_loop fará a marca d'água repetir durante toda a duração do áudio principal
+          '[1:a]volume=0.5[watermark];[0:a][watermark]amix=inputs=2:duration=longest:dropout_transition=2[out]'
         ])
         .outputOptions([
           '-map [out]',
