@@ -48,3 +48,4 @@ Se você já tem arquivos públicos no bucket, eles continuarão acessíveis at�
 2. Ou mova os arquivos para um novo bucket privado
 
 
+

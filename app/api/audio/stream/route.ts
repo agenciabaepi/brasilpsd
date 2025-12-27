@@ -131,6 +131,18 @@ export async function GET(request: NextRequest) {
     // 5. GERAR PRESIGNED URL TEMPORÁRIA
     // ========================================================================
     try {
+      // Validar key antes de tentar gerar URL
+      if (!key || !key.trim()) {
+        console.error('❌ Invalid key provided:', { resourceId, key })
+        return NextResponse.json(
+          { 
+            error: 'Chave inválida',
+            message: 'A chave do arquivo é inválida ou está vazia.'
+          },
+          { status: 400 }
+        )
+      }
+      
       const command = new GetObjectCommand({
         Bucket: BUCKET_NAME,
         Key: key,
@@ -138,6 +150,18 @@ export async function GET(request: NextRequest) {
 
       // Gerar URL assinada válida por 1 hora
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+      
+      // Validar se a URL foi gerada corretamente
+      if (!signedUrl || !signedUrl.trim()) {
+        console.error('❌ Failed to generate signed URL:', { resourceId, key })
+        return NextResponse.json(
+          { 
+            error: 'Erro ao gerar URL de acesso',
+            message: 'Não foi possível gerar o link de acesso ao áudio.'
+          },
+          { status: 500 }
+        )
+      }
 
       // Retornar URL assinada diretamente (Wavesurfer precisa de URL direta)
       return NextResponse.json({
@@ -148,7 +172,25 @@ export async function GET(request: NextRequest) {
         }
       })
     } catch (s3Error: any) {
-      console.error('❌ Error generating signed URL:', s3Error)
+      console.error('❌ Error generating signed URL:', {
+        error: s3Error,
+        message: s3Error?.message,
+        code: s3Error?.Code,
+        resourceId,
+        key
+      })
+      
+      // Verificar se é erro de arquivo não encontrado
+      if (s3Error?.Code === 'NoSuchKey' || s3Error?.name === 'NoSuchKey') {
+        return NextResponse.json(
+          { 
+            error: 'Arquivo não encontrado',
+            message: 'O arquivo de áudio não foi encontrado no servidor.'
+          },
+          { status: 404 }
+        )
+      }
+      
       return NextResponse.json(
         { 
           error: 'Erro ao gerar URL de acesso',

@@ -44,10 +44,12 @@ export default function AudioPlayer({
   const [isLoading, setIsLoading] = useState(false)
   
   const waveformRef = useRef<HTMLDivElement>(null)
-  // Usar resourceId ou audioUrl para gerar ID estável (evita hydration mismatch)
-  const waveformId = resourceId 
-    ? `waveform-${resourceId.replace(/-/g, '')}` 
-    : `waveform-${audioUrl ? audioUrl.slice(-12).replace(/[^a-z0-9]/gi, '') : Math.random().toString(36).substr(2, 9)}`
+  // Usar resourceId ou audioUrl para gerar IDs estáveis (evita hydration mismatch)
+  const baseId = resourceId 
+    ? resourceId.replace(/-/g, '') 
+    : (audioUrl ? audioUrl.slice(-12).replace(/[^a-z0-9]/gi, '') : Math.random().toString(36).substr(2, 9))
+  const waveformIdMobile = `waveform-mobile-${baseId}`
+  const waveformIdDesktop = `waveform-desktop-${baseId}`
   const wavesurferRef = useRef<ReturnType<typeof WaveSurfer.create> | null>(null)
   const watermarkRef = useRef<HTMLAudioElement | null>(null)
   const isMountedRef = useRef(true)
@@ -58,48 +60,61 @@ export default function AudioPlayer({
 
   // Configurar Wavesurfer
   useEffect(() => {
-    // Encontrar o container correto - funciona em mobile e desktop
+    // Encontrar o container correto baseado no tamanho da tela
     const getContainer = () => {
       if (typeof window === 'undefined') return null
       
-      // Primeiro, tentar usar o ref diretamente se disponível
-      if (waveformRef.current && waveformRef.current.isConnected) {
-        // Verificar se o elemento está visível (não oculto por CSS)
-        const computedStyle = window.getComputedStyle(waveformRef.current)
-        const isVisible = computedStyle.display !== 'none'
-        
-        if (isVisible) {
-          const rect = waveformRef.current.getBoundingClientRect()
-          if (rect.width > 0 && rect.height > 0) {
-            return waveformRef.current
-          }
-        }
-      }
+      // Determinar qual elemento buscar baseado no tamanho da tela
+      const isMobile = window.innerWidth < 768 // md breakpoint do Tailwind
+      const targetId = isMobile ? waveformIdMobile : waveformIdDesktop
       
-      // Se o ref não está disponível ou não está visível, buscar pelo ID único
-      const containerById = document.getElementById(waveformId) as HTMLDivElement | null
+      // Buscar pelo ID correto (mobile ou desktop) - priorizar busca direta por ID
+      const containerById = document.getElementById(targetId) as HTMLDivElement | null
       if (containerById && containerById.isConnected) {
-        // Verificar se o elemento está visível
+        const rect = containerById.getBoundingClientRect()
         const computedStyle = window.getComputedStyle(containerById)
+        // Verificar se está visível (display !== 'none') e tem dimensões válidas
+        // No mobile, aceitar mesmo se width for 0 (pode estar sendo renderizado)
         const isVisible = computedStyle.display !== 'none'
+        const hasDimensions = rect.width >= 0 && rect.height >= 0
         
-        if (isVisible) {
-          const rect = containerById.getBoundingClientRect()
-          if (rect.width > 0 && rect.height > 0) {
-            waveformRef.current = containerById
-            return containerById
-          }
+        if (isVisible && (hasDimensions || isMobile)) {
+          waveformRef.current = containerById
+          return containerById
         }
       }
       
-      // Última tentativa: retornar o elemento pelo ID mesmo que não esteja visível
-      // (pode estar em um layout que ainda não foi renderizado)
+      // Se não encontrou o elemento correto, tentar o outro (pode estar em transição de tamanho)
+      const fallbackId = isMobile ? waveformIdDesktop : waveformIdMobile
+      const fallbackContainer = document.getElementById(fallbackId) as HTMLDivElement | null
+      if (fallbackContainer && fallbackContainer.isConnected) {
+        const rect = fallbackContainer.getBoundingClientRect()
+        const computedStyle = window.getComputedStyle(fallbackContainer)
+        const isVisible = computedStyle.display !== 'none'
+        const hasDimensions = rect.width >= 0 && rect.height >= 0
+        
+        if (isVisible && (hasDimensions || isMobile)) {
+          waveformRef.current = fallbackContainer
+          return fallbackContainer
+        }
+      }
+      
+      // Tentar usar o ref diretamente se disponível e conectado (fallback)
+      if (waveformRef.current && waveformRef.current.isConnected) {
+        const rect = waveformRef.current.getBoundingClientRect()
+        const computedStyle = window.getComputedStyle(waveformRef.current)
+        if (computedStyle.display !== 'none' && (rect.width >= 0 && rect.height >= 0 || isMobile)) {
+          return waveformRef.current
+        }
+      }
+      
+      // Última tentativa: retornar qualquer elemento conectado pelo ID
       if (containerById && containerById.isConnected) {
         waveformRef.current = containerById
         return containerById
       }
       
-      return waveformRef.current
+      return null
     }
     
     // Função para inicializar o Wavesurfer
@@ -142,11 +157,19 @@ export default function AudioPlayer({
     
     // Função para obter URL segura do áudio
     const getSecureAudioUrl = async () => {
-      if (!resourceId) return previewUrl || audioUrl
+      if (!resourceId) {
+        console.log('📝 No resourceId, using direct URL:', { previewUrl, audioUrl })
+        return previewUrl || audioUrl
+      }
       
       // Extrair key do file_url ou preview_url
       let key: string
       const urlToExtract = previewUrl || audioUrl
+      
+      if (!urlToExtract || !urlToExtract.trim()) {
+        console.error('❌ Empty audioUrl and previewUrl:', { resourceId, audioUrl, previewUrl })
+        throw new Error('URL do áudio não encontrada')
+      }
       
       try {
         const url = new URL(urlToExtract)
@@ -155,7 +178,14 @@ export default function AudioPlayer({
         // Se não for uma URL válida, assumir que é a chave direta
         key = urlToExtract
       }
+      
+      if (!key || !key.trim()) {
+        console.error('❌ Invalid key extracted:', { resourceId, urlToExtract, key })
+        throw new Error('Chave do arquivo inválida')
+      }
 
+      console.log('🔍 Requesting audio stream:', { resourceId, key: key.substring(0, 50) + '...', type: previewUrl ? 'preview' : 'file' })
+      
       // Usar API segura para obter URL assinada
       const type = previewUrl ? 'preview' : 'file'
       const response = await fetch(`/api/audio/stream?resourceId=${resourceId}&key=${encodeURIComponent(key)}&type=${type}`)
@@ -164,10 +194,16 @@ export default function AudioPlayer({
         const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
         const errorMessage = errorData.error || 'Erro ao obter URL do áudio'
         
-        // Marcar erro persistente para não tentar novamente (especialmente para 403/401)
-        // Estes erros indicam problemas de autenticação/autorização que não serão resolvidos
-        // apenas tentando novamente com o mesmo recurso
-        if (response.status === 403 || response.status === 401) {
+        console.error('❌ Audio stream API error:', {
+          resourceId,
+          status: response.status,
+          error: errorMessage,
+          key: key.substring(0, 50) + '...'
+        })
+        
+        // Marcar erro persistente para não tentar novamente (especialmente para 403/401/404)
+        // Estes erros indicam problemas de autenticação/autorização ou arquivo não encontrado
+        if (response.status === 403 || response.status === 401 || response.status === 404) {
           // IMPORTANTE: Só marcar como erro persistente se for o mesmo recurso
           // Isso previne que um erro em um recurso bloqueie outros recursos
           // currentResourceKey está no escopo do useEffect, então está disponível aqui
@@ -182,6 +218,22 @@ export default function AudioPlayer({
       }
       
       const data = await response.json()
+      
+      // Validar se a URL foi retornada e é válida
+      if (!data.url || typeof data.url !== 'string') {
+        console.error('❌ Invalid URL returned from API:', { resourceId, data })
+        throw new Error('URL inválida retornada pela API')
+      }
+      
+      // Verificar se a URL é válida
+      try {
+        new URL(data.url)
+        console.log('✅ Audio stream URL generated successfully:', { resourceId, urlLength: data.url.length })
+      } catch {
+        console.error('❌ Invalid URL format:', { resourceId, url: data.url?.substring(0, 100) })
+        throw new Error('Formato de URL inválido')
+      }
+      
       return data.url
     }
 
@@ -216,6 +268,14 @@ export default function AudioPlayer({
           return
         }
 
+        // Validar URL antes de criar Wavesurfer
+        if (!urlToUse || !urlToUse.trim()) {
+          console.error('❌ Empty or invalid URL:', { resourceId, urlToUse })
+          setIsLoading(false)
+          setIsPlaying(false)
+          return
+        }
+        
         // Criar instância do Wavesurfer com configurações otimizadas
         const wavesurfer = WaveSurfer.create({
           container: container,
@@ -229,7 +289,7 @@ export default function AudioPlayer({
           normalize: true,
           url: urlToUse,
           interact: true, // Permite clicar na waveform para navegar
-          backend: 'MediaElement', // MediaElement permite tocar antes da waveform estar pronta
+          backend: 'WebAudio', // WebAudio é mais confiável e compatível
           mediaControls: false, // Desabilitar controles de mídia nativos
           autoplay: false,
           dragToSeek: true,
@@ -295,8 +355,10 @@ export default function AudioPlayer({
           // Ignorar erros de abort que são esperados durante cleanup
           if (error?.name === 'AbortError' || 
               error?.message?.includes('aborted') ||
-              error?.message?.includes('BodyStreamBuffer was aborted')) {
-            // Não mostrar erro para aborts esperados (componente desmontado)
+              error?.message?.includes('BodyStreamBuffer was aborted') ||
+              error?.message?.includes('NotAllowedError') ||
+              error?.message?.includes('NotSupportedError')) {
+            // Não mostrar erro para aborts esperados ou erros de autoplay
             return
           }
           
@@ -306,7 +368,14 @@ export default function AudioPlayer({
           console.error('Wavesurfer error:', error)
           setIsLoading(false)
           setIsPlaying(false)
-          toast.error('Erro ao carregar áudio')
+          
+          // Não mostrar toast para erros comuns que podem ser resolvidos automaticamente
+          // Apenas logar para debug
+          if (!error?.message?.includes('network') && 
+              !error?.message?.includes('timeout') &&
+              !error?.message?.includes('CORS')) {
+            // toast.error('Erro ao carregar áudio')
+          }
         })
 
         // Configurar volume inicial
@@ -334,11 +403,17 @@ export default function AudioPlayer({
         if (!hasPersistentErrorRef.current) {
           const errorMessage = error.message || 'Erro ao carregar áudio'
           
-          // Só mostrar toast se não for erro de autenticação/autorização
+          // Só mostrar toast se não for erro de autenticação/autorização ou erro comum
           if (!errorMessage.includes('Não autorizado') && 
               !errorMessage.includes('Assinatura necessária') &&
-              !errorMessage.includes('não disponível')) {
-            toast.error(errorMessage)
+              !errorMessage.includes('não disponível') &&
+              !errorMessage.includes('network') &&
+              !errorMessage.includes('timeout') &&
+              !errorMessage.includes('CORS') &&
+              !errorMessage.includes('Failed to fetch')) {
+            // Silenciar erros comuns que podem ser temporários
+            console.warn('Audio loading error (silent):', errorMessage)
+            // toast.error(errorMessage)
           }
         }
       })
@@ -347,52 +422,148 @@ export default function AudioPlayer({
     // Tentar encontrar o container e inicializar - versão otimizada
     let timeoutId: NodeJS.Timeout | null = null
     let retryCount = 0
-    const maxRetries = 2 // Apenas 2 tentativas (mais rápido)
+    // Aumentar tentativas no mobile para dar mais tempo de renderização
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    const maxRetries = isMobile ? 8 : 3 // Mais tentativas no mobile (8 tentativas)
     
     const tryInitialize = () => {
       const container = getContainer()
+      
       if (container && container.isConnected) {
-        // Verificar se está visível e tem dimensões
+        // Verificar dimensões básicas (ser mais tolerante no mobile)
+        const rect = container.getBoundingClientRect()
         const computedStyle = window.getComputedStyle(container)
         const isVisible = computedStyle.display !== 'none'
         
-        if (isVisible) {
-          const rect = container.getBoundingClientRect()
-          if (rect.width > 0 && rect.height > 0) {
-            // Container encontrado, visível e tem dimensões, inicializar
-            initializeWavesurfer()
-            return true
-          }
-        } else {
-          // Se não está visível, pode ser que o layout ainda não foi renderizado
-          // Tentar novamente com delay maior
-          if (retryCount < maxRetries) {
-            retryCount++
-            const delay = 100 * retryCount // Delay maior para dar tempo do layout renderizar
-            timeoutId = setTimeout(tryInitialize, delay)
-          }
-          return false
+        // No mobile, aceitar mesmo se width for 0 inicialmente (pode estar sendo renderizado)
+        const hasValidDimensions = rect.width > 0 && rect.height > 0
+        const isMobileView = window.innerWidth < 768
+        
+        // Log para debug no mobile
+        if (isMobileView && retryCount < 3) {
+          console.log('🔍 Mobile container check:', {
+            resourceId,
+            containerId: container.id,
+            width: rect.width,
+            height: rect.height,
+            visible: isVisible,
+            display: computedStyle.display,
+            retryCount
+          })
+        }
+        
+        // Aceitar se:
+        // 1. Tem dimensões válidas E está visível, OU
+        // 2. Está no mobile E já tentou várias vezes (pode estar fora da viewport), OU
+        // 3. Já tentou muitas vezes (última tentativa)
+        if ((hasValidDimensions && isVisible) || 
+            (isMobileView && retryCount >= maxRetries - 2) ||
+            (retryCount >= maxRetries - 1)) {
+          console.log('✅ Container found, initializing Wavesurfer:', {
+            resourceId,
+            containerId: container.id,
+            width: rect.width,
+            height: rect.height,
+            visible: isVisible,
+            retryCount,
+            isMobile: isMobileView
+          })
+          initializeWavesurfer()
+          return true
+        }
+      } else {
+        // Log quando não encontra o container
+        if (retryCount < 3) {
+          console.log('⏳ Container not found yet:', {
+            resourceId,
+            retryCount,
+            isMobile: typeof window !== 'undefined' && window.innerWidth < 768
+          })
         }
       }
       
-      // Se não encontrou, tentar novamente com delay curto
+      // Se não encontrou ou não está pronto, tentar novamente
       if (retryCount < maxRetries) {
         retryCount++
-        // Delay progressivo: 50ms, 100ms, 150ms
-        const delay = 50 * retryCount
+        // Delay progressivo: 50ms, 100ms, 150ms... (mais rápido no início)
+        const delay = Math.min(50 * retryCount, 500) // Max 500ms entre tentativas
         timeoutId = setTimeout(tryInitialize, delay)
+      } else {
+        // Se esgotou as tentativas, tentar inicializar mesmo assim
+        const container = getContainer()
+        if (container && container.isConnected) {
+          console.warn('⚠️ Max retries reached, initializing anyway:', { 
+            resourceId,
+            containerId: container.id 
+          })
+          initializeWavesurfer()
+          return true
+        } else {
+          console.error('❌ Failed to find container after max retries:', { resourceId })
+        }
       }
       return false
     }
     
     // Tentar inicializar imediatamente (sem delay inicial)
     tryInitialize()
+    
+    // Listener para redimensionamento da janela (mobile/desktop switch)
+    let resizeTimeout: NodeJS.Timeout | null = null
+    const handleResize = () => {
+      // Debounce do resize para evitar muitas chamadas
+      if (resizeTimeout) clearTimeout(resizeTimeout)
+      resizeTimeout = setTimeout(() => {
+        // Se o Wavesurfer já foi inicializado, verificar se precisa reinicializar
+        if (wavesurferRef.current && !wavesurferRef.current.destroyed) {
+          const currentContainer = waveformRef.current
+          const newContainer = getContainer()
+          
+          // Se o container mudou (mobile <-> desktop), reinicializar
+          if (newContainer && currentContainer !== newContainer) {
+            console.log('🔄 Screen size changed, reinitializing Wavesurfer:', {
+              resourceId,
+              oldContainer: currentContainer?.id,
+              newContainer: newContainer.id
+            })
+            
+            // Destruir o Wavesurfer atual
+            try {
+              if (!wavesurferRef.current.destroyed) {
+                wavesurferRef.current.destroy()
+              }
+            } catch (error) {
+              console.warn('Error destroying Wavesurfer on resize:', error)
+            }
+            
+            wavesurferRef.current = null
+            waveformRef.current = null
+            
+            // Reinicializar com o novo container
+            retryCount = 0
+            tryInitialize()
+          }
+        } else if (!wavesurferRef.current || wavesurferRef.current.destroyed) {
+          // Se não foi inicializado ainda, tentar novamente
+          retryCount = 0
+          tryInitialize()
+        }
+      }, 300) // Debounce de 300ms
+    }
+    
+    window.addEventListener('resize', handleResize)
 
     return () => {
       // Limpar timeout se existir
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
+      
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout)
+      }
+      
+      window.removeEventListener('resize', handleResize)
       
       isMountedRef.current = false
       // Resetar flags de loading apenas se o componente estiver sendo desmontado
@@ -597,7 +768,7 @@ export default function AudioPlayer({
           <div
             ref={waveformRef}
             className="w-full h-8 cursor-pointer"
-            id={waveformId}
+            id={waveformIdMobile}
           />
         </div>
 
@@ -668,7 +839,7 @@ export default function AudioPlayer({
           <div
             ref={waveformRef}
             className="w-full h-12 cursor-pointer"
-            id={waveformId}
+            id={waveformIdDesktop}
           />
         </div>
 

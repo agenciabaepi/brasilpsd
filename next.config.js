@@ -3,6 +3,15 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
+  // Permitir requisições de origem cruzada da rede local durante desenvolvimento
+  // Isso permite acessar o servidor de desenvolvimento de outros dispositivos na mesma rede
+  ...(process.env.NODE_ENV === 'development' && {
+    allowedDevOrigins: [
+      '192.168.15.114',
+      // Adicionar outros IPs da rede local conforme necessário
+    ],
+  }),
+  
   eslint: {
     // Warning: This allows production builds to successfully complete even if
     // your project has ESLint errors.

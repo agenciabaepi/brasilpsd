@@ -6,3 +6,4 @@ ALTER TABLE public.email_verification_codes DISABLE ROW LEVEL SECURITY;
 -- Para reabilitar RLS depois (se necessário):
 -- ALTER TABLE public.email_verification_codes ENABLE ROW LEVEL SECURITY;
 
+

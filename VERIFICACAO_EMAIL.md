@@ -138,3 +138,4 @@ await sendVerificationEmail(email, code)
 - [ ] Adicionar contador de tentativas (limitar tentativas de verificação)
 - [ ] Considerar usar serviços de email transacional (SendGrid, AWS SES, etc.)
 
+

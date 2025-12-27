@@ -59,3 +59,4 @@ No terminal onde está rodando `npm run dev`, você deve ver:
 - Verificar se a query está retornando a assinatura
 - Verificar logs no console
 
+

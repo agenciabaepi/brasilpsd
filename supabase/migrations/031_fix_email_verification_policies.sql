@@ -23,3 +23,4 @@ CREATE POLICY "Allow update to verify codes"
 -- Alternativa: Se ainda houver problemas, desabilitar RLS temporariamente
 -- ALTER TABLE public.email_verification_codes DISABLE ROW LEVEL SECURITY;
 
+

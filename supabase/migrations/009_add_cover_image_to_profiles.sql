@@ -9,3 +9,4 @@ COMMENT ON COLUMN public.profiles.cover_image IS 'URL da imagem de capa/banner d
 
 
 
+

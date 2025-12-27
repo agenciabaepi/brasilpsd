@@ -84,3 +84,4 @@ curl -X GET http://localhost:3000/api/cron/check-expired-subscriptions \
   -H "Authorization: Bearer test-secret-token"
 ```
 
+

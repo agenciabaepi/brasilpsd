@@ -33,3 +33,4 @@ CREATE POLICY "Admins can delete categories"
 
 
 
+

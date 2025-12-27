@@ -84,3 +84,4 @@ CREATE TRIGGER on_creator_application_approved
   WHEN (NEW.status = 'approved' AND OLD.status != 'approved')
   EXECUTE FUNCTION handle_creator_application_approval();
 
+

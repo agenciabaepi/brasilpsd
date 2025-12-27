@@ -157,3 +157,4 @@ Se encontrar problemas após essas correções, verifique:
 - Logs do servidor e do cliente
 - Network tab no DevTools para verificar requisições
 
+

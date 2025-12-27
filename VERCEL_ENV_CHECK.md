@@ -87,3 +87,4 @@ Se você está usando **sandbox** em localhost e **produção** no Vercel, certi
 - A chave PIX está cadastrada na conta de **produção**
 - As variáveis de ambiente no Vercel estão apontando para **produção**
 
+

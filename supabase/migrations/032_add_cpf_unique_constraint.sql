@@ -34,3 +34,4 @@ WHERE cpf_cnpj IS NOT NULL AND cpf_cnpj != '';
 -- Comentário explicativo
 COMMENT ON INDEX idx_profiles_cpf_cnpj_unique IS 'Garante que cada CPF/CNPJ seja único na tabela profiles. Permite múltiplos registros com NULL.';
 
+
