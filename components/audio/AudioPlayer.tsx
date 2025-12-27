@@ -47,22 +47,46 @@ export default function AudioPlayer({
     if (!waveformRef.current) return
 
     isMountedRef.current = true
-    const urlToUse = previewUrl || audioUrl
+    
+    // Função para obter URL segura do áudio
+    const getSecureAudioUrl = async () => {
+      if (!resourceId) return previewUrl || audioUrl
+      
+      // Extrair key do file_url ou preview_url
+      let key: string
+      const urlToExtract = previewUrl || audioUrl
+      
+      try {
+        const url = new URL(urlToExtract)
+        key = url.pathname.substring(1)
+      } catch {
+        // Se não for uma URL válida, assumir que é a chave direta
+        key = urlToExtract
+      }
 
-    // Criar instância do Wavesurfer
-    const wavesurfer = WaveSurfer.create({
-      container: waveformRef.current,
-      waveColor: '#d1d5db', // cinza claro para parte não tocada
-      progressColor: '#374151', // cinza escuro para parte tocada
-      cursorColor: 'transparent',
-      barWidth: 2,
-      barRadius: 1,
-      barGap: 2,
-      height: 48,
-      normalize: true,
-      url: urlToUse,
-      interact: true, // Permite clicar na waveform para navegar
-    })
+      // Usar API segura para obter URL assinada
+      const type = previewUrl ? 'preview' : 'file'
+      return `/api/audio/stream?resourceId=${resourceId}&key=${encodeURIComponent(key)}&type=${type}`
+    }
+
+    // Carregar URL segura e criar Wavesurfer
+    getSecureAudioUrl().then((urlToUse) => {
+      if (!waveformRef.current || !isMountedRef.current) return
+
+      // Criar instância do Wavesurfer
+      const wavesurfer = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: '#d1d5db', // cinza claro para parte não tocada
+        progressColor: '#374151', // cinza escuro para parte tocada
+        cursorColor: 'transparent',
+        barWidth: 2,
+        barRadius: 1,
+        barGap: 2,
+        height: 48,
+        normalize: true,
+        url: urlToUse,
+        interact: true, // Permite clicar na waveform para navegar
+      })
 
     wavesurferRef.current = wavesurfer
 

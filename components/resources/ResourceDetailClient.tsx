@@ -512,8 +512,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
             {resource.resource_type === 'audio' ? (
               <div className="w-full p-8 md:p-12">
                 <AudioPlayer
-                  audioUrl={getS3Url(resource.file_url)}
-                  previewUrl={resource.preview_url ? getS3Url(resource.preview_url) : null}
+                  audioUrl={resource.file_url}
+                  previewUrl={resource.preview_url}
                   title={resource.title}
                   artist={isOfficial ? 'BrasilPSD' : (resource.creator?.full_name || 'Desconhecido')}
                   duration={resource.duration || undefined}
