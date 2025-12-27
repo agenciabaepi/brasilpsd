@@ -166,7 +166,7 @@ export default function AudioPlayer({
 
   return (
     <div className="w-full bg-white rounded-lg border border-gray-100 p-3 md:p-4">
-      <div className="flex items-center gap-2 md:gap-3 lg:gap-4">
+      <div className="flex items-center gap-2 md:gap-3 lg:gap-4 overflow-hidden">
         {/* Play Button */}
         <button
           onClick={togglePlay}
@@ -276,7 +276,7 @@ export default function AudioPlayer({
         </div>
 
         {/* Volume Control - apenas em telas médias/grandes */}
-        <div className="hidden md:flex items-center gap-1.5 md:gap-2 flex-shrink-0 w-20 md:w-24">
+        <div className="hidden md:flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-[80px] max-w-[100px]">
           <button
             onClick={toggleMute}
             className="p-1 flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
@@ -294,7 +294,7 @@ export default function AudioPlayer({
             step="0.01"
             value={volume}
             onChange={handleVolumeChange}
-            className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            className="flex-1 min-w-0 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
             style={{
               background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${volume * 100}%, #e5e7eb ${volume * 100}%, #e5e7eb 100%)`
             }}
