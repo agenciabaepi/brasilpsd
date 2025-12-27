@@ -171,7 +171,8 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
     }, 300)
 
     return () => clearTimeout(timeoutId)
-  }, [searchQuery, filters, searchAudios])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, filters])
 
   const handleFavorite = async (resourceId: string) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -225,26 +226,35 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
     }
 
     try {
+      // Extrair key do file_url (igual ao ResourceDetailClient)
+      // file_url pode ser uma URL completa ou apenas uma chave S3
+      let key: string
+      try {
+        const url = new URL(resource.file_url)
+        key = url.pathname.substring(1)
+      } catch {
+        // Se não for uma URL válida, assumir que é a chave direta
+        key = resource.file_url
+      }
+
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resourceId: resource.id })
+        body: JSON.stringify({ resourceId: resource.id, key })
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Erro ao baixar')
+      const downloadData = await response.json()
+
+      if (!response.ok || downloadData.error) {
+        throw new Error(downloadData.error || downloadData.message || 'Erro ao baixar')
       }
 
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${resource.title}.${resource.file_format || 'mp3'}`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      if (!downloadData.url) {
+        throw new Error('URL de download não recebida')
+      }
+
+      // Abrir download
+      window.open(downloadData.url, '_blank')
 
       toast.success('Download iniciado!')
     } catch (error: any) {

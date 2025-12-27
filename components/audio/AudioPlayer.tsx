@@ -109,7 +109,15 @@ export default function AudioPlayer({
     wavesurfer.setVolume(isMuted ? 0 : volume)
 
     return () => {
-      wavesurfer.destroy()
+      // Verificar se wavesurfer ainda existe antes de destruir
+      if (wavesurferRef.current && !wavesurferRef.current.destroyed) {
+        try {
+          wavesurferRef.current.destroy()
+        } catch (error) {
+          // Ignorar erros de destruição (pode já estar destruído)
+          console.warn('Wavesurfer cleanup warning:', error)
+        }
+      }
       wavesurferRef.current = null
     }
   }, [audioUrl, previewUrl])
