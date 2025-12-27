@@ -66,7 +66,15 @@ export default function AudioPlayer({
 
       // Usar API segura para obter URL assinada
       const type = previewUrl ? 'preview' : 'file'
-      return `/api/audio/stream?resourceId=${resourceId}&key=${encodeURIComponent(key)}&type=${type}`
+      const response = await fetch(`/api/audio/stream?resourceId=${resourceId}&key=${encodeURIComponent(key)}&type=${type}`)
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Erro ao obter URL do áudio')
+      }
+      
+      const data = await response.json()
+      return data.url
     }
 
     // Carregar URL segura e criar Wavesurfer
