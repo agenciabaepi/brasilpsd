@@ -51,38 +51,58 @@ export default function AudioPlayer({
     const audio = audioRef.current
     if (!audio) return
 
-    // Criar AudioContext
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-    }
-    
-    const audioContext = audioContextRef.current
-    const analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256 // Usar 128 barras (fftSize / 2)
-    analyser.smoothingTimeConstant = 0.8
-    
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-    dataArrayRef.current = dataArray
-    analyserRef.current = analyser
+    let source: MediaElementAudioSourceNode | null = null
 
-    // Conectar áudio ao analisador
-    try {
-      const source = audioContext.createMediaElementSource(audio)
-      source.connect(analyser)
-      analyser.connect(audioContext.destination)
-    } catch (error) {
-      console.error('Error setting up audio analyser:', error)
+    // Criar AudioContext
+    const initAudioContext = async () => {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      }
+      
+      // Retomar contexto se estiver suspenso (necessário após interação do usuário)
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume()
+      }
+      
+      const audioContext = audioContextRef.current
+      
+      // Criar analisador se ainda não existe
+      if (!analyserRef.current) {
+        const analyser = audioContext.createAnalyser()
+        analyser.fftSize = 256 // 128 barras (fftSize / 2)
+        analyser.smoothingTimeConstant = 0.8
+        
+        const bufferLength = analyser.frequencyBinCount
+        const dataArray = new Uint8Array(bufferLength)
+        dataArrayRef.current = dataArray
+        analyserRef.current = analyser
+
+        // Conectar áudio ao analisador (só pode ser feito uma vez)
+        try {
+          source = audioContext.createMediaElementSource(audio)
+          source.connect(analyser)
+          analyser.connect(audioContext.destination)
+        } catch (error) {
+          console.error('Error setting up audio analyser:', error)
+        }
+      }
     }
+
+    initAudioContext()
 
     // Função para atualizar visualização
     const updateVisualization = () => {
-      if (!analyserRef.current || !dataArrayRef.current) return
+      if (!analyserRef.current || !dataArrayRef.current) {
+        if (isPlaying) {
+          animationFrameRef.current = requestAnimationFrame(updateVisualization)
+        }
+        return
+      }
 
       analyserRef.current.getByteFrequencyData(dataArrayRef.current)
       setAudioData(new Uint8Array(dataArrayRef.current))
       
-      if (isPlaying || audioContext.state === 'running') {
+      if (isPlaying) {
         animationFrameRef.current = requestAnimationFrame(updateVisualization)
       }
     }
@@ -90,13 +110,19 @@ export default function AudioPlayer({
     // Iniciar visualização quando estiver tocando
     if (isPlaying) {
       updateVisualization()
+    } else {
+      // Limpar dados quando pausar
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
     }
 
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
       }
-      // Não fechar o AudioContext para evitar problemas de reinicialização
     }
   }, [isPlaying])
 
