@@ -546,80 +546,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3.3. Processamento de áudio (marca d'água)
+    // 3.3. Processamento de áudio (apenas metadata - marca d'água é feita cliente-side)
     let audioMetadata: { duration?: number; bitrate?: number; sampleRate?: number; channels?: number } | null = null
     
     if (type === 'resource' && file.type.startsWith('audio/') && buffer) {
       const ffmpegAvailable = await checkFfmpegAvailable()
       if (ffmpegAvailable) {
-        console.log('🎵 Starting audio processing (watermark)...')
+        console.log('🎵 Extracting audio metadata...')
         const processingStartTime = Date.now()
         
         try {
-          // Extrair metadados do áudio (mais rápido que o watermark)
-          const metadataPromise = extractAudioMetadata(buffer, fileExtension || 'mp3')
-          
-          // Criar versão com marca d'água para preview (processamento em paralelo com metadata)
-          // Para áudios muito grandes, pular o watermark e usar apenas cliente-side
-          const fileSizeMB = buffer.length / (1024 * 1024)
-          const shouldProcessWatermark = fileSizeMB < 20 // Apenas processar se menor que 20MB
-          
-          if (shouldProcessWatermark) {
-            const [metadataResult, previewResult] = await Promise.allSettled([
-              metadataPromise,
-              (async () => {
-                console.log('💧 Creating watermarked preview version for audio...')
-                const { join: pathJoin } = await import('path')
-                const watermarkPath = pathJoin(process.cwd(), 'public', 'marca dagua audio.mp3')
-                const watermarked = await addWatermarkToAudio(buffer, fileExtension || 'mp3', watermarkPath)
-                if (watermarked && watermarked.length > 0) {
-                  const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`
-                  const previewKey = `previews/${user.id}/${previewFileName}`
-                  const url = await uploadFileToS3({
-                    file: watermarked,
-                    key: previewKey,
-                    contentType: 'audio/mpeg',
-                    metadata: {
-                      userId: user.id,
-                      originalName: file.name,
-                      isPreview: 'true'
-                    },
-                  })
-                  console.log('✅ Preview with watermark uploaded:', url)
-                  return { buffer: watermarked, url }
-                }
-                return null
-              })()
-            ])
-            
-            if (metadataResult.status === 'fulfilled' && metadataResult.value) {
-              audioMetadata = metadataResult.value
-              console.log('✅ Audio metadata extracted:', audioMetadata)
-            }
-            
-            if (previewResult.status === 'fulfilled' && previewResult.value) {
-              previewBuffer = previewResult.value.buffer
-              previewUrl = previewResult.value.url
-            } else if (previewResult.status === 'rejected') {
-              console.warn('⚠️ Failed to create watermarked preview:', previewResult.reason)
-            }
-          } else {
-            // Para arquivos grandes, apenas extrair metadata e usar marca d'água cliente-side
-            console.log('⚠️ File too large for server-side watermarking, using client-side watermark only')
-            audioMetadata = await metadataPromise
-            if (audioMetadata) {
-              console.log('✅ Audio metadata extracted:', audioMetadata)
-            }
+          // Apenas extrair metadados do áudio (rápido)
+          // Marca d'água será aplicada cliente-side no AudioPlayer (já implementado)
+          audioMetadata = await extractAudioMetadata(buffer, fileExtension || 'mp3')
+          if (audioMetadata) {
+            console.log('✅ Audio metadata extracted:', audioMetadata)
           }
           
           const processingTime = ((Date.now() - processingStartTime) / 1000).toFixed(2)
-          console.log(`✅ Audio processing completed in ${processingTime}s`)
+          console.log(`✅ Audio metadata extraction completed in ${processingTime}s`)
+          console.log('ℹ️ Watermark will be applied client-side for preview')
         } catch (error: any) {
-          console.error('❌ Error during audio processing:', error.message)
-          // Continuar mesmo se o processamento falhar
+          console.error('❌ Error extracting audio metadata:', error.message)
+          // Continuar mesmo se a extração de metadata falhar
         }
       } else {
-        console.warn('⚠️ FFmpeg not available, skipping audio processing')
+        console.warn('⚠️ FFmpeg not available, skipping audio metadata extraction')
       }
     }
 
