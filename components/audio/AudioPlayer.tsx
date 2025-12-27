@@ -38,6 +38,7 @@ export default function AudioPlayer({
   const [isLoading, setIsLoading] = useState(false)
   
   const waveformRef = useRef<HTMLDivElement>(null)
+  const waveformIdRef = useRef<string>(`waveform-${Math.random().toString(36).substr(2, 9)}`)
   const wavesurferRef = useRef<ReturnType<typeof WaveSurfer.create> | null>(null)
   const watermarkRef = useRef<HTMLAudioElement | null>(null)
   const isMountedRef = useRef(true)
@@ -48,11 +49,61 @@ export default function AudioPlayer({
 
   // Configurar Wavesurfer
   useEffect(() => {
-    // Verificações iniciais - ordem importa!
-    if (!waveformRef.current) return
+    // Encontrar o container correto baseado no tamanho da tela
+    const getContainer = () => {
+      if (typeof window === 'undefined') return null
+      
+      // Primeiro, tentar encontrar pelo ID único (funciona em ambos os layouts)
+      const containerById = document.getElementById(waveformIdRef.current) as HTMLDivElement | null
+      if (containerById) {
+        // Verificar se o elemento está visível (não está oculto por CSS)
+        const computedStyle = window.getComputedStyle(containerById)
+        const isVisible = computedStyle.display !== 'none' && 
+                         computedStyle.visibility !== 'hidden' &&
+                         computedStyle.opacity !== '0'
+        
+        if (isVisible) {
+          const rect = containerById.getBoundingClientRect()
+          // Aceitar mesmo que tenha dimensões pequenas (pode estar carregando)
+          if (rect.width >= 0 && rect.height >= 0) {
+            waveformRef.current = containerById
+            return containerById
+          }
+        }
+      }
+      
+      // Se não encontrou pelo ID, tentar usar o ref diretamente
+      if (waveformRef.current) {
+        const computedStyle = window.getComputedStyle(waveformRef.current)
+        const isVisible = computedStyle.display !== 'none' && 
+                         computedStyle.visibility !== 'hidden' &&
+                         computedStyle.opacity !== '0'
+        
+        if (isVisible) {
+          const rect = waveformRef.current.getBoundingClientRect()
+          if (rect.width >= 0 && rect.height >= 0) {
+            return waveformRef.current
+          }
+        }
+      }
+      
+      // Última tentativa: retornar o elemento pelo ID mesmo que não esteja visível
+      // (pode estar em um elemento que ainda não foi renderizado ou está oculto temporariamente)
+      if (containerById) {
+        waveformRef.current = containerById
+        return containerById
+      }
+      
+      return waveformRef.current
+    }
+    
+    // Função para inicializar o Wavesurfer
+    const initializeWavesurfer = () => {
+      const currentContainer = waveformRef.current
+      if (!currentContainer) return
 
-    // Criar uma chave única para este recurso PRIMEIRO
-    const currentResourceKey = `${resourceId || ''}-${audioUrl}-${previewUrl || ''}`
+      // Criar uma chave única para este recurso PRIMEIRO
+      const currentResourceKey = `${resourceId || ''}-${audioUrl}-${previewUrl || ''}`
     
     // Se o recurso mudou, resetar o erro persistente e o loading state
     if (currentResourceKey !== lastResourceKeyRef.current) {
@@ -268,8 +319,59 @@ export default function AudioPlayer({
           }
         }
       })
+    }
+    
+    // Tentar encontrar o container e inicializar
+    let timeoutId: NodeJS.Timeout | null = null
+    let retryCount = 0
+    const maxRetries = 10 // Tentar até 10 vezes (1 segundo total)
+    
+    const tryInitialize = () => {
+      const container = getContainer()
+      if (container) {
+        // Verificar se o container está no DOM
+        if (!container.isConnected) {
+          // Se não está no DOM, tentar novamente
+          if (retryCount < maxRetries) {
+            retryCount++
+            timeoutId = setTimeout(tryInitialize, 100)
+          }
+          return false
+        }
+        
+        // Verificar se o container está visível (não oculto por CSS)
+        const computedStyle = window.getComputedStyle(container)
+        const isVisible = computedStyle.display !== 'none' && 
+                         computedStyle.visibility !== 'hidden' &&
+                         computedStyle.opacity !== '0'
+        
+        if (isVisible) {
+          // Verificar dimensões (aceitar mesmo que seja pequeno, pode estar carregando)
+          const rect = container.getBoundingClientRect()
+          // Aceitar se tiver qualquer dimensão positiva ou se estiver no DOM
+          if (rect.width >= 0 && rect.height >= 0) {
+            initializeWavesurfer()
+            return true
+          }
+        }
+      }
+      
+      // Se não encontrou ou não está visível, tentar novamente
+      if (retryCount < maxRetries) {
+        retryCount++
+        timeoutId = setTimeout(tryInitialize, 100)
+      }
+      return false
+    }
+    
+    // Tentar inicializar imediatamente
+    tryInitialize()
 
     return () => {
+      // Limpar timeout se existir
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
       isMountedRef.current = false
       // Resetar flags de loading apenas se o componente estiver sendo desmontado
       // ou se as dependências mudaram (o que causará uma nova execução do effect)
@@ -444,6 +546,7 @@ export default function AudioPlayer({
           <div
             ref={waveformRef}
             className="w-full h-10 cursor-pointer"
+            id={waveformIdRef.current}
           />
         </div>
 
@@ -512,7 +615,9 @@ export default function AudioPlayer({
 
         <div className="flex-1 min-w-0 mx-2 md:mx-3">
           <div
-            className="w-full h-12 cursor-pointer hidden md:block"
+            ref={waveformRef}
+            className="w-full h-12 cursor-pointer"
+            id={waveformIdRef.current}
           />
         </div>
 

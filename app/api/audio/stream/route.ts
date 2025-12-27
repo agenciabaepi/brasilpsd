@@ -29,21 +29,10 @@ const s3Client = new S3Client({
 export async function GET(request: NextRequest) {
   try {
     // ========================================================================
-    // 1. AUTENTICAÇÃO OBRIGATÓRIA
+    // 1. AUTENTICAÇÃO (OPCIONAL - permitir reprodução pública)
     // ========================================================================
     const supabase = createRouteHandlerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      console.warn('⚠️ Audio stream blocked: Unauthorized')
-      return NextResponse.json(
-        { 
-          error: 'Não autorizado',
-          message: 'Você precisa fazer login para acessar este áudio.'
-        },
-        { status: 401 }
-      )
-    }
 
     // ========================================================================
     // 2. OBTER PARÂMETROS
@@ -52,6 +41,9 @@ export async function GET(request: NextRequest) {
     const resourceId = searchParams.get('resourceId')
     const key = searchParams.get('key')
     const type = searchParams.get('type') || 'file' // 'file' ou 'preview'
+    
+    // Permitir acesso sem autenticação para reprodução (streaming)
+    // A autenticação só é necessária para downloads e recursos premium específicos
 
     if (!resourceId || !key) {
       return NextResponse.json(
@@ -95,18 +87,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Verificar se recurso está aprovado OU se é o criador/admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single()
+    let isCreator = false
+    let isAdmin = false
+    
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
 
-    const isCreator = resource.creator_id === user.id
-    const isAdmin = profile?.is_admin || false
+      isCreator = resource.creator_id === user.id
+      isAdmin = profile?.is_admin || false
+    }
 
+    // Verificar se recurso está aprovado (para ambos preview e file)
+    // Permitir acesso público para reprodução de recursos aprovados
     if (resource.status !== 'approved' && !isCreator && !isAdmin) {
       console.warn('⚠️ Audio stream blocked: Resource not approved', {
-        userId: user.id,
+        userId: user?.id,
         resourceId,
         status: resource.status
       })
@@ -123,41 +122,10 @@ export async function GET(request: NextRequest) {
     // ========================================================================
     // 4. VERIFICAR ASSINATURA SE RECURSO FOR PREMIUM
     // ========================================================================
-    if (resource.is_premium && type === 'file') {
-      // Buscar assinaturas ativas
-      const { data: subscriptions } = await supabase
-        .from('subscriptions')
-        .select('id, tier, status, current_period_end')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-
-      const now = new Date()
-      const today = now.toISOString().split('T')[0]
-
-      const hasActiveSubscription = subscriptions?.some(sub => {
-        if (!sub.current_period_end) return false
-        const periodEnd = typeof sub.current_period_end === 'string' 
-          ? sub.current_period_end.split('T')[0]
-          : new Date(sub.current_period_end).toISOString().split('T')[0]
-        return periodEnd >= today
-      })
-
-      if (!hasActiveSubscription && !isCreator && !isAdmin) {
-        console.warn('⚠️ Audio stream blocked: Premium resource without subscription', {
-          userId: user.id,
-          resourceId
-        })
-        
-        return NextResponse.json(
-          { 
-            error: 'Assinatura necessária',
-            message: 'Este áudio é exclusivo para membros Premium.'
-          },
-          { status: 403 }
-        )
-      }
-    }
+    // Para reprodução (streaming), permitir acesso mesmo sem assinatura
+    // A verificação de assinatura só é necessária para downloads
+    // Isso permite que usuários ouçam o áudio antes de se inscrever
+    // (A verificação de assinatura para downloads é feita no endpoint /api/download)
 
     // ========================================================================
     // 5. GERAR PRESIGNED URL TEMPORÁRIA
