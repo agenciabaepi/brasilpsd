@@ -165,45 +165,44 @@ a {
   background-color: #ffffff;
 }
 
-/* Layout Masonry (Tipo Pinterest/Tetris) - Usando CSS Grid para preencher horizontalmente */
+/* Layout Masonry (Tipo Pinterest/Tetris) - Usando CSS Grid com 6 colunas */
 .masonry-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 8px;
   width: 100%;
 }
 
-/* Tamanho Pequeno (Padrão) - Mais imagens por linha */
+/* Tamanho Pequeno (Padrão) - 6 colunas */
 .masonry-small {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
 }
 
 @media (min-width: 1024px) {
   .masonry-small {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-small {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
-/* Tamanho Pequeno Expandido (sem sidebar) - Mais colunas */
+/* Tamanho Pequeno Expandido (sem sidebar) - 6 colunas */
 .masonry-small-expanded {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(6, 1fr);
 }
 
 @media (min-width: 1024px) {
   .masonry-small-expanded {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-small-expanded {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
