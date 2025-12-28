@@ -782,7 +782,68 @@ export default function UploadResourcePage() {
       
       console.log('✅ Resource saved successfully:', resource?.id)
 
-      // 5. Adicionar à coleção se selecionada
+      // 5. Se for PNG, garantir que está associado à categoria "Imagens" também
+      if (resource && formData.resource_type === 'png') {
+        // Buscar categoria "Imagens"
+        const { data: imagensCategory } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('slug', 'imagens')
+          .is('parent_id', null)
+          .maybeSingle()
+        
+        if (imagensCategory) {
+          // Verificar se já está associado à categoria "Imagens"
+          const categoryIdsToAssociate = [imagensCategory.id]
+          
+          // Se já tem uma categoria selecionada e não é "Imagens", adicionar "Imagens" também
+          if (formData.category_id && formData.category_id !== imagensCategory.id) {
+            categoryIdsToAssociate.push(formData.category_id)
+          }
+          
+          // Associar categorias na tabela resource_categories (se existir)
+          try {
+            const categoryInserts = categoryIdsToAssociate.map(categoryId => ({
+              resource_id: resource.id,
+              category_id: categoryId
+            }))
+            
+            const { error: categoriesError } = await supabase
+              .from('resource_categories')
+              .insert(categoryInserts)
+            
+            if (categoriesError) {
+              console.warn('⚠️ Erro ao associar categoria "Imagens" ao PNG:', categoriesError)
+              // Se a tabela não existir, apenas atualizar o category_id principal para "Imagens"
+              if (formData.category_id !== imagensCategory.id) {
+                const { error: updateError } = await supabase
+                  .from('resources')
+                  .update({ category_id: imagensCategory.id })
+                  .eq('id', resource.id)
+                
+                if (updateError) {
+                  console.warn('⚠️ Erro ao atualizar category_id para "Imagens":', updateError)
+                } else {
+                  console.log('✅ PNG: category_id atualizado para "Imagens"')
+                }
+              }
+            } else {
+              console.log('✅ PNG: Associado à categoria "Imagens" automaticamente')
+            }
+          } catch (err) {
+            console.warn('⚠️ Erro ao associar categorias:', err)
+            // Fallback: atualizar category_id principal
+            if (formData.category_id !== imagensCategory.id) {
+              await supabase
+                .from('resources')
+                .update({ category_id: imagensCategory.id })
+                .eq('id', resource.id)
+            }
+          }
+        }
+      }
+
+      // 6. Adicionar à coleção se selecionada
       if (collectionId && resource) {
         // Buscar o maior order_index da coleção para adicionar no final
         const { data: existingResources } = await supabase

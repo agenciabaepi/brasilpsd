@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import ResourceCard from '@/components/resources/ResourceCard'
-import { Search, Filter, X, Maximize2, Minimize2, Star, Layout, ImageIcon, FileType, Check, ChevronRight } from 'lucide-react'
+import { Search, Filter, X, Maximize2, Minimize2, Star, Layout, ImageIcon, FileType, Check, ChevronRight, ChevronLeft } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
@@ -18,6 +18,7 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
   const [resources, setResources] = useState(initialResources)
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Recolhido por padrão
   const [filters, setFilters] = useState({
     format: 'all',
     license: 'all',
@@ -113,15 +114,25 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
       <div className="max-w-[1600px] mx-auto h-full flex relative">
         
         {/* SIDEBAR FILTERS */}
+        {isSidebarOpen && (
         <aside className="w-72 flex-shrink-0 border-r border-gray-100 bg-white p-8 h-full overflow-y-hidden hidden lg:flex flex-col z-40">
           <div className="flex items-center justify-between mb-8 flex-shrink-0">
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-900" />
               <h2 className="text-base font-bold text-gray-900 tracking-tight">Filtros</h2>
             </div>
-            <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              {Object.values(filters).filter(v => v !== 'all').length} aplicados
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {Object.values(filters).filter(v => v !== 'all').length} aplicados
+              </span>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Recolher filtros"
+              >
+                <ChevronLeft className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
           </div>
 
           {/* FILTERS SECTION - Scrollable */}
@@ -182,17 +193,36 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
             </FilterSection>
           </div>
         </aside>
+        )}
 
         {/* MAIN CONTENT */}
         <main className="flex-1 h-full flex flex-col overflow-hidden p-8 lg:p-12">
           {/* Header Area - Fixed */}
           <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Imagens</h1>
-              <p className="text-gray-700 text-base mt-1">
-                Encontramos aproximadamente {filteredResources.length} resultados.
-        </p>
-      </div>
+            <div className="flex items-center gap-4">
+              {/* Botão para expandir filtros quando estiverem recolhidos */}
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="hidden lg:flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors flex-shrink-0"
+                  title="Mostrar filtros"
+                >
+                  <Filter className="h-4 w-4 text-gray-700" />
+                  <span className="text-sm font-semibold text-gray-700">Filtros</span>
+                  {Object.values(filters).filter(v => v !== 'all').length > 0 && (
+                    <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {Object.values(filters).filter(v => v !== 'all').length}
+                    </span>
+                  )}
+                </button>
+              )}
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Imagens</h1>
+                <p className="text-gray-700 text-base mt-1">
+                  Encontramos aproximadamente {filteredResources.length} resultados.
+                </p>
+              </div>
+            </div>
 
             <div className="flex items-center space-x-4">
         {/* Busca */}
@@ -285,7 +315,12 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
                   ))}
                 </div>
                 {/* Desktop: Masonry Layout */}
-                <div className={`hidden lg:block masonry-container ${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}`}>
+                <div className={cn(
+                  "hidden lg:block masonry-container",
+                  imageSize === 'large' 
+                    ? (isSidebarOpen ? 'masonry-large' : 'masonry-large-expanded')
+                    : (isSidebarOpen ? 'masonry-small' : 'masonry-small-expanded')
+                )}>
                   {filteredResources.map((resource) => (
                     <ResourceCard key={resource.id} resource={resource} />
                   ))}

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { metadata, fileName, categories, imageBase64, resourceType } = await request.json()
+    const { metadata, fileName, categories, imageBase64, resourceType, generateDescription = true } = await request.json()
 
     // Se temos imagem visual, não usar fileName para evitar que a IA copie o nome do arquivo
     const shouldIgnoreFileName = !!imageBase64
@@ -235,7 +235,7 @@ INSTRUÇÕES:
      : '- Inclua o nome da fonte e o peso se identificado (ex: "Montserrat Bold", "Roboto Thin")'
    }
 
-3. Crie uma descrição detalhada (2-3 frases) descrevendo:
+${generateDescription ? `3. Crie uma descrição detalhada (2-3 frases) descrevendo:
    - O estilo tipográfico
    ${isFamily 
      ? '- Mencione que é uma família completa com múltiplas variações'
@@ -244,7 +244,7 @@ INSTRUÇÕES:
    - Características visuais
    - Uso recomendado
 
-4. Extraia 3-5 palavras-chave relevantes incluindo o peso (ex: "sans-serif", "bold", "moderno", "elegante", "títulos")
+4. Extraia 3-5 palavras-chave relevantes incluindo o peso (ex: "sans-serif", "bold", "moderno", "elegante", "títulos")` : `3. Extraia 3-5 palavras-chave relevantes incluindo o peso (ex: "sans-serif", "bold", "moderno", "elegante", "títulos")`}
 
 5. Escolha a categoria MAIS APROPRIADA baseada no estilo${isFamily ? ' geral da família' : ' e peso identificado'}:
    ${isFamily 
@@ -284,7 +284,7 @@ ${isFamily
 Responda APENAS com JSON válido (sem markdown, sem código, apenas JSON puro):
 {
   "title": "${isFamily ? 'APENAS o nome base da família (ex: "Montserrat", "Roboto") - SEM variações de peso ou estilo' : 'título profissional da fonte incluindo peso se identificado'}",
-  "description": "${isFamily ? 'descrição do estilo geral da família e suas características' : 'descrição do estilo, peso e características da fonte'}",
+  ${generateDescription ? `"description": "${isFamily ? 'descrição do estilo geral da família e suas características' : 'descrição do estilo, peso e características da fonte'}",` : ''}
   "keywords": ["palavra1", "palavra2", ${isFamily ? '"família", "family"' : '"peso-identificado"'}, "palavra3"],
   ${isFamily ? '' : '"font_weight": "peso identificado (Bold, Thin, Regular, etc.)",'}
   "category_id": "uuid-da-categoria-mais-apropriada",
@@ -315,9 +315,7 @@ Você está analisando uma IMAGEM. Olhe para a imagem e descreva APENAS o que vo
 INSTRUÇÕES:
 1. Olhe atentamente para a imagem e descreva EXATAMENTE o que você vê (pessoas, objetos, cenário, ação, emoção)
 2. Gere um título curto e descritivo (máximo 60 caracteres) em português brasileiro baseado APENAS no que você vê na imagem
-3. Crie uma descrição detalhada (2-3 frases) em português brasileiro
-4. Extraia 3-5 palavras-chave relevantes
-5. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual
+${generateDescription ? '3. Crie uma descrição detalhada (2-3 frases) em português brasileiro\n4. Extraia 3-5 palavras-chave relevantes\n5. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual' : '3. Extraia 3-5 palavras-chave relevantes\n4. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual'}
 
 EXEMPLOS CORRETOS:
 - Se você vê uma mulher de cabelos longos com as mãos juntas em oração: "Mulher em Oração" ou "Mulher Rezando"
@@ -340,7 +338,7 @@ IMPORTANTE SOBRE CATEGORIAS:
 Responda APENAS com JSON válido (sem markdown, sem código, apenas JSON puro):
 {
   "title": "título baseado APENAS no que você vê na imagem",
-  "description": "descrição detalhada do conteúdo visual",
+  ${generateDescription ? '"description": "descrição detalhada do conteúdo visual",' : ''}
   "keywords": ["palavra1", "palavra2", "palavra3"],
   "category_ids": ["id-da-categoria1", "id-da-categoria2"]
 }`
@@ -359,9 +357,7 @@ Responda APENAS com JSON válido (sem markdown, sem código, apenas JSON puro):
         role: 'user',
         content: `Com base no nome do arquivo e nas informações técnicas disponíveis, gere:
 1. Um título curto, descritivo e profissional (máximo 60 caracteres) em português brasileiro
-2. Uma descrição detalhada e atrativa (2-3 frases) em português brasileiro
-3. Palavras-chave relevantes (3-5 palavras)
-4. A categoria mais apropriada (use APENAS o ID da categoria da lista acima)
+${generateDescription ? '2. Uma descrição detalhada e atrativa (2-3 frases) em português brasileiro\n3. Palavras-chave relevantes (3-5 palavras)\n4. A categoria mais apropriada (use APENAS o ID da categoria da lista acima)' : '2. Palavras-chave relevantes (3-5 palavras)\n3. A categoria mais apropriada (use APENAS o ID da categoria da lista acima)'}
 
 Nome do arquivo: ${fileName || 'desconhecido'}
 
@@ -374,7 +370,7 @@ ${categoriesText}
 Responda APENAS no formato JSON válido:
 {
   "title": "título aqui",
-  "description": "descrição aqui",
+  ${generateDescription ? '"description": "descrição aqui",' : ''}
   "keywords": ["palavra1", "palavra2", "palavra3"],
   "category_id": "uuid-da-categoria-aqui"
 }`
@@ -415,13 +411,13 @@ Responda APENAS no formato JSON válido:
       clearTimeout(timeoutId)
       if (error.name === 'AbortError') {
         console.error('⏱️ Timeout na chamada da API OpenAI (25s)')
-        // Fallback: gerar título do nome do arquivo
-        return NextResponse.json({
-          title: extractTitleFromFileName(fileName),
-          description: generateDescriptionFromMetadata(metadata),
-          keywords: [],
-          category_id: null
-        })
+      // Fallback: gerar título do nome do arquivo
+      return NextResponse.json({
+        title: extractTitleFromFileName(fileName),
+        description: generateDescription ? generateDescriptionFromMetadata(metadata) : null,
+        keywords: [],
+        category_id: null
+      })
       }
       throw error
     } finally {
@@ -435,7 +431,7 @@ Responda APENAS no formato JSON válido:
       // Fallback: gerar título do nome do arquivo
       return NextResponse.json({
         title: extractTitleFromFileName(fileName),
-        description: generateDescriptionFromMetadata(metadata),
+        description: generateDescription ? generateDescriptionFromMetadata(metadata) : null,
         keywords: [],
         category_id: null
       })
@@ -538,7 +534,7 @@ Responda APENAS no formato JSON válido:
           
           return NextResponse.json({
             title: parsed.title || extractTitleFromFileName(fileName),
-            description: parsed.description || generateDescriptionFromMetadata(metadata),
+            description: generateDescription ? (parsed.description || generateDescriptionFromMetadata(metadata)) : null,
             keywords: parsed.keywords || [],
             category_ids: categoryIds,
             category_id: categoryIds.length > 0 ? categoryIds[0] : null, // Primeira categoria para compatibilidade
@@ -558,7 +554,7 @@ Responda APENAS no formato JSON válido:
     // Fallback
     return NextResponse.json({
       title: extractTitleFromFileName(fileName),
-      description: generateDescriptionFromMetadata(metadata),
+      description: generateDescription ? generateDescriptionFromMetadata(metadata) : null,
       keywords: [],
       category_id: null
     })

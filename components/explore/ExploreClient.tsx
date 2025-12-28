@@ -18,7 +18,8 @@ import {
   X,
   ChevronRight,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ChevronLeft
 } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import Button from '@/components/ui/Button'
@@ -31,6 +32,7 @@ interface ExploreClientProps {
   initialCategoryId?: string
   categoryName?: string
   initialFormatFilter?: string
+  hasHero?: boolean
 }
 
 export default function ExploreClient(props: ExploreClientProps) {
@@ -41,7 +43,7 @@ export default function ExploreClient(props: ExploreClientProps) {
   )
 }
 
-function ExploreContent({ initialResources, initialCategoryId, categoryName, initialFormatFilter }: ExploreClientProps) {
+function ExploreContent({ initialResources, initialCategoryId, categoryName, initialFormatFilter, hasHero = false }: ExploreClientProps) {
   const searchParams = useSearchParams()
   
   // Ler o tipo da query string ou usar o filtro inicial
@@ -56,7 +58,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
   const [loading, setLoading] = useState(false)
   const [isFirstRender, setIsFirstRender] = useState(true)
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Recolhido por padrão
   const [categories, setCategories] = useState<any[]>([])
   
   // FILTERS STATE - garantir que o formato inicial seja aplicado
@@ -109,20 +111,20 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
 
   useEffect(() => {
     // Pular o carregamento na primeira renderização se já temos dados iniciais
-    // e os filtros são os mesmos que os iniciais
-    if (isFirstRender && initialResources.length > 0) {
-      // Verificar se os recursos iniciais correspondem ao filtro atual
-      // Se o filtro for 'png', garantir que todos os recursos iniciais são PNG
-      if (filters.format === 'png' && initialResources.every(r => r.resource_type === 'png')) {
-        return
-      }
-      // Se não for PNG, verificar se corresponde ao filtro
-      if (filters.format !== 'png' && filters.format !== 'all') {
-        return
-      }
+    if (isFirstRender) {
+      return
     }
 
-    if (!searchParams.get('q')) {
+    // Só recarregar se não houver busca ativa e os recursos iniciais não corresponderem
+    if (!searchParams.get('q') && initialResources.length > 0) {
+      // Verificar se os recursos iniciais correspondem ao filtro atual
+      const needsReload = filters.format !== 'all' && 
+        !initialResources.every(r => r.resource_type === filters.format)
+      
+      if (needsReload) {
+        loadResources()
+      }
+    } else if (!searchParams.get('q')) {
       loadResources()
     }
   }, [filters, searchParams, isFirstRender])
@@ -331,22 +333,32 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
   ]
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-white overflow-hidden">
-      <div className="max-w-[1600px] mx-auto h-full flex relative">
+    <div className={cn("bg-white overflow-hidden", hasHero ? "min-h-screen" : "h-[calc(100vh-64px)]")}>
+      <div className={cn("max-w-[1600px] mx-auto flex relative", hasHero ? "min-h-[calc(100vh-64px)]" : "h-full")}>
         
         {/* SIDEBAR FILTERS */}
+        {isSidebarOpen && (
         <aside className={cn(
-          "w-72 flex-shrink-0 border-r border-gray-100 bg-white p-8 h-full overflow-y-hidden hidden lg:flex flex-col transition-all z-40",
-          !isSidebarOpen && "-ml-72 opacity-0"
+          "w-72 flex-shrink-0 border-r border-gray-100 bg-white p-8 hidden lg:flex flex-col transition-all duration-300 z-40",
+          hasHero ? "min-h-[calc(100vh-64px)]" : "h-full"
         )}>
           <div className="flex items-center justify-between mb-8 flex-shrink-0">
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-900" />
               <h2 className="text-base font-bold text-gray-900 tracking-tight">Filtros</h2>
             </div>
-            <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              {Object.values(filters).filter(v => v !== 'all').length} aplicados
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {Object.values(filters).filter(v => v !== 'all').length} aplicados
+              </span>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Recolher filtros"
+              >
+                <ChevronLeft className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
           </div>
 
           {/* FILTERS SECTION - Scrollable */}
@@ -410,18 +422,40 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
             </FilterSection>
           </div>
         </aside>
+        )}
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 h-full flex flex-col overflow-hidden p-8 lg:p-12">
+        <main className={cn(
+          "flex-1 flex flex-col p-8 lg:p-12",
+          hasHero ? "min-h-[calc(100vh-64px)]" : "h-full overflow-hidden"
+        )}>
           {/* Header Area - Fixed */}
           <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-                {categoryName || (filters.format === 'all' ? 'Todos os Recursos' : formats.find(f => f.id === filters.format)?.label)}
-              </h1>
-              <p className="text-gray-700 text-base mt-1">
-                Encontramos aproximadamente {resources.length} resultados{categoryName ? ` em ${categoryName}` : ''}.
-              </p>
+            <div className="flex items-center gap-4">
+              {/* Botão para expandir filtros quando estiverem recolhidos */}
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="hidden lg:flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors flex-shrink-0"
+                  title="Mostrar filtros"
+                >
+                  <Filter className="h-4 w-4 text-gray-700" />
+                  <span className="text-sm font-semibold text-gray-700">Filtros</span>
+                  {Object.values(filters).filter(v => v !== 'all').length > 0 && (
+                    <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {Object.values(filters).filter(v => v !== 'all').length}
+                    </span>
+                  )}
+                </button>
+              )}
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+                  {categoryName || (filters.format === 'all' ? 'Todos os Recursos' : formats.find(f => f.id === filters.format)?.label)}
+                </h1>
+                <p className="text-gray-700 text-base mt-1">
+                  Encontramos aproximadamente {resources.length} resultados{categoryName ? ` em ${categoryName}` : ''}.
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center space-x-4">
@@ -537,7 +571,11 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
                 {/* Desktop: Columns masonry (Tipo Pinterest/Tetris) */}
                 <div className={cn(
                   "hidden lg:block masonry-container",
-                  viewMode === 'grid' ? `${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}` : "flex flex-col"
+                  viewMode === 'grid' 
+                    ? (imageSize === 'large' 
+                        ? (isSidebarOpen ? 'masonry-large' : 'masonry-large-expanded')
+                        : (isSidebarOpen ? 'masonry-small' : 'masonry-small-expanded'))
+                    : "flex flex-col"
                 )}>
                   {resources.map((resource) => (
                     <ResourceCard

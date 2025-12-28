@@ -293,6 +293,7 @@ export default function BatchUploadPage() {
           fileName: imageBase64 ? undefined : image.file.name, // Só passar fileName se não tiver imagem visual
           categories: categories, // Passar categorias para a IA escolher
           imageBase64: imageBase64, // Enviar imagem para análise visual
+          generateDescription: false, // Não gerar descrição, apenas título
         }),
       })
 
@@ -321,7 +322,8 @@ export default function BatchUploadPage() {
           console.warn('⚠️ No title from AI, using filename')
         }
         
-        description = aiData.description || description
+        // Não usar descrição da IA (generateDescription: false)
+        description = ''
         keywords = aiData.keywords || []
         
         // Suportar tanto category_id (único) quanto category_ids (múltiplas)
@@ -486,21 +488,44 @@ export default function BatchUploadPage() {
       .eq('id', user.id)
       .single()
 
-    // 3. Salvar recurso no banco de dados
+    // 3. Detectar tipo de recurso baseado na extensão do arquivo
+    const fileExtension = image.file.name.split('.').pop()?.toLowerCase() || ''
+    const isPng = fileExtension === 'png'
+    const resourceType: ResourceType = isPng ? 'png' : 'image'
+    
+    // 4. Se for PNG, garantir que está associado à categoria "Imagens" também
+    let finalCategoryIds = [...image.category_ids]
+    if (isPng) {
+      // Buscar categoria "Imagens"
+      const { data: imagensCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', 'imagens')
+        .is('parent_id', null)
+        .maybeSingle()
+      
+      if (imagensCategory && !finalCategoryIds.includes(imagensCategory.id)) {
+        // Adicionar categoria "Imagens" se ainda não estiver na lista
+        finalCategoryIds = [imagensCategory.id, ...finalCategoryIds]
+        console.log('✅ PNG: Adicionada categoria "Imagens" automaticamente')
+      }
+    }
+    
+    // 5. Salvar recurso no banco de dados
     // Usar a primeira categoria como category_id principal (para compatibilidade)
-    const primaryCategoryId = image.category_ids.length > 0 ? image.category_ids[0] : null
+    const primaryCategoryId = finalCategoryIds.length > 0 ? finalCategoryIds[0] : null
     
     const resourceData: any = {
       title: image.title,
       description: image.description || null,
-      resource_type: 'image',
+      resource_type: resourceType,
       category_id: primaryCategoryId, // Primeira categoria como principal
       creator_id: user.id,
       file_url: fileUrl,
       preview_url: previewUrl || null,
       thumbnail_url: thumbnailUrl || null,
       file_size: image.file.size,
-      file_format: image.file.name.split('.').pop() || '',
+      file_format: fileExtension,
       width: image.metadata?.width || null,
       height: image.metadata?.height || null,
       keywords: image.keywords.length > 0 ? image.keywords : [],
@@ -510,20 +535,57 @@ export default function BatchUploadPage() {
       status: profile?.is_admin ? 'approved' : 'pending',
     }
 
-    const { data: resource, error: insertError } = await supabase
-      .from('resources')
-      .insert(resourceData)
-      .select()
-      .single()
+    // Se for PNG, usar a API route especial para inserção
+    let resource
+    if (isPng) {
+      console.log('📸 PNG detected - using API route for direct database insert')
+      try {
+        const response = await fetch('/api/resources/insert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(resourceData)
+        })
+        
+        const result = await response.json()
+        
+        if (response.ok && result.data) {
+          resource = result.data
+          console.log('✅ PNG resource inserted successfully via API route')
+        } else {
+          throw new Error(result.error || 'Erro ao inserir via API')
+        }
+      } catch (apiErr: any) {
+        console.error('❌ Error calling API route:', apiErr)
+        // Tentar inserção normal como fallback
+        const { data, error: insertError } = await supabase
+          .from('resources')
+          .insert({ ...resourceData, resource_type: 'image' }) // Fallback para 'image'
+          .select()
+          .single()
+        
+        if (insertError) {
+          console.error('Erro ao salvar recurso no banco:', insertError)
+          throw new Error(`Erro ao salvar no banco: ${insertError.message}`)
+        }
+        resource = data
+      }
+    } else {
+      const { data, error: insertError } = await supabase
+        .from('resources')
+        .insert(resourceData)
+        .select()
+        .single()
 
-    if (insertError) {
-      console.error('Erro ao salvar recurso no banco:', insertError)
-      throw new Error(`Erro ao salvar no banco: ${insertError.message}`)
+      if (insertError) {
+        console.error('Erro ao salvar recurso no banco:', insertError)
+        throw new Error(`Erro ao salvar no banco: ${insertError.message}`)
+      }
+      resource = data
     }
 
-    // 4. Salvar múltiplas categorias na tabela resource_categories
-    if (resource && image.category_ids.length > 0) {
-      const categoryInserts = image.category_ids.map(categoryId => ({
+    // 6. Salvar múltiplas categorias na tabela resource_categories
+    if (resource && finalCategoryIds.length > 0) {
+      const categoryInserts = finalCategoryIds.map(categoryId => ({
         resource_id: resource.id,
         category_id: categoryId
       }))
@@ -535,6 +597,8 @@ export default function BatchUploadPage() {
       if (categoriesError) {
         console.warn('Erro ao salvar categorias:', categoriesError)
         // Não falhar o upload se houver erro ao salvar categorias
+      } else {
+        console.log(`✅ ${finalCategoryIds.length} categoria(s) associada(s) ao recurso`)
       }
     }
 
@@ -603,10 +667,38 @@ export default function BatchUploadPage() {
 
           {images.length > 0 && (
             <div className="mt-4">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-gray-600">
-                  {readyCount} de {images.length} imagem(ns) pronta(s)
-                </span>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600">
+                    {readyCount} de {images.length} imagem(ns) pronta(s)
+                  </span>
+                  {/* Opção global para definir licença */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-600">Aplicar a todas:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImages(prev => prev.map(img => ({ ...img, is_premium: false })))
+                        toast.success('Todas as imagens definidas como Grátis')
+                      }}
+                      className="px-3 py-1.5 bg-blue-500 text-white rounded-md text-xs font-medium hover:bg-blue-600 transition-colors"
+                      disabled={isUploading}
+                    >
+                      Grátis
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImages(prev => prev.map(img => ({ ...img, is_premium: true })))
+                        toast.success('Todas as imagens definidas como Premium')
+                      }}
+                      className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
+                      disabled={isUploading}
+                    >
+                      Premium
+                    </button>
+                  </div>
+                </div>
                 <Button
                   onClick={handleBatchUpload}
                   disabled={readyCount === 0 || isUploading}
@@ -745,17 +837,32 @@ export default function BatchUploadPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id={`premium-${image.id}`}
-                        checked={image.is_premium}
-                        onChange={(e) => updateImage(image.id, { is_premium: e.target.checked })}
-                        className="rounded"
-                      />
-                      <label htmlFor={`premium-${image.id}`} className="text-sm">
-                        Premium
-                      </label>
+                    <div>
+                      <label className="block text-xs font-medium mb-2">Licença</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateImage(image.id, { is_premium: false })}
+                          className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            !image.is_premium
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          Grátis
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateImage(image.id, { is_premium: true })}
+                          className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            image.is_premium
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          Premium
+                        </button>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -780,6 +887,15 @@ export default function BatchUploadPage() {
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        image.is_premium
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {image.is_premium ? 'Premium' : 'Grátis'}
+                      </span>
                     </div>
                     {image.description && (
                       <p className="text-xs text-gray-600 line-clamp-2">

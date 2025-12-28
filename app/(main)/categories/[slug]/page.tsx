@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import ExploreClient from '@/components/explore/ExploreClient'
+import VideosHero from '@/components/categories/VideosHero'
 import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -33,12 +34,25 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     .order('created_at', { ascending: false })
     .limit(50)
 
+  // Verificar se é a categoria de vídeos (por slug ou nome)
+  const slugLower = category.slug?.toLowerCase() || ''
+  const nameLower = category.name?.toLowerCase() || ''
+  const isVideosCategory = 
+    slugLower.includes('video') || 
+    slugLower === 'videos' ||
+    nameLower.includes('vídeo') || 
+    nameLower.includes('video')
+
   return (
-    <ExploreClient 
-      initialResources={initialResources || []} 
-      initialCategoryId={category.id}
-      categoryName={category.name}
-    />
+    <>
+      {isVideosCategory && <VideosHero />}
+      <ExploreClient 
+        initialResources={initialResources || []} 
+        initialCategoryId={category.id}
+        categoryName={category.name}
+        hasHero={isVideosCategory}
+      />
+    </>
   )
 }
 

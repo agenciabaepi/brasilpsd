@@ -35,6 +35,7 @@ export default function UploadAudioPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isAiProcessing, setIsAiProcessing] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [audioTitles, setAudioTitles] = useState<Map<number, string>>(new Map()) // Títulos gerados pela IA para cada arquivo
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map())
   
   const router = useRouter()
@@ -174,10 +175,15 @@ export default function UploadAudioPage() {
       setFormData(prev => ({ ...prev, title: fileName }))
     }
 
-    // Detectar automaticamente categoria e informações pela IA (usar primeiro arquivo)
+    // Detectar automaticamente categoria e informações pela IA para TODOS os arquivos
     if (selectedFiles.length > 0) {
       setTimeout(() => {
-        generateContentWithAI(selectedFiles[0])
+        // Se houver múltiplos arquivos, processar todos
+        if (selectedFiles.length > 1) {
+          processAllAudiosWithAI(selectedFiles)
+        } else {
+          generateContentWithAI(selectedFiles[0])
+        }
       }, 100)
     }
   }
@@ -200,6 +206,117 @@ export default function UploadAudioPage() {
     } else {
       audio.play()
       setPlayingIndex(index)
+    }
+  }
+
+  async function processAllAudiosWithAI(audioFiles: File[]) {
+    setIsAiProcessing(true)
+    setAiError(null)
+    
+    toast.loading(`Processando ${audioFiles.length} áudio(s) com IA...`, { id: 'processing-audios' })
+    
+    const newTitles = new Map<number, string>()
+    
+    try {
+      // Buscar categorias de áudios uma vez
+      const { data: audiosCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .or('slug.eq.audios,slug.eq.áudios,slug.eq.audio')
+        .is('parent_id', null)
+        .maybeSingle()
+      
+      let categoriesList: any[] = []
+      if (audiosCategory) {
+        const { data: mainCat } = await supabase
+          .from('categories')
+          .select('id, name, parent_id, slug')
+          .eq('id', audiosCategory.id)
+          .single()
+        
+        const { data: subCats } = await supabase
+          .from('categories')
+          .select('id, name, parent_id, slug')
+          .eq('parent_id', audiosCategory.id)
+          .order('order_index', { ascending: true })
+        
+        categoriesList = [
+          ...(mainCat ? [mainCat] : []),
+          ...(subCats || [])
+        ]
+      }
+      
+      // Processar cada arquivo
+      for (let i = 0; i < audioFiles.length; i++) {
+        const file = audioFiles[i]
+        const fileName = file.name
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'mp3'
+        const fileSize = file.size
+        
+        const metadata = {
+          fileName,
+          fileExtension: fileExtension.toUpperCase(),
+          fileSize,
+          format: fileExtension,
+          duration: durations.get(i) || undefined
+        }
+        
+        try {
+          const aiResponse = await fetch('/api/ai/generate-content', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              metadata,
+              fileName,
+              categories: categoriesList,
+              resourceType: 'audio',
+              generateDescription: false // Não gerar descrição, apenas título
+            }),
+          })
+          
+          if (aiResponse.ok) {
+            const aiData = await aiResponse.json()
+            if (aiData.title) {
+              newTitles.set(i, aiData.title)
+            } else {
+              // Fallback: usar nome do arquivo
+              newTitles.set(i, fileName.replace(/\.[^/.]+$/, ''))
+            }
+            
+            // Usar categoria do primeiro arquivo para o formulário
+            if (i === 0 && (aiData.category_id || (aiData.category_ids && aiData.category_ids.length > 0))) {
+              const categoryId = aiData.category_id || aiData.category_ids[0]
+              setFormData(prev => ({ ...prev, category_id: categoryId }))
+            }
+          } else {
+            // Fallback: usar nome do arquivo
+            newTitles.set(i, fileName.replace(/\.[^/.]+$/, ''))
+          }
+        } catch (error) {
+          console.error(`Erro ao processar ${file.name}:`, error)
+          // Fallback: usar nome do arquivo
+          newTitles.set(i, fileName.replace(/\.[^/.]+$/, ''))
+        }
+      }
+      
+      setAudioTitles(newTitles)
+      
+      // Se houver apenas um arquivo, usar o título no formulário
+      if (audioFiles.length === 1 && newTitles.has(0)) {
+        setFormData(prev => ({ ...prev, title: newTitles.get(0) || '' }))
+      }
+      
+      toast.dismiss('processing-audios')
+      toast.success(`${audioFiles.length} áudio(s) processado(s) pela IA!`)
+    } catch (error: any) {
+      console.error('Erro ao processar áudios:', error)
+      setAiError(error.message || 'Erro ao processar áudios com IA')
+      toast.dismiss('processing-audios')
+      toast.error('Erro ao processar áudios com IA')
+    } finally {
+      setIsAiProcessing(false)
     }
   }
 
@@ -265,7 +382,8 @@ export default function UploadAudioPage() {
           metadata,
           fileName,
           categories: categoriesList,
-          resourceType: 'audio'
+          resourceType: 'audio',
+          generateDescription: false // Não gerar descrição, apenas título
         }),
       })
 
@@ -280,9 +398,8 @@ export default function UploadAudioPage() {
         setFormData(prev => ({ ...prev, title: aiData.title }))
       }
       
-      if (aiData.description) {
-        setFormData(prev => ({ ...prev, description: aiData.description }))
-      }
+      // Não usar descrição da IA (generateDescription: false)
+      // Descrição será vazia
       
       if (aiData.keywords && aiData.keywords.length > 0) {
         setFormData(prev => ({ ...prev, keywords: aiData.keywords.join(', ') }))
@@ -357,10 +474,14 @@ export default function UploadAudioPage() {
         const uploadData = await uploadResponse.json()
         uploadedCount++
 
-        // Título específico para este áudio (usar nome do arquivo se múltiplos)
-        const audioTitle = files.length > 1 
-          ? file.name.replace(/\.[^/.]+$/, '')
-          : formData.title
+        // Título específico para este áudio
+        // Se houver título gerado pela IA para este arquivo, usar ele
+        // Senão, usar título do formulário (se único) ou nome do arquivo (se múltiplos)
+        const audioTitle = audioTitles.has(i)
+          ? audioTitles.get(i)!
+          : files.length > 1 
+            ? file.name.replace(/\.[^/.]+$/, '')
+            : formData.title
 
         // 2. Criar recurso no banco
         const { data: resource, error: resourceError } = await supabase
@@ -422,6 +543,7 @@ export default function UploadAudioPage() {
       setFiles([])
       setAudioPreviews(new Map())
       setDurations(new Map())
+      setAudioTitles(new Map())
       setPlayingIndex(null)
       
       // Redirecionar após 1 segundo
@@ -544,6 +666,8 @@ export default function UploadAudioPage() {
                         const newDurations = new Map(durations)
                         newDurations.delete(index)
                         setDurations(newDurations)
+                        // Limpar títulos - serão regenerados se necessário
+                        setAudioTitles(new Map())
                         const audio = audioRefs.current.get(index)
                         if (audio) {
                           audio.pause()
@@ -551,6 +675,16 @@ export default function UploadAudioPage() {
                         }
                         if (playingIndex === index) {
                           setPlayingIndex(null)
+                        }
+                        // Se ainda houver arquivos, reprocessar com IA
+                        if (newFiles.length > 0) {
+                          setTimeout(() => {
+                            if (newFiles.length > 1) {
+                              processAllAudiosWithAI(newFiles)
+                            } else {
+                              generateContentWithAI(newFiles[0])
+                            }
+                          }, 100)
                         }
                       }}
                       className="p-2 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"

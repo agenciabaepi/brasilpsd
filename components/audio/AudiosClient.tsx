@@ -5,7 +5,7 @@ import { createSupabaseClient } from '@/lib/supabase/client'
 import AudioPlayer from './AudioPlayer'
 import SubscriptionModal from '@/components/premium/SubscriptionModal'
 import type { Resource } from '@/types/database'
-import { Search, Filter, Check, X } from 'lucide-react'
+import { Search, Filter, Check, X, ChevronLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils/cn'
@@ -318,18 +318,25 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
       <div className="max-w-[1600px] mx-auto flex overflow-x-hidden">
         
         {/* SIDEBAR FILTERS - Desktop */}
-        <aside className={cn(
-          "w-72 flex-shrink-0 border-r border-gray-100 p-8 h-[calc(100vh-64px)] sticky top-16 overflow-y-auto hidden lg:block transition-all",
-          !isSidebarOpen && "-ml-72 opacity-0"
-        )}>
+        {isSidebarOpen && (
+        <aside className="w-72 flex-shrink-0 border-r border-gray-100 p-8 h-[calc(100vh-64px)] sticky top-16 overflow-y-auto hidden lg:block transition-all">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-900" />
               <h2 className="text-base font-bold text-gray-900 tracking-tight">Filtros</h2>
             </div>
-            <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              {Object.values(filters).filter(v => v !== 'all').length} aplicados
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {Object.values(filters).filter(v => v !== 'all').length} aplicados
+              </span>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Recolher filtros"
+              >
+                <ChevronLeft className="h-4 w-4 text-gray-600" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -414,6 +421,7 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
             </FilterSection>
           </div>
         </aside>
+        )}
 
         {/* SIDEBAR FILTERS - Mobile Drawer */}
         <aside className={cn(
@@ -562,7 +570,25 @@ export default function AudiosClient({ initialAudios }: AudiosClientProps) {
           {/* Header */}
           <div className="mb-6 md:mb-8">
             <div className="flex items-center justify-between mb-2">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Biblioteca de Áudios</h1>
+              <div className="flex items-center gap-4">
+                {/* Botão para expandir filtros quando estiverem recolhidos - Desktop */}
+                {!isSidebarOpen && (
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="hidden lg:flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors flex-shrink-0"
+                    title="Mostrar filtros"
+                  >
+                    <Filter className="h-4 w-4 text-gray-700" />
+                    <span className="text-sm font-semibold text-gray-700">Filtros</span>
+                    {Object.values(filters).filter(v => v !== 'all').length > 0 && (
+                      <span className="bg-primary-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                        {Object.values(filters).filter(v => v !== 'all').length}
+                      </span>
+                    )}
+                  </button>
+                )}
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Biblioteca de Áudios</h1>
+              </div>
               {/* Mobile Filter Button */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}

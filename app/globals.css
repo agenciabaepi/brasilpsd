@@ -170,34 +170,40 @@ a {
   column-count: auto;
   column-gap: 8px;
   column-fill: balance;
+  width: 100%;
 }
 
 /* Tamanho Pequeno (Padrão) - Mais imagens por linha */
 .masonry-small {
-  column-width: 200px;
-}
-
-@media (min-width: 640px) {
-  .masonry-small {
-    column-width: 220px;
-  }
-}
-
-@media (min-width: 768px) {
-  .masonry-small {
-    column-width: 240px;
-  }
+  column-width: 140px;
 }
 
 @media (min-width: 1024px) {
   .masonry-small {
-    column-width: 260px;
+    column-width: 140px;
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-small {
-    column-width: 280px;
+    column-width: 140px;
+  }
+}
+
+/* Tamanho Pequeno Expandido (sem sidebar) - Mais colunas */
+.masonry-small-expanded {
+  column-width: 135px;
+}
+
+@media (min-width: 1024px) {
+  .masonry-small-expanded {
+    column-width: 135px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .masonry-small-expanded {
+    column-width: 135px;
   }
 }
 
@@ -206,27 +212,32 @@ a {
   column-width: 280px;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
   .masonry-large {
     column-width: 300px;
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1280px) {
   .masonry-large {
-    column-width: 340px;
+    column-width: 320px;
   }
 }
 
+/* Tamanho Grande Expandido (sem sidebar) - Mais colunas */
+.masonry-large-expanded {
+  column-width: 260px;
+}
+
 @media (min-width: 1024px) {
-  .masonry-large {
-    column-width: 380px;
+  .masonry-large-expanded {
+    column-width: 280px;
   }
 }
 
 @media (min-width: 1280px) {
-  .masonry-large {
-    column-width: 420px;
+  .masonry-large-expanded {
+    column-width: 300px;
   }
 }
 
@@ -239,6 +250,8 @@ a {
   width: 100%;
   margin-bottom: 8px;
 }
+
+/* Grid já cuida do layout, não precisa mais dessas regras antigas do column layout */
 
 /* Proteções de segurança para imagens */
 img[src*="s3"], 

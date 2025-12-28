@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
         const image = sharp(buffer)
         const metadata = await image.metadata()
         
-        // Criar marca d'água SVG - GRANDE e VISÍVEL para "estragar" a imagem
+        // Criar marca d'água GRANDE e VISÍVEL para repetir (Tiling)
         const watermarkTile = Buffer.from(`
           <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
             <text 

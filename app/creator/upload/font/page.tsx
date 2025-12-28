@@ -239,11 +239,137 @@ export default function UploadFontPage() {
       }
     }
 
-    // Detectar automaticamente categoria e peso pela IA (usar primeiro arquivo)
+    // Detectar automaticamente categoria e peso pela IA para TODOS os arquivos
     if (selectedFiles.length > 0) {
       setTimeout(() => {
-        generateContentWithAI(selectedFiles[0])
+        // Se houver múltiplos arquivos, processar todos
+        if (selectedFiles.length > 1) {
+          processAllFontsWithAI(selectedFiles)
+        } else {
+          generateContentWithAI(selectedFiles[0])
+        }
       }, 100)
+    }
+  }
+
+  async function processAllFontsWithAI(fontFiles: File[]) {
+    setIsAiProcessing(true)
+    setAiError(null)
+    
+    toast.loading(`Processando ${fontFiles.length} fonte(s) com IA...`, { id: 'processing-fonts' })
+    
+    try {
+      // Se houver múltiplos arquivos, analisar todos para identificar a família
+      const allFileNames = fontFiles.map(f => f.name)
+      const baseFontName = extractBaseFontName(allFileNames)
+      const isFamily = fontFiles.length > 1
+      
+      const firstFile = fontFiles[0]
+      const fileName = firstFile.name
+      const fileExtension = firstFile.name.split('.').pop()?.toLowerCase() || 'ttf'
+      const fileSize = firstFile.size
+      
+      // Preparar metadados da fonte
+      const metadata = {
+        fileName: isFamily ? baseFontName : fileName,
+        fileExtension: fileExtension.toUpperCase(),
+        fileSize,
+        format: fileExtension,
+        isFamily: isFamily,
+        familySize: fontFiles.length,
+        allFileNames: isFamily ? allFileNames : undefined
+      }
+      
+      // Buscar categorias de fontes
+      const { data: fontesCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .or('slug.eq.fontes,slug.eq.fonts')
+        .is('parent_id', null)
+        .maybeSingle()
+      
+      let categoriesList: any[] = []
+      if (fontesCategory) {
+        const { data: mainCat } = await supabase
+          .from('categories')
+          .select('id, name, parent_id, slug')
+          .eq('id', fontesCategory.id)
+          .single()
+        
+        const { data: subCats } = await supabase
+          .from('categories')
+          .select('id, name, parent_id, slug')
+          .eq('parent_id', fontesCategory.id)
+          .order('order_index', { ascending: true })
+        
+        categoriesList = [
+          ...(mainCat ? [mainCat] : []),
+          ...(subCats || [])
+        ]
+      }
+      
+      // Chamar API de IA
+      const aiResponse = await fetch('/api/ai/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          metadata,
+          fileName,
+          categories: categoriesList,
+          resourceType: 'font',
+          generateDescription: false // Não gerar descrição, apenas título
+        }),
+      })
+      
+      if (!aiResponse.ok) {
+        throw new Error('Erro ao gerar conteúdo com IA')
+      }
+      
+      const aiData = await aiResponse.json()
+      
+      // PRIORIDADE ABSOLUTA: Se for família, SEMPRE usar o nome base (sem variações)
+      if (isFamily && baseFontName) {
+        setFormData(prev => ({ ...prev, title: baseFontName }))
+      } else if (aiData.title) {
+        setFormData(prev => ({ ...prev, title: aiData.title }))
+      }
+      
+      // Não usar descrição da IA (generateDescription: false)
+      // Descrição será vazia
+      
+      if (aiData.keywords && aiData.keywords.length > 0) {
+        let keywords = aiData.keywords
+        if (isFamily) {
+          keywords = keywords.filter(k => 
+            !['black', 'bold', 'thin', 'light', 'regular', 'medium', 'semibold', 'extrabold', 'heavy', 'italic', 'oblique'].includes(k.toLowerCase())
+          )
+          keywords = [...keywords, 'família', 'family', 'completa']
+        }
+        setFormData(prev => ({ ...prev, keywords: keywords.join(', ') }))
+      } else if (isFamily) {
+        setFormData(prev => ({ ...prev, keywords: 'família, family, completa' }))
+      }
+      
+      if (aiData.category_id || (aiData.category_ids && aiData.category_ids.length > 0)) {
+        const categoryId = aiData.category_id || aiData.category_ids[0]
+        setFormData(prev => ({ ...prev, category_id: categoryId }))
+      }
+      
+      if (aiData.font_weight) {
+        setDetectedFontWeight(aiData.font_weight)
+      }
+      
+      toast.dismiss('processing-fonts')
+      toast.success(`${fontFiles.length} fonte(s) processada(s) pela IA!`)
+    } catch (error: any) {
+      console.error('Erro ao processar fontes:', error)
+      setAiError(error.message || 'Erro ao processar fontes com IA')
+      toast.dismiss('processing-fonts')
+      toast.error('Erro ao processar fontes com IA')
+    } finally {
+      setIsAiProcessing(false)
     }
   }
 
@@ -316,7 +442,8 @@ export default function UploadFontPage() {
           metadata,
           fileName,
           categories: categoriesList,
-          resourceType: 'font'
+          resourceType: 'font',
+          generateDescription: false // Não gerar descrição, apenas título
         }),
       })
 
@@ -346,31 +473,8 @@ export default function UploadFontPage() {
         setFormData(prev => ({ ...prev, title: aiData.title }))
       }
       
-      if (aiData.description) {
-        // Se for família, criar descrição focada na família completa
-        if (files.length > 1) {
-          // Remover referências a peso específico da descrição e focar na família
-          const cleanDescription = aiData.description
-            .replace(/\b(Black|Bold|Thin|Light|Regular|Medium|SemiBold|ExtraBold|Heavy|Italic|Oblique)\b/gi, '')
-            .trim()
-          const familyDescription = `Família tipográfica completa com ${files.length} variações (pesos e estilos). ${cleanDescription || 'Família versátil para uso em diversos projetos.'}`
-          setFormData(prev => ({ 
-            ...prev, 
-            description: familyDescription
-          }))
-        } else {
-          setFormData(prev => ({ 
-            ...prev, 
-            description: aiData.description 
-          }))
-        }
-      } else if (files.length > 1) {
-        // Se não tiver descrição mas é família, criar uma básica
-        setFormData(prev => ({ 
-          ...prev, 
-          description: `Família tipográfica completa com ${files.length} variações (pesos e estilos).` 
-        }))
-      }
+      // Não usar descrição da IA (generateDescription: false)
+      // Descrição será vazia
       
       if (aiData.keywords && aiData.keywords.length > 0) {
         // Adicionar "família" nas palavras-chave se houver múltiplos arquivos

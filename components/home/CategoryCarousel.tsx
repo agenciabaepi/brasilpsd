@@ -15,11 +15,22 @@ interface CategoryCarouselProps {
   categories: Category[]
 }
 
-function CategoryCard({ title, href, icon, backgroundImage, hoverImage, showTitle = true }: { title: string, href: string, icon: any, backgroundImage?: string, hoverImage?: string, showTitle?: boolean }) {
+function CategoryCard({ title, href, icon, backgroundImage, hoverImage, backgroundVideo, showTitle = true }: { title: string, href: string, icon: any, backgroundImage?: string, hoverImage?: string, backgroundVideo?: string, showTitle?: boolean }) {
   return (
     <Link href={href} className="group block aspect-square">
-      <div className={`rounded-3xl border border-gray-200 p-6 hover:border-primary-300 transition-all w-full h-full aspect-square flex flex-col relative overflow-hidden ${backgroundImage ? '' : 'bg-white hover:shadow-xl'}`}>
-        {backgroundImage && (
+      <div className={`rounded-3xl border border-gray-200 p-6 hover:border-primary-300 transition-all w-full h-full aspect-square flex flex-col relative overflow-hidden ${backgroundImage || backgroundVideo ? '' : 'bg-white hover:shadow-xl'}`}>
+        {backgroundVideo && (
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          >
+            <source src={backgroundVideo} type="video/webm" />
+          </video>
+        )}
+        {backgroundImage && !backgroundVideo && (
           <>
             <Image
               src={backgroundImage}
@@ -39,14 +50,14 @@ function CategoryCard({ title, href, icon, backgroundImage, hoverImage, showTitl
             )}
           </>
         )}
-        <div className={`relative z-10 flex flex-col h-full ${backgroundImage ? 'text-white' : ''}`}>
+        <div className={`relative z-10 flex flex-col h-full ${backgroundImage || backgroundVideo ? 'text-white' : ''}`}>
           {icon && (
             <div className="mb-6 flex justify-center">
               {icon}
             </div>
           )}
           {showTitle && (
-            <h3 className={`text-lg font-bold mb-8 group-hover:text-primary-300 transition-colors ${backgroundImage ? 'text-white' : 'text-gray-900 group-hover:text-primary-600'}`}>
+            <h3 className={`text-lg font-bold mb-8 group-hover:text-primary-300 transition-colors ${backgroundImage || backgroundVideo ? 'text-white' : 'text-gray-900 group-hover:text-primary-600'}`}>
               {title}
             </h3>
           )}
@@ -280,21 +291,49 @@ export default function CategoryCarousel({ categories }: CategoryCarouselProps) 
           const originalIndex = index % categories.length
           const { categoryType, iconElement, gradientClass } = getCategoryConfig(category, originalIndex)
 
+          // Definir imagens/vídeos de capa para cada categoria
+          let backgroundImage: string | undefined
+          let hoverImage: string | undefined
+          let backgroundVideo: string | undefined
+          let showTitle = true
+
+          if (categoryType === 'mockups') {
+            backgroundImage = '/images/mockup.jpg'
+            hoverImage = '/images/mockup-verso.jpg'
+            showTitle = false
+          } else if (categoryType === 'psd') {
+            backgroundImage = '/images/psd.jpg'
+            hoverImage = '/images/psd-verso.jpg'
+            showTitle = false
+          } else if (categoryType === 'videos') {
+            backgroundVideo = '/images/video.webm'
+            showTitle = false
+          } else if (categoryType === 'fontes') {
+            backgroundImage = '/images/fontes.jpg'
+            hoverImage = '/images/fontes-verso.jpg'
+            showTitle = false
+          } else if (categoryType === 'audios') {
+            backgroundImage = '/images/audios.jpg'
+            hoverImage = '/images/audios-verso.jpg'
+            showTitle = false
+          }
+
           return (
             <div key={`${category.id || originalIndex}-${Math.floor(index / categories.length)}`} className="flex-shrink-0 w-[calc(100vw-3rem)] snap-center">
               <CategoryCard
                 title={category.name}
                 href={`/categories/${category.slug}`}
                 icon={
-                  categoryType === 'mockups' ? null : (
+                  backgroundImage || backgroundVideo ? null : (
                     <div className={`w-24 h-24 bg-gradient-to-br ${gradientClass} rounded-3xl flex items-center justify-center shadow-xl`}>
                       {iconElement}
                     </div>
                   )
                 }
-                backgroundImage={categoryType === 'mockups' ? '/images/mockup.jpg' : undefined}
-                hoverImage={categoryType === 'mockups' ? '/images/mockup-verso.jpg' : undefined}
-                showTitle={categoryType !== 'mockups'}
+                backgroundImage={backgroundImage}
+                hoverImage={hoverImage}
+                backgroundVideo={backgroundVideo}
+                showTitle={showTitle}
               />
             </div>
           )

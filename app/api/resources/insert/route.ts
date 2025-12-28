@@ -114,7 +114,64 @@ export async function POST(request: NextRequest) {
       // Verificar se realmente foi atualizado
       if (finalResource && finalResource.resource_type === 'png') {
         console.log('✅ Resource type successfully updated to png')
-        return NextResponse.json({ data: finalResource, error: null })
+        
+        // Associar automaticamente à categoria "Imagens" se ainda não estiver associado
+        const { data: imagensCategory } = await adminClient
+          .from('categories')
+          .select('id')
+          .eq('slug', 'imagens')
+          .is('parent_id', null)
+          .maybeSingle()
+        
+        if (imagensCategory) {
+          // Verificar se já está associado à categoria "Imagens"
+          const currentCategoryId = finalResource.category_id
+          
+          // Se não tem categoria ou a categoria não é "Imagens", associar
+          if (!currentCategoryId || currentCategoryId !== imagensCategory.id) {
+            // Tentar associar na tabela resource_categories primeiro
+            try {
+              const { error: categoriesError } = await adminClient
+                .from('resource_categories')
+                .insert({
+                  resource_id: finalResource.id,
+                  category_id: imagensCategory.id
+                })
+              
+              if (categoriesError) {
+                console.warn('⚠️ Erro ao associar categoria "Imagens" na resource_categories:', categoriesError)
+                // Fallback: atualizar category_id principal
+                if (!currentCategoryId || currentCategoryId !== imagensCategory.id) {
+                  await adminClient
+                    .from('resources')
+                    .update({ category_id: imagensCategory.id })
+                    .eq('id', finalResource.id)
+                  console.log('✅ PNG: category_id atualizado para "Imagens"')
+                }
+              } else {
+                console.log('✅ PNG: Associado à categoria "Imagens" automaticamente')
+              }
+            } catch (err) {
+              console.warn('⚠️ Erro ao associar categorias:', err)
+              // Fallback: atualizar category_id principal
+              if (!currentCategoryId || currentCategoryId !== imagensCategory.id) {
+                await adminClient
+                  .from('resources')
+                  .update({ category_id: imagensCategory.id })
+                  .eq('id', finalResource.id)
+              }
+            }
+          }
+        }
+        
+        // Buscar recurso atualizado novamente para retornar com categoria correta
+        const { data: updatedResource } = await adminClient
+          .from('resources')
+          .select('*')
+          .eq('id', finalResource.id)
+          .single()
+        
+        return NextResponse.json({ data: updatedResource || finalResource, error: null })
       } else {
         console.warn('⚠️ Resource type is still:', finalResource?.resource_type || 'unknown')
         return NextResponse.json({ 
