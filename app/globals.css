@@ -240,9 +240,14 @@ a {
   }
 }
 
-/* Cards dentro do grid */
+/* Evitar quebra de cards nas colunas */
 .masonry-container > * {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  display: inline-block;
   width: 100%;
+  margin-bottom: 8px;
 }
 
 /* Grid já cuida do layout, não precisa mais dessas regras antigas do column layout */
