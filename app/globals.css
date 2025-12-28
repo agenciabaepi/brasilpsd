@@ -208,35 +208,35 @@ a {
 
 /* Tamanho Grande - Menos imagens por linha, imagens maiores */
 .masonry-large {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  column-width: 280px;
 }
 
 @media (min-width: 1024px) {
   .masonry-large {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    column-width: 300px;
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-large {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    column-width: 320px;
   }
 }
 
 /* Tamanho Grande Expandido (sem sidebar) - Mais colunas */
 .masonry-large-expanded {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  column-width: 260px;
 }
 
 @media (min-width: 1024px) {
   .masonry-large-expanded {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    column-width: 280px;
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-large-expanded {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    column-width: 300px;
   }
 }
 
