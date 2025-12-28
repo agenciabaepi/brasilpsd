@@ -40,31 +40,42 @@ export async function addWatermarkToVideo(
       text: watermarkText
     })
     
-    // Criar imagem de marca d'água menor e mais sutil (SVG com texto rotacionado)
+    // Criar imagem de marca d'água em padrão de grid (quadrados com linhas)
     const watermarkTile = Buffer.from(`
-      <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+      <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+        <!-- Linhas horizontais -->
+        <line x1="0" y1="0" x2="400" y2="0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="0" y1="300" x2="400" y2="300" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="0" y1="400" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <!-- Linhas verticais -->
+        <line x1="0" y1="0" x2="0" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="100" y1="0" x2="100" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="300" y1="0" x2="300" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="400" y1="0" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <!-- Texto no centro -->
         <text 
           x="50%" 
           y="50%" 
           font-family="Arial, sans-serif" 
-          font-weight="700" 
-          font-size="48" 
-          fill="rgba(255,255,255,0.2)" 
-          stroke="rgba(0,0,0,0.08)" 
-          stroke-width="0.8" 
+          font-weight="600" 
+          font-size="50" 
+          fill="rgba(255,255,255,0.12)" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          transform="rotate(-30 200 150)"
+          transform="rotate(-30 200 200)"
         >
           ${watermarkText}
         </text>
       </svg>
     `)
     
-    // Converter SVG para PNG para usar como overlay no vídeo (tamanho menor)
+    // Converter SVG para PNG para usar como overlay no vídeo
     watermarkImagePath = join(tmpdir(), `watermark-${Date.now()}-${Math.random().toString(36)}.png`)
     await sharp(watermarkTile)
-      .resize(400, 300, { fit: 'inside' })
+      .resize(400, 400, { fit: 'inside' })
       .png()
       .toFile(watermarkImagePath)
     
