@@ -131,21 +131,21 @@ export async function POST(request: NextRequest) {
     // 1. Thumbnail Processing + Watermark (otimizado)
     if (type === 'thumbnail') {
       try {
-        // Criar marca d'água GRANDE e VISÍVEL para repetir (Tiling)
+        // Criar marca d'água menor e mais sutil para repetir (Tiling)
         const watermarkTile = Buffer.from(`
-          <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+          <svg width="600" height="450" xmlns="http://www.w3.org/2000/svg">
             <text 
               x="50%" 
               y="50%" 
               font-family="Arial, sans-serif" 
-              font-weight="900" 
-              font-size="120" 
-              fill="rgba(255,255,255,0.5)" 
-              stroke="rgba(0,0,0,0.3)" 
-              stroke-width="2" 
+              font-weight="700" 
+              font-size="80" 
+              fill="rgba(255,255,255,0.25)" 
+              stroke="rgba(0,0,0,0.1)" 
+              stroke-width="1" 
               text-anchor="middle" 
               dominant-baseline="middle"
-              transform="rotate(-30 400 300)"
+              transform="rotate(-30 300 225)"
             >
               BRASILPSD
             </text>
@@ -290,21 +290,21 @@ export async function POST(request: NextRequest) {
         const image = sharp(buffer)
         const metadata = await image.metadata()
         
-        // Criar marca d'água GRANDE e VISÍVEL para repetir (Tiling)
+        // Criar marca d'água menor e mais sutil para repetir (Tiling)
         const watermarkTile = Buffer.from(`
-          <svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+          <svg width="600" height="450" xmlns="http://www.w3.org/2000/svg">
             <text 
               x="50%" 
               y="50%" 
               font-family="Arial, sans-serif" 
-              font-weight="900" 
-              font-size="120" 
-              fill="rgba(255,255,255,0.5)" 
-              stroke="rgba(0,0,0,0.3)" 
-              stroke-width="2" 
+              font-weight="700" 
+              font-size="80" 
+              fill="rgba(255,255,255,0.25)" 
+              stroke="rgba(0,0,0,0.1)" 
+              stroke-width="1" 
               text-anchor="middle" 
               dominant-baseline="middle"
-              transform="rotate(-30 400 300)"
+              transform="rotate(-30 300 225)"
             >
               BRASILPSD
             </text>
