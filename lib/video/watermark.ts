@@ -40,30 +40,31 @@ export async function addWatermarkToVideo(
       text: watermarkText
     })
     
-    // Criar imagem de marca d'água igual às imagens (SVG com texto rotacionado)
+    // Criar imagem de marca d'água menor e mais sutil (SVG com texto rotacionado)
     const watermarkTile = Buffer.from(`
-      <svg width="300" height="200" xmlns="http://www.w3.org/2000/svg">
+      <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
         <text 
           x="50%" 
           y="50%" 
-          font-family="sans-serif" 
-          font-weight="900" 
-          font-size="20" 
+          font-family="Arial, sans-serif" 
+          font-weight="700" 
+          font-size="48" 
           fill="rgba(255,255,255,0.2)" 
-          stroke="rgba(0,0,0,0.05)" 
-          stroke-width="0.5" 
+          stroke="rgba(0,0,0,0.08)" 
+          stroke-width="0.8" 
           text-anchor="middle" 
-          transform="rotate(-30 150 100)"
+          dominant-baseline="middle"
+          transform="rotate(-30 200 150)"
         >
           ${watermarkText}
         </text>
       </svg>
     `)
     
-    // Converter SVG para PNG para usar como overlay no vídeo
+    // Converter SVG para PNG para usar como overlay no vídeo (tamanho menor)
     watermarkImagePath = join(tmpdir(), `watermark-${Date.now()}-${Math.random().toString(36)}.png`)
     await sharp(watermarkTile)
-      .resize(600, 400, { fit: 'inside' })
+      .resize(400, 300, { fit: 'inside' })
       .png()
       .toFile(watermarkImagePath)
     
