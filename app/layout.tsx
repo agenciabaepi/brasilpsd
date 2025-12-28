@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './fonts.css'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
+import ImageProtection from '@/components/security/ImageProtection'
 
 export const metadata: Metadata = {
   title: 'BrasilPSD - Recursos Digitais Premium',
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="antialiased">
+        <ImageProtection />
         {children}
         <Toaster 
           position="top-right"

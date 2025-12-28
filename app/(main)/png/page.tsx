@@ -1,22 +1,26 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import ImagesClient from '@/components/images/ImagesClient'
+import ExploreClient from '@/components/explore/ExploreClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ImagesPage() {
+export default async function PNGPage() {
   const supabase = createServerSupabaseClient()
   
-  // Buscar imagens e PNGs aprovados (PNG também é um tipo de imagem)
+  // Buscar recursos PNG aprovados
   const { data: initialResources } = await supabase
     .from('resources')
     .select('*, creator:profiles!creator_id(*)')
     .eq('status', 'approved')
-    .in('resource_type', ['image', 'png'])
+    .eq('resource_type', 'png')
     .order('created_at', { ascending: false })
     .limit(50)
 
-  return <ImagesClient initialResources={initialResources || []} />
+  return (
+    <ExploreClient 
+      initialResources={initialResources || []} 
+      categoryName="PNG"
+      initialFormatFilter="png"
+    />
+  )
 }
-
-
 

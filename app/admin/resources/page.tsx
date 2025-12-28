@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Search, Filter, Trash2, Edit, ExternalLink, CheckCircle2, AlertCircle, ShieldCheck, Image as ImageIcon, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, Filter, Trash2, Edit, Edit2, ExternalLink, CheckCircle2, AlertCircle, ShieldCheck, Image as ImageIcon, ChevronDown, ChevronRight, Eye, Check, X } from 'lucide-react'
 import type { Resource, Category } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { formatFileSize } from '@/lib/utils/format'
@@ -109,11 +109,12 @@ export default function AdminResourcesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryFilter, searchQuery, statusFilter, categories.length])
 
-  // Agrupar recursos por categoria
+  // Agrupar recursos por categoria e resource_type
   const groupedResources = () => {
     const mainCategories = categories.filter(c => !c.parent_id).sort((a, b) => a.order_index - b.order_index)
     const uncategorized: Resource[] = []
     const grouped: Record<string, { category: Category, resources: Resource[] }> = {}
+    const pngResources: Resource[] = []
 
     // Inicializar grupos
     mainCategories.forEach(cat => {
@@ -122,6 +123,12 @@ export default function AdminResourcesPage() {
 
     // Agrupar recursos
     resources.forEach(resource => {
+      // Separar recursos PNG em grupo próprio
+      if (resource.resource_type === 'png') {
+        pngResources.push(resource)
+        return
+      }
+
       if (!resource.category_id) {
         uncategorized.push(resource)
       } else {
@@ -140,6 +147,23 @@ export default function AdminResourcesPage() {
         }
       }
     })
+
+    // Adicionar grupo especial para PNG se houver recursos (com order_index baixo para aparecer primeiro)
+    if (pngResources.length > 0) {
+      grouped['png'] = {
+        category: {
+          id: 'png',
+          name: 'PNG',
+          slug: 'png',
+          description: 'Recursos PNG',
+          icon: null,
+          parent_id: null,
+          order_index: -1, // Ordem negativa para aparecer antes das outras categorias
+          created_at: new Date().toISOString()
+        },
+        resources: pngResources
+      }
+    }
 
     return { grouped, uncategorized, mainCategories }
   }
@@ -339,6 +363,135 @@ export default function AdminResourcesPage() {
 
             return (
               <>
+                {/* Renderizar grupo PNG primeiro se existir */}
+                {grouped['png'] && (() => {
+                  const pngGroup = grouped['png']
+                  const pngResources = pngGroup.resources || []
+                  const isPngExpanded = expandedCategories.has('png')
+                  
+                  return (
+                    <div key="png" className="border-b border-gray-100 last:border-b-0">
+                      <button
+                        onClick={() => toggleCategory('png')}
+                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          {isPngExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          )}
+                          <span className="text-sm font-bold text-gray-900">PNG</span>
+                          <span className="text-xs text-gray-400 font-medium">({pngResources.length})</span>
+                        </div>
+                      </button>
+                      
+                      {isPngExpanded && pngResources.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recurso</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Autor</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo/Tamanho</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                                <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {pngResources.map((resource) => (
+                                <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-4">
+                                      <div className={`h-12 w-12 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-checkerboard`}>
+                                        {resource.thumbnail_url && (
+                                          <img src={getS3Url(resource.thumbnail_url)} className="h-full w-full object-cover" />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-bold text-gray-900 truncate max-w-[200px]">{resource.title}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                          {resource.is_premium && <span className="text-[8px] font-bold text-orange-500 uppercase tracking-widest">Premium</span>}
+                                          {resource.is_official && <span className="text-[8px] font-bold text-primary-500 uppercase tracking-widest">Oficial</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-gray-600">
+                                        {resource.is_official ? 'BrasilPSD' : (resource.creator?.full_name || 'Desconhecido')}
+                                      </span>
+                                      {resource.is_official && <CheckCircle2 className="h-3 w-3 text-primary-500 fill-primary-500" />}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col">
+                                      <span className="text-xs font-bold text-gray-900 uppercase tracking-tighter">PNG</span>
+                                      <span className="text-[10px] text-gray-400">{formatFileSize(resource.file_size)}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                      resource.status === 'approved' ? 'bg-green-50 text-gray-900' :
+                                      resource.status === 'pending' ? 'bg-yellow-50 text-gray-900' :
+                                      'bg-red-50 text-gray-900'
+                                    }`}>
+                                      {resource.status === 'approved' ? 'Aprovado' : resource.status === 'pending' ? 'Pendente' : 'Rejeitado'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-2">
+                                      <Link href={`/resources/${resource.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </Link>
+                                      <Link href={`/admin/resources/edit/${resource.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                          <Edit2 className="h-4 w-4" />
+                                        </Button>
+                                      </Link>
+                                      {resource.status === 'pending' && (
+                                        <>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
+                                            onClick={() => handleUpdateStatus(resource.id, 'approved')}
+                                          >
+                                            <Check className="h-4 w-4" />
+                                          </Button>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                                            onClick={() => handleUpdateStatus(resource.id, 'rejected')}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      )}
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                                        onClick={() => handleDelete(resource.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+                
                 {mainCategories.map(category => {
                   const group = grouped[category.id]
                   const categoryResources = group?.resources || []
@@ -382,7 +535,7 @@ export default function AdminResourcesPage() {
                   <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
+                        <div className={`h-12 w-12 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>
                           {resource.thumbnail_url && (
                             <img src={getS3Url(resource.thumbnail_url)} className="h-full w-full object-cover" />
                           )}
@@ -493,7 +646,7 @@ export default function AdminResourcesPage() {
                               <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
+                                    <div className={`h-12 w-12 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>
                                       {resource.thumbnail_url && (
                                         <img src={getS3Url(resource.thumbnail_url)} className="h-full w-full object-cover" />
                                       )}

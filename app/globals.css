@@ -153,3 +153,137 @@ a {
   display: flex;
 }
 
+/* Fundo quadriculado para imagens PNG (transparência) */
+.bg-checkerboard {
+  background-image: 
+    linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+    linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  background-color: #ffffff;
+}
+
+/* Layout Masonry (Tipo Pinterest/Tetris) */
+.masonry-container {
+  column-count: auto;
+  column-gap: 8px;
+  column-fill: balance;
+}
+
+/* Tamanho Pequeno (Padrão) - Mais imagens por linha */
+.masonry-small {
+  column-width: 200px;
+}
+
+@media (min-width: 640px) {
+  .masonry-small {
+    column-width: 220px;
+  }
+}
+
+@media (min-width: 768px) {
+  .masonry-small {
+    column-width: 240px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .masonry-small {
+    column-width: 260px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .masonry-small {
+    column-width: 280px;
+  }
+}
+
+/* Tamanho Grande - Menos imagens por linha, imagens maiores */
+.masonry-large {
+  column-width: 280px;
+}
+
+@media (min-width: 640px) {
+  .masonry-large {
+    column-width: 300px;
+  }
+}
+
+@media (min-width: 768px) {
+  .masonry-large {
+    column-width: 340px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .masonry-large {
+    column-width: 380px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .masonry-large {
+    column-width: 420px;
+  }
+}
+
+/* Evitar quebra de cards nas colunas */
+.masonry-container > * {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* Proteções de segurança para imagens */
+img[src*="s3"], 
+img[src*="amazonaws"],
+img[src*="storage"],
+.next-image-wrapper img {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-user-drag: none !important;
+  -khtml-user-drag: none !important;
+  -moz-user-drag: none !important;
+  -o-user-drag: none !important;
+  user-drag: none !important;
+  pointer-events: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Bloquear seleção de texto em áreas de imagens */
+.image-container,
+[class*="resource"],
+[class*="preview"],
+[class*="thumbnail"] {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* Permitir seleção apenas em inputs e textareas */
+input,
+textarea,
+[contenteditable="true"],
+[role="textbox"],
+p,
+span,
+h1, h2, h3, h4, h5, h6,
+a,
+button {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+

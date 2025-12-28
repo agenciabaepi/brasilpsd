@@ -8,6 +8,7 @@ import Input from '@/components/ui/Input'
 import type { Collection, Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import Image from 'next/image'
+import ProtectedImage from '@/components/ui/ProtectedImage'
 import Link from 'next/link'
 
 interface CollectionsListClientProps {
@@ -111,15 +112,17 @@ export default function CollectionsListClient({ collections: initialCollections 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {collection.preview_resources.map((resource) => (
                         <Link key={resource.id} href={`/resources/${resource.id}`}>
-                          <div className="group relative overflow-hidden rounded-xl bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md cursor-pointer">
-                            <div className="relative w-full aspect-square overflow-hidden">
+                          <div className="group relative overflow-hidden rounded-xl border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md cursor-pointer">
+                            <div className={`relative w-full aspect-square overflow-hidden ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>
                               {resource.thumbnail_url ? (
-                                <Image
-                                  src={getS3Url(resource.thumbnail_url)}
+                                <ProtectedImage
+                                  src={resource.thumbnail_url}
                                   alt={resource.title}
                                   fill
                                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                                  quality={60}
+                                  objectFit="cover"
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-gray-50">

@@ -33,6 +33,7 @@ import { isSystemProfileSync } from '@/lib/utils/system'
 import FontThumbnail from '@/components/fonts/FontThumbnail'
 import AudioPlayer from '@/components/audio/AudioPlayer'
 import SubscriptionModal from '@/components/premium/SubscriptionModal'
+import ProtectedImage from '@/components/ui/ProtectedImage'
 
 interface ResourceDetailClientProps {
   resource: Resource
@@ -704,24 +705,32 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 )}
               </div>
             ) : resource.preview_url ? (
-              // Usar preview_url (com marca d'água) se disponível, senão usar thumbnail_url
-              <Image
-                src={getS3Url(resource.preview_url)}
-                alt={resource.title}
-                width={1200}
-                height={800}
-                priority
-                className="max-w-full h-auto object-contain"
-              />
+              // Usar preview_url (com marca d'água) se disponível - protegida
+              <div className={`w-full flex items-center justify-center ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
+                <ProtectedImage
+                  src={resource.preview_url}
+                  alt={resource.title}
+                  width={1200}
+                  height={800}
+                  priority
+                  className="max-w-full h-auto"
+                  quality={75}
+                  objectFit="contain"
+                />
+              </div>
             ) : resource.thumbnail_url ? (
-              <Image
-                src={getS3Url(resource.thumbnail_url)}
-                alt={resource.title}
-                width={1200}
-                height={800}
-                priority
-                className="max-w-full h-auto object-contain"
-              />
+              <div className={`w-full flex items-center justify-center ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
+                <ProtectedImage
+                  src={resource.thumbnail_url}
+                  alt={resource.title}
+                  width={1200}
+                  height={800}
+                  priority
+                  className="max-w-full h-auto"
+                  quality={75}
+                  objectFit="contain"
+                />
+              </div>
             ) : resource.resource_type === 'font' ? (
               <FontPreview fontName={fontName} fontLoaded={fontLoaded} resourceTitle={resource.title} />
             ) : (

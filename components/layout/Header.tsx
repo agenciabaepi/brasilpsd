@@ -269,7 +269,8 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     const routeMap: Record<string, string> = {
       'imagens': '/images',
       'fontes': '/fonts',
-      'audios': '/audios'
+      'audios': '/audios',
+      'png': '/png'
     }
     return routeMap[slug.toLowerCase()] || `/categories/${slug}`
   }
@@ -286,6 +287,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
         subItems: isPSD ? psdSubItems : []
       }
     }),
+    { id: 'png', name: 'PNG', href: '/png' },
     { id: 'collections', name: 'Coleções', href: '/collections' }
   ]
 

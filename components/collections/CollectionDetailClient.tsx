@@ -9,6 +9,7 @@ import ResourceCard from '@/components/resources/ResourceCard'
 import type { Collection, Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import Image from 'next/image'
+import ProtectedImage from '@/components/ui/ProtectedImage'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import Link from 'next/link'
@@ -58,13 +59,15 @@ export default function CollectionDetailClient({ collection, resources }: Collec
             <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 h-full p-4">
               {resources.slice(0, 16).map((resource, index) => (
                 resource.thumbnail_url ? (
-                  <div key={resource.id || index} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
-                    <Image
-                      src={getS3Url(resource.thumbnail_url)}
+                  <div key={resource.id || index} className={`relative aspect-square rounded-lg overflow-hidden ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>
+                    <ProtectedImage
+                      src={resource.thumbnail_url}
                       alt={resource.title}
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 25vw, 12.5vw"
+                      quality={60}
+                      objectFit="cover"
                     />
                   </div>
                 ) : null
@@ -143,14 +146,16 @@ export default function CollectionDetailClient({ collection, resources }: Collec
                           <Link
                             key={resource.id || index}
                             href={`/resources/${resource.id}`}
-                            className="aspect-square relative rounded-lg overflow-hidden bg-gray-100 hover:ring-2 hover:ring-primary-500 transition-all group"
+                            className={`aspect-square relative rounded-lg overflow-hidden hover:ring-2 hover:ring-primary-500 transition-all group ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}
                           >
-                            <Image
-                              src={getS3Url(resource.thumbnail_url)}
+                            <ProtectedImage
+                              src={resource.thumbnail_url}
                               alt={resource.title}
                               fill
                               className="object-cover group-hover:scale-105 transition-transform duration-300"
                               sizes="(max-width: 1024px) 50vw, 25vw"
+                              quality={60}
+                              objectFit="cover"
                             />
                           </Link>
                         ) : (

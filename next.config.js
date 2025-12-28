@@ -43,6 +43,8 @@ const nextConfig = {
         hostname: 'ui-avatars.com',
       },
     ],
+    // Permitir imagens da própria API
+    unoptimized: false,
     // Otimizações de performance para imagens
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],

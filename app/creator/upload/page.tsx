@@ -66,64 +66,48 @@ export default function UploadResourcePage() {
   const router = useRouter()
   const supabase = createSupabaseClient()
 
-  // Função para carregar categorias baseado no tipo de recurso
-  async function loadCategoriesForType(resourceType: ResourceType) {
-    // Mapear resource_type para slug da categoria
-    const categorySlugMap: Record<string, string> = {
-      'image': 'imagens',
-      'audio': 'audios',
-      'font': 'fontes',
-      'psd': 'psd',
-      'ai': 'vetores',
-      'video': 'videos'
-    }
-    
-    const categorySlug = categorySlugMap[resourceType]
-    
-    if (categorySlug) {
-      // Buscar categoria principal
-      const { data: mainCategory } = await supabase
+  // Função para carregar todas as categorias cadastradas
+  async function loadAllCategories() {
+    try {
+      // Buscar todas as categorias principais
+      const { data: mainCategories, error: mainError } = await supabase
         .from('categories')
-        .select('id, name, parent_id, slug')
-        .eq('slug', categorySlug)
+        .select('id, name, parent_id, slug, order_index')
         .is('parent_id', null)
-        .maybeSingle()
+        .order('order_index', { ascending: true })
       
-      if (mainCategory) {
-        // Para PSD, incluir também as subcategorias
-        if (resourceType === 'psd') {
-          const { data: subCats } = await supabase
-            .from('categories')
-            .select('id, name, parent_id, slug')
-            .eq('parent_id', mainCategory.id)
-            .order('order_index', { ascending: true })
-          
-          setCategories([
-            mainCategory,
-            ...(subCats || [])
-          ])
-        } else {
-          // Para outros tipos, apenas a categoria principal
-          setCategories([mainCategory])
-        }
-      } else {
-        // Fallback: buscar todas as categorias principais
-        const { data: cats } = await supabase
-          .from('categories')
-          .select('id, name, parent_id, slug')
-          .is('parent_id', null)
-          .order('order_index', { ascending: true })
-        setCategories(cats || [])
-      }
-    } else {
-      // Para outros tipos, buscar todas as categorias principais
+      if (mainError) throw mainError
+
+      // Buscar todas as subcategorias (apenas de PSD por enquanto)
+      const { data: subCategories, error: subError } = await supabase
+        .from('categories')
+        .select('id, name, parent_id, slug, order_index')
+        .not('parent_id', 'is', null)
+        .order('order_index', { ascending: true })
+      
+      if (subError) throw subError
+
+      // Combinar todas as categorias
+      setCategories([
+        ...(mainCategories || []),
+        ...(subCategories || [])
+      ])
+    } catch (error: any) {
+      console.error('Erro ao carregar categorias:', error)
+      // Fallback: buscar apenas categorias principais
       const { data: cats } = await supabase
         .from('categories')
-        .select('id, name, parent_id, slug')
+        .select('id, name, parent_id, slug, order_index')
         .is('parent_id', null)
         .order('order_index', { ascending: true })
       setCategories(cats || [])
     }
+  }
+
+  // Função para carregar categorias baseado no tipo de recurso (mantida para compatibilidade)
+  async function loadCategoriesForType(resourceType: ResourceType) {
+    // Sempre carregar todas as categorias para o usuário escolher
+    await loadAllCategories()
   }
 
   useEffect(() => {
@@ -139,8 +123,8 @@ export default function UploadResourcePage() {
           setUserProfile(data)
         }
 
-        // Carregar categorias baseado no tipo inicial (image)
-        await loadCategoriesForType('image')
+        // Carregar todas as categorias cadastradas
+        await loadAllCategories()
 
         // Carregar coleções do usuário (com is_premium)
         if (user) {
@@ -676,7 +660,7 @@ export default function UploadResourcePage() {
       const basicResourceData: any = {
         title: formData.title,
         description: formData.description || null,
-        resource_type: formData.resource_type,
+        resource_type: formData.resource_type, // Manter o tipo selecionado (png, image, etc.)
         category_id: formData.category_id || null,
         creator_id: creatorId,
         file_url: fileUrl,
@@ -697,6 +681,7 @@ export default function UploadResourcePage() {
       console.log('💾 Saving resource to database:', {
         title: basicResourceData.title,
         resource_type: basicResourceData.resource_type,
+        resource_type_type: typeof basicResourceData.resource_type,
         file_size: basicResourceData.file_size,
         file_url: basicResourceData.file_url?.substring(0, 50) + '...',
         has_video_metadata: !!videoMetadata
@@ -704,14 +689,51 @@ export default function UploadResourcePage() {
       
       // Tentar inserir primeiro sem campos de vídeo extras (caso a migração não tenha sido aplicada)
       let resource, error
-      const { data, error: insertError } = await supabase
-        .from('resources')
-        .insert(basicResourceData)
-        .select()
-        .single()
       
-      resource = data
-      error = insertError
+      // Garantir que resource_type seja uma string válida
+      // IMPORTANTE: Para PNG, usar RPC que faz cast explícito no banco
+      const resourceDataToInsert = {
+        ...basicResourceData,
+        resource_type: String(basicResourceData.resource_type) as ResourceType
+      }
+      
+      console.log('📤 Inserting with resource_type:', resourceDataToInsert.resource_type, typeof resourceDataToInsert.resource_type)
+      
+      // Se for PNG, usar API route que faz insert direto no banco (contorna validação do cliente)
+      if (resourceDataToInsert.resource_type === 'png') {
+        console.log('📸 PNG detected - using API route for direct database insert')
+        try {
+          const response = await fetch('/api/resources/insert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(resourceDataToInsert)
+          })
+          
+          const result = await response.json()
+          
+          if (response.ok && result.data) {
+            resource = result.data
+            error = null
+            console.log('✅ PNG resource inserted successfully via API route')
+          } else {
+            error = { message: result.error || 'Erro ao inserir via API' } as any
+            console.error('❌ API route error:', result.error)
+          }
+        } catch (apiErr: any) {
+          console.error('❌ Error calling API route:', apiErr)
+          error = apiErr
+        }
+      } else {
+        // Para outros tipos, usar insert normal
+        const { data, error: insertError } = await supabase
+          .from('resources')
+          .insert(resourceDataToInsert)
+          .select()
+          .single()
+        
+        resource = data
+        error = insertError
+      }
 
       // Se deu certo, tentar atualizar com campos de vídeo se for vídeo
       if (!error && resource && formData.resource_type === 'video' && videoMetadata) {
@@ -882,6 +904,8 @@ export default function UploadResourcePage() {
       let detectedType: ResourceType = 'image'
       if (file.type.startsWith('video/')) {
         detectedType = 'video'
+      } else if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
+        detectedType = 'png'
       } else if (file.type.includes('psd') || file.name.toLowerCase().endsWith('.psd')) {
         detectedType = 'psd'
       } else if (file.type.includes('ai') || file.name.toLowerCase().endsWith('.ai')) {
@@ -1217,6 +1241,8 @@ export default function UploadResourcePage() {
     let detectedType: ResourceType = 'image'
     if (selectedFile.type.startsWith('video/')) {
       detectedType = 'video'
+    } else if (selectedFile.type === 'image/png' || selectedFile.name.toLowerCase().endsWith('.png')) {
+      detectedType = 'png'
     } else if (selectedFile.type.includes('psd') || selectedFile.name.toLowerCase().endsWith('.psd')) {
       detectedType = 'psd'
     } else if (selectedFile.type.includes('ai') || selectedFile.name.toLowerCase().endsWith('.ai')) {
@@ -1423,12 +1449,14 @@ export default function UploadResourcePage() {
                   <div className="mt-6 rounded-3xl overflow-hidden border border-gray-100 shadow-sm animate-[fadeIn_0.5s_ease-in]">
                     <p className="p-4 bg-gray-50 text-sm font-semibold text-gray-400 tracking-widest border-b border-gray-100 uppercase">Pré-visualização</p>
                     {preview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img 
-                        src={preview} 
-                        alt="Preview" 
-                        className="w-full h-auto max-h-[400px] object-contain mx-auto animate-[fadeIn_0.6s_ease-in]" 
-                      />
+                      <div className={`w-full flex items-center justify-center ${file?.type === 'image/png' || file?.name?.toLowerCase().endsWith('.png') ? 'bg-checkerboard' : 'bg-white'}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={preview} 
+                          alt="Preview" 
+                          className="w-full h-auto max-h-[400px] object-contain mx-auto animate-[fadeIn_0.6s_ease-in]" 
+                        />
+                      </div>
                     ) : videoPreview ? (
                       <div className="relative w-full bg-black group">
                         <video
@@ -1569,11 +1597,13 @@ export default function UploadResourcePage() {
                   }`}>
                     {thumbnailPreview ? (
                       <>
-                        <img 
-                          src={thumbnailPreview} 
-                          alt="Thumbnail preview" 
-                          className="max-h-32 max-w-full rounded-xl mb-2 object-contain"
-                        />
+                        <div className={`w-full h-full flex items-center justify-center ${thumbnail?.type === 'image/png' || thumbnail?.name?.toLowerCase().endsWith('.png') ? 'bg-checkerboard' : ''}`}>
+                          <img 
+                            src={thumbnailPreview} 
+                            alt="Thumbnail preview" 
+                            className="max-h-32 max-w-full rounded-xl mb-2 object-contain"
+                          />
+                        </div>
                         <p className="text-sm font-semibold text-gray-600 truncate max-w-full px-4">
                           {thumbnail?.name}
                         </p>
@@ -1720,6 +1750,7 @@ export default function UploadResourcePage() {
                     required
                   >
                     <option value="image">Imagem</option>
+                    <option value="png">PNG</option>
                     <option value="video">Vídeo</option>
                     <option value="font">Fonte</option>
                     <option value="psd">PSD</option>
@@ -1777,11 +1808,13 @@ export default function UploadResourcePage() {
                     <option value="">Selecionar Categoria</option>
                     {categories
                       .filter(cat => !cat.parent_id)
+                      .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
                       .map((parent) => (
                         <optgroup key={parent.id} label={parent.name}>
                           <option value={parent.id}>{parent.name} (Tudo)</option>
                           {categories
                             .filter(sub => sub.parent_id === parent.id)
+                            .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
                             .map((sub) => (
                               <option key={sub.id} value={sub.id}>
                                 &nbsp;&nbsp;{sub.name}

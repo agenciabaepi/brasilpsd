@@ -16,7 +16,9 @@ import {
   Layout,
   Star,
   X,
-  ChevronRight
+  ChevronRight,
+  Maximize2,
+  Minimize2
 } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import Button from '@/components/ui/Button'
@@ -28,6 +30,7 @@ interface ExploreClientProps {
   initialResources: Resource[]
   initialCategoryId?: string
   categoryName?: string
+  initialFormatFilter?: string
 }
 
 export default function ExploreClient(props: ExploreClientProps) {
@@ -38,39 +41,62 @@ export default function ExploreClient(props: ExploreClientProps) {
   )
 }
 
-function ExploreContent({ initialResources, initialCategoryId, categoryName }: ExploreClientProps) {
+function ExploreContent({ initialResources, initialCategoryId, categoryName, initialFormatFilter }: ExploreClientProps) {
   const searchParams = useSearchParams()
-  const [resources, setResources] = useState<Resource[]>(initialResources)
+  
+  // Ler o tipo da query string ou usar o filtro inicial
+  const typeFromQuery = searchParams.get('type') || initialFormatFilter || 'all'
+  
+  // Filtrar recursos iniciais se houver filtro de formato
+  const filteredInitialResources = typeFromQuery !== 'all' 
+    ? (initialResources || []).filter(r => r.resource_type === typeFromQuery)
+    : (initialResources || [])
+  
+  const [resources, setResources] = useState<Resource[]>(filteredInitialResources)
   const [loading, setLoading] = useState(false)
   const [isFirstRender, setIsFirstRender] = useState(true)
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [categories, setCategories] = useState<any[]>([])
   
-  // Ler o tipo da query string
-  const typeFromQuery = searchParams.get('type') || 'all'
-  
-  // FILTERS STATE
+  // FILTERS STATE - garantir que o formato inicial seja aplicado
   const [filters, setFilters] = useState({
-    format: typeFromQuery !== 'all' ? typeFromQuery : 'all',
+    format: typeFromQuery !== 'all' ? typeFromQuery : (initialFormatFilter || 'all'),
     license: 'all', // all, premium, free
     orientation: 'all', // all, horizontal, vertical, square
-    color: 'all',
-    category: initialCategoryId || 'all'
+    color: 'all'
   })
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  // Tamanho de exibição: 'small' (padrão) ou 'large'
+  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('imageDisplaySize')
+      return (saved === 'large' || saved === 'small') ? saved : 'small'
+    }
+    return 'small'
+  })
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const supabase = createSupabaseClient()
+
+  // Salvar preferência no localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('imageDisplaySize', imageSize)
+    }
+  }, [imageSize])
 
   useEffect(() => {
     loadCategories()
     loadFavorites()
     
-    // Aplicar tipo da query string se existir
+    // Aplicar tipo da query string ou filtro inicial se existir
     const typeParam = searchParams.get('type')
     if (typeParam && typeParam !== 'all') {
       setFilters(prev => ({ ...prev, format: typeParam }))
+    } else if (initialFormatFilter && initialFormatFilter !== 'all') {
+      // Se não houver type na query string, usar o filtro inicial
+      setFilters(prev => ({ ...prev, format: initialFormatFilter }))
     }
     
     if (searchParams.get('q')) {
@@ -85,7 +111,15 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
     // Pular o carregamento na primeira renderização se já temos dados iniciais
     // e os filtros são os mesmos que os iniciais
     if (isFirstRender && initialResources.length > 0) {
-      return
+      // Verificar se os recursos iniciais correspondem ao filtro atual
+      // Se o filtro for 'png', garantir que todos os recursos iniciais são PNG
+      if (filters.format === 'png' && initialResources.every(r => r.resource_type === 'png')) {
+        return
+      }
+      // Se não for PNG, verificar se corresponde ao filtro
+      if (filters.format !== 'png' && filters.format !== 'all') {
+        return
+      }
     }
 
     if (!searchParams.get('q')) {
@@ -108,20 +142,6 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
   async function loadResources() {
     setLoading(true)
     try {
-      // Se for uma categoria pai, precisamos buscar os IDs de todas as subcategorias
-      let categoryIds = [filters.category];
-      
-      if (filters.category !== 'all') {
-        const { data: subcats } = await supabase
-          .from('categories')
-          .select('id')
-          .eq('parent_id', filters.category);
-        
-        if (subcats && subcats.length > 0) {
-          categoryIds = [filters.category, ...subcats.map(s => s.id)];
-        }
-      }
-
       let query = supabase
         .from('resources')
         .select('*, creator:profiles!creator_id(*)')
@@ -129,12 +149,23 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
         .order('created_at', { ascending: false })
         .limit(50)
 
-      if (filters.format !== 'all') {
-        query = query.eq('resource_type', filters.format)
+      // Aplicar filtro de categoria inicial se existir (para páginas de categoria específica)
+      if (initialCategoryId && initialCategoryId !== 'all') {
+        // Se for uma categoria pai, buscar os IDs de todas as subcategorias
+        const { data: subcats } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('parent_id', initialCategoryId)
+        
+        let categoryIds = [initialCategoryId]
+        if (subcats && subcats.length > 0) {
+          categoryIds = [initialCategoryId, ...subcats.map(s => s.id)]
+        }
+        query = query.in('category_id', categoryIds)
       }
 
-      if (filters.category !== 'all') {
-        query = query.in('category_id', categoryIds)
+      if (filters.format !== 'all') {
+        query = query.eq('resource_type', filters.format)
       }
 
       if (filters.license === 'premium') {
@@ -145,8 +176,31 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
 
       const { data, error } = await query
 
-      if (error) throw error
-      setResources(data || [])
+      if (error) {
+        console.error('❌ Erro ao carregar recursos:', error)
+        throw error
+      }
+      
+      // Filtrar recursos no cliente também para garantir (fallback)
+      let filteredData = data || []
+      if (filters.format !== 'all') {
+        filteredData = filteredData.filter(r => r.resource_type === filters.format)
+        console.log(`✅ Filtrados ${filteredData.length} recursos do tipo ${filters.format} de ${data?.length || 0} total`)
+      }
+      
+      // Aplicar filtros de orientação e cor no cliente
+      if (filters.orientation !== 'all') {
+        filteredData = filteredData.filter(r => {
+          if (!r.width || !r.height) return false
+          const aspectRatio = r.width / r.height
+          if (filters.orientation === 'horizontal') return aspectRatio > 1
+          if (filters.orientation === 'vertical') return aspectRatio < 1
+          if (filters.orientation === 'square') return Math.abs(aspectRatio - 1) < 0.1
+          return true
+        })
+      }
+      
+      setResources(filteredData)
     } catch (error: any) {
       console.error('Erro ao carregar recursos:', error)
       toast.error('Erro ao carregar recursos')
@@ -241,13 +295,21 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
     }
   }
 
-  const formats = [
+  // Formatos baseados nas categorias principais do sistema
+  // Se estiver na página PNG, mostrar apenas formatos de imagem
+  const formats = initialFormatFilter === 'png' ? [
+    { id: 'all', label: 'Todos os formatos', icon: Layout },
+    { id: 'png', label: 'PNG', icon: ImageIcon },
+    { id: 'image', label: 'Imagens', icon: ImageIcon },
+  ] : [
     { id: 'all', label: 'Todos os formatos', icon: Layout },
     { id: 'psd', label: 'PSD', icon: FileType },
+    { id: 'png', label: 'PNG', icon: ImageIcon },
     { id: 'image', label: 'Imagens', icon: ImageIcon },
     { id: 'video', label: 'Vídeos', icon: MousePointer2 },
     { id: 'font', label: 'Fontes', icon: FileType },
-    { id: 'ai', label: 'Vetores AI', icon: FileType },
+    { id: 'ai', label: 'Vetores', icon: FileType },
+    { id: 'audio', label: 'Áudios', icon: FileType },
   ]
 
   const orientations = [
@@ -269,15 +331,15 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
   ]
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-[1600px] mx-auto flex">
+    <div className="h-[calc(100vh-64px)] bg-white overflow-hidden">
+      <div className="max-w-[1600px] mx-auto h-full flex relative">
         
         {/* SIDEBAR FILTERS */}
         <aside className={cn(
-          "w-72 flex-shrink-0 border-r border-gray-100 p-8 h-[calc(100vh-64px)] sticky top-16 overflow-y-auto hidden lg:block transition-all",
+          "w-72 flex-shrink-0 border-r border-gray-100 bg-white p-8 h-full overflow-y-hidden hidden lg:flex flex-col transition-all z-40",
           !isSidebarOpen && "-ml-72 opacity-0"
         )}>
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8 flex-shrink-0">
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-900" />
               <h2 className="text-base font-bold text-gray-900 tracking-tight">Filtros</h2>
@@ -287,41 +349,9 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
             </span>
           </div>
 
-          {/* FORMAT SECTION */}
-          <div className="space-y-6">
-            <FilterSection title="Categorias">
-              <div className="space-y-1">
-                <FilterItem 
-                  label="Todas as Categorias"
-                  active={filters.category === 'all'}
-                  onClick={() => setFilters({...filters, category: 'all'})}
-                />
-                {categories
-                  .filter(c => !c.parent_id)
-                  .map((parent) => (
-                    <div key={parent.id} className="space-y-1">
-                      <FilterItem 
-                        label={parent.name}
-                        active={filters.category === parent.id}
-                        onClick={() => setFilters({...filters, category: parent.id})}
-                      />
-                      {categories
-                        .filter(c => c.parent_id === parent.id)
-                        .map((sub) => (
-                          <FilterItem 
-                            key={sub.id}
-                            label={sub.name}
-                            active={filters.category === sub.id}
-                            onClick={() => setFilters({...filters, category: sub.id})}
-                            isSubItem
-                          />
-                        ))}
-                    </div>
-                  ))}
-              </div>
-            </FilterSection>
-
-            <FilterSection title="Formato">
+          {/* FILTERS SECTION - Scrollable */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide space-y-6 pr-2 -mr-2">
+            <FilterSection title="Formato" maxHeight={formats.length > 5 ? 200 : 'none'}>
               <div className="space-y-1">
                 {formats.map((f) => (
                   <FilterItem 
@@ -382,9 +412,9 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
         </aside>
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 p-8 lg:p-12">
-          {/* Header Area */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+        <main className="flex-1 h-full flex flex-col overflow-hidden p-8 lg:p-12">
+          {/* Header Area - Fixed */}
+          <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
                 {categoryName || (filters.format === 'all' ? 'Todos os Recursos' : formats.find(f => f.id === filters.format)?.label)}
@@ -404,41 +434,61 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 pointer-events-none" />
               </div>
               
-              <div className="hidden sm:flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
-                <button 
-                  onClick={() => setViewMode('grid')}
-                  className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-white shadow-sm text-secondary-600" : "text-gray-600")}
-                >
-                  <Grid className="h-4 w-4" />
-                </button>
-                <button 
-                  onClick={() => setViewMode('list')}
-                  className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-white shadow-sm text-secondary-600" : "text-gray-600")}
-                >
-                  <List className="h-4 w-4" />
-                </button>
+              <div className="hidden sm:flex items-center gap-2">
+                {/* Controle de Tamanho (apenas no modo grid) */}
+                {viewMode === 'grid' && (
+                  <div className="flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
+                    <button
+                      onClick={() => setImageSize('small')}
+                      className={cn("p-2 rounded-lg transition-all", imageSize === 'small' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
+                      title="Imagens menores"
+                    >
+                      <Minimize2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setImageSize('large')}
+                      className={cn("p-2 rounded-lg transition-all", imageSize === 'large' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
+                      title="Imagens maiores"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Controles de Visualização */}
+                <div className="flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
+                  <button 
+                    onClick={() => setViewMode('grid')}
+                    className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-white shadow-sm text-secondary-600" : "text-gray-600")}
+                  >
+                    <Grid className="h-4 w-4" />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('list')}
+                    className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-white shadow-sm text-secondary-600" : "text-gray-600")}
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ACTIVE FILTERS CHIPS */}
-          {Object.values(filters).some(v => v !== 'all') && (
-            <div className="flex flex-wrap gap-2 mb-8">
+          {/* ACTIVE FILTERS CHIPS - Ocultar na página PNG */}
+          {!initialFormatFilter && Object.values(filters).some(v => v !== 'all') && (
+            <div className="flex-shrink-0 flex flex-wrap gap-2 mb-8">
               {Object.entries(filters).map(([key, value]) => {
                 if (value === 'all') return null;
-                
-                // Não mostra o chip de categoria se já estivermos na página da categoria
                 if (key === 'category' && initialCategoryId) return null;
 
                 const labelMap: Record<string, string> = {
                   format: 'Formato',
                   license: 'Licença',
                   orientation: 'Orientação',
-                  color: 'Cor',
-                  category: 'Categoria'
+                  color: 'Cor'
                 };
 
-                const displayValue = key === 'category' ? (categoryName || value) : value;
+                const displayValue = value;
 
                 return (
                   <button 
@@ -453,7 +503,7 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
                 );
               })}
               <button 
-                onClick={() => setFilters({format: 'all', license: 'all', orientation: 'all', color: 'all', category: initialCategoryId || 'all'})}
+                onClick={() => setFilters({format: 'all', license: 'all', orientation: 'all', color: 'all'})}
                 className="text-secondary-600 text-[10px] font-bold hover:underline ml-2"
               >
                 Limpar todos
@@ -461,74 +511,81 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName }: E
             </div>
           )}
 
-          {/* RESULTS GRID */}
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-32 space-y-4">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
-              <p className="text-gray-600 text-sm font-medium">Buscando os melhores recursos...</p>
-            </div>
-          ) : resources.length > 0 ? (
-            <>
-              {/* Mobile: Grid 2 colunas */}
-              <div className={cn(
-                "gap-1 lg:hidden",
-                viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
-              )}>
-                {resources.map((resource) => (
-                  <ResourceCard
-                    key={resource.id}
-                    resource={resource}
-                    onFavorite={handleFavorite}
-                    isFavorited={favorites.has(resource.id)}
-                  />
-                ))}
+          {/* RESULTS GRID - Scrollable */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide pr-2 -mr-2">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-32 space-y-4">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
+                <p className="text-gray-600 text-sm font-medium">Buscando os melhores recursos...</p>
               </div>
-              {/* Desktop: Columns masonry */}
-              <div className={cn(
-                "gap-1 hidden lg:block",
-                viewMode === 'grid' ? "columns-3 xl:columns-5 2xl:columns-6" : "flex flex-col"
-              )}>
-                {resources.map((resource) => (
-                  <ResourceCard
-                    key={resource.id}
-                    resource={resource}
-                    onFavorite={handleFavorite}
-                    isFavorited={favorites.has(resource.id)}
-                  />
-                ))}
+            ) : resources.length > 0 ? (
+              <>
+                {/* Mobile: Grid 2 colunas */}
+                <div className={cn(
+                  "gap-1 lg:hidden",
+                  viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
+                )}>
+                  {resources.map((resource) => (
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      onFavorite={handleFavorite}
+                      isFavorited={favorites.has(resource.id)}
+                    />
+                  ))}
+                </div>
+                {/* Desktop: Columns masonry (Tipo Pinterest/Tetris) */}
+                <div className={cn(
+                  "hidden lg:block masonry-container",
+                  viewMode === 'grid' ? `${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}` : "flex flex-col"
+                )}>
+                  {resources.map((resource) => (
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      onFavorite={handleFavorite}
+                      isFavorited={favorites.has(resource.id)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-32 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">
+                <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm mb-4">
+                  <Search className="h-8 w-8 text-gray-200" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">Nenhum recurso encontrado</h3>
+                <p className="text-gray-500 text-sm max-w-xs mx-auto mt-2">
+                  Tente ajustar seus filtros ou pesquisar por termos diferentes.
+                </p>
+                <Button 
+                  variant="ghost" 
+                  className="mt-6 text-primary-500 font-bold uppercase text-[10px] tracking-widest"
+                  onClick={() => setFilters({format: 'all', license: 'all', orientation: 'all', color: 'all'})}
+                >
+                  Resetar todos os filtros
+                </Button>
               </div>
-            </>
-          ) : (
-            <div className="text-center py-32 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">
-              <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm mb-4">
-                <Search className="h-8 w-8 text-gray-200" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">Nenhum recurso encontrado</h3>
-              <p className="text-gray-500 text-sm max-w-xs mx-auto mt-2">
-                Tente ajustar seus filtros ou pesquisar por termos diferentes.
-              </p>
-              <Button 
-                variant="ghost" 
-                className="mt-6 text-primary-500 font-bold uppercase text-[10px] tracking-widest"
-                onClick={() => setFilters({format: 'all', license: 'all', orientation: 'all', color: 'all'})}
-              >
-                Resetar todos os filtros
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </main>
       </div>
     </div>
   )
 }
 
-function FilterSection({ title, children }: { title: string, children: React.ReactNode }) {
+function FilterSection({ title, children, maxHeight = 'none' }: { title: string, children: React.ReactNode, maxHeight?: string | number }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-bold text-gray-700 tracking-tight border-b border-gray-50 pb-2">
+      <h3 className="text-xs font-bold text-gray-700 tracking-tight border-b border-gray-50 pb-2 flex-shrink-0">
         {title}
       </h3>
-      {children}
+      <div 
+        className={maxHeight !== 'none' ? 'overflow-y-auto scrollbar-hide pr-2 -mr-2' : ''}
+        style={maxHeight !== 'none' ? { maxHeight: typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight } : {}}
+      >
+        {children}
+      </div>
     </div>
   )
 }

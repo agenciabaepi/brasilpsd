@@ -23,6 +23,7 @@ import {
 import type { Resource, Category } from '@/types/database'
 import Link from 'next/link'
 import { getS3Url } from '@/lib/aws/s3'
+import { formatFileSize } from '@/lib/utils/format'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
 
@@ -136,11 +137,12 @@ export default function CreatorResourcesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryFilter, searchQuery, categories.length])
 
-  // Agrupar recursos por categoria
+  // Agrupar recursos por categoria e resource_type
   const groupedResources = () => {
     const mainCategories = categories.filter(c => !c.parent_id).sort((a, b) => a.order_index - b.order_index)
     const uncategorized: Resource[] = []
     const grouped: Record<string, { category: Category, resources: Resource[] }> = {}
+    const pngResources: Resource[] = []
 
     // Inicializar grupos
     mainCategories.forEach(cat => {
@@ -149,6 +151,12 @@ export default function CreatorResourcesPage() {
 
     // Agrupar recursos
     resources.forEach(resource => {
+      // Separar recursos PNG em grupo próprio
+      if (resource.resource_type === 'png') {
+        pngResources.push(resource)
+        return
+      }
+
       if (!resource.category_id) {
         uncategorized.push(resource)
       } else {
@@ -167,6 +175,23 @@ export default function CreatorResourcesPage() {
         }
       }
     })
+
+    // Adicionar grupo especial para PNG se houver recursos
+    if (pngResources.length > 0) {
+      grouped['png'] = {
+        category: {
+          id: 'png',
+          name: 'PNG',
+          slug: 'png',
+          description: 'Recursos PNG',
+          icon: null,
+          parent_id: null,
+          order_index: 0,
+          created_at: new Date().toISOString()
+        },
+        resources: pngResources
+      }
+    }
 
     return { grouped, uncategorized, mainCategories }
   }
@@ -309,6 +334,117 @@ export default function CreatorResourcesPage() {
 
             return (
               <>
+                {/* Renderizar grupo PNG primeiro se existir */}
+                {grouped['png'] && (() => {
+                  const pngGroup = grouped['png']
+                  const pngResources = pngGroup.resources || []
+                  const isPngExpanded = expandedCategories.has('png')
+                  
+                  return (
+                    <div key="png" className="border-b border-gray-100 last:border-b-0">
+                      <button
+                        onClick={() => toggleCategory('png')}
+                        className="w-full px-8 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          {isPngExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          )}
+                          <span className="text-sm font-bold text-gray-900">PNG</span>
+                          <span className="text-xs text-gray-400 font-medium">({pngResources.length})</span>
+                        </div>
+                      </button>
+                      
+                      {isPngExpanded && pngResources.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead className="bg-gray-50/50 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                              <tr>
+                                <th className="px-8 py-4">Arquivo</th>
+                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4 text-center">Downloads</th>
+                                <th className="px-6 py-4 text-center">Views</th>
+                                <th className="px-6 py-4">Data</th>
+                                <th className="px-8 py-4 text-right">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {pngResources.map((resource) => (
+                                <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors group">
+                                  <td className="px-8 py-5">
+                                    <div className="flex items-center space-x-4">
+                                      <div className={`h-12 w-12 rounded-lg bg-checkerboard border border-gray-100 overflow-hidden flex-shrink-0 relative`}>
+                                        {resource.thumbnail_url && (
+                                          <Image
+                                            src={getS3Url(resource.thumbnail_url)}
+                                            alt={resource.title}
+                                            width={48}
+                                            height={48}
+                                            className="w-full h-full object-cover"
+                                            unoptimized
+                                          />
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-gray-900 truncate">{resource.title}</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">PNG • {formatFileSize(resource.file_size)}</p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                      resource.status === 'approved' ? 'bg-green-50 text-green-700' :
+                                      resource.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
+                                      'bg-red-50 text-red-700'
+                                    }`}>
+                                      {resource.status === 'approved' ? 'Aprovado' : resource.status === 'pending' ? 'Pendente' : 'Rejeitado'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-5 text-center">
+                                    <span className="text-sm font-medium text-gray-600">{resource.download_count || 0}</span>
+                                  </td>
+                                  <td className="px-6 py-5 text-center">
+                                    <span className="text-sm font-medium text-gray-600">{resource.view_count || 0}</span>
+                                  </td>
+                                  <td className="px-6 py-5">
+                                    <span className="text-xs text-gray-500">
+                                      {new Date(resource.created_at).toLocaleDateString('pt-BR')}
+                                    </span>
+                                  </td>
+                                  <td className="px-8 py-5">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Link href={`/resources/${resource.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </Link>
+                                      <Link href={`/creator/resources/edit/${resource.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                          <Edit2 className="h-4 w-4" />
+                                        </Button>
+                                      </Link>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                                        onClick={() => handleDelete(resource.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+                
                 {mainCategories.map(category => {
                   const group = grouped[category.id]
                   const categoryResources = group?.resources || []
@@ -370,16 +506,18 @@ export default function CreatorResourcesPage() {
                             <>
                               {/* Thumbnail - sempre visível quando não está em hover */}
                               {resource.thumbnail_url ? (
+                                <div className={`absolute inset-0 w-full h-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}>
                                 <Image
                                   src={getS3Url(resource.thumbnail_url)}
                                   alt={resource.title}
                                   width={48}
                                   height={48}
-                                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+                                    className={`w-full h-full object-cover transition-opacity duration-300 ${
                                     hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
                                   }`}
                                   unoptimized
                                 />
+                                </div>
                               ) : (
                                 <video
                                   src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=0.001'}
@@ -444,6 +582,7 @@ export default function CreatorResourcesPage() {
                               )}
                             </>
                           ) : resource.thumbnail_url ? (
+                            <div className={`h-full w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}>
                             <Image
                               src={getS3Url(resource.thumbnail_url)}
                               alt={resource.title}
@@ -452,6 +591,7 @@ export default function CreatorResourcesPage() {
                               className="h-full w-full object-cover"
                               unoptimized
                             />
+                            </div>
                           ) : (
                             <div className="h-full w-full flex items-center justify-center text-gray-300">
                               <Files className="h-5 w-5" />
@@ -568,16 +708,18 @@ export default function CreatorResourcesPage() {
                                       {resource.resource_type === 'video' && (resource.preview_url || resource.file_url) ? (
                                         <>
                                           {resource.thumbnail_url ? (
-                                            <Image
-                                              src={getS3Url(resource.thumbnail_url)}
-                                              alt={resource.title}
-                                              width={48}
-                                              height={48}
-                                              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-                                                hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
-                                              }`}
-                                              unoptimized
-                                            />
+                                            <div className={`absolute inset-0 w-full h-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}>
+                                              <Image
+                                                src={getS3Url(resource.thumbnail_url)}
+                                                alt={resource.title}
+                                                width={48}
+                                                height={48}
+                                                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                                                  hoveredVideoId === resource.id ? 'opacity-0' : 'opacity-100'
+                                                }`}
+                                                unoptimized
+                                              />
+                                            </div>
                                           ) : (
                                             <video
                                               src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)) + '#t=0.001'}
@@ -641,14 +783,16 @@ export default function CreatorResourcesPage() {
                                           )}
                                         </>
                                       ) : resource.thumbnail_url ? (
-                                        <Image
-                                          src={getS3Url(resource.thumbnail_url)}
-                                          alt={resource.title}
-                                          width={48}
-                                          height={48}
-                                          className="h-full w-full object-cover"
-                                          unoptimized
-                                        />
+                                        <div className={`h-full w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}>
+                                          <Image
+                                            src={getS3Url(resource.thumbnail_url)}
+                                            alt={resource.title}
+                                            width={48}
+                                            height={48}
+                                            className="h-full w-full object-cover"
+                                            unoptimized
+                                          />
+                                        </div>
                                       ) : (
                                         <div className="h-full w-full flex items-center justify-center text-gray-300">
                                           <Files className="h-5 w-5" />
