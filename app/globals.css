@@ -173,37 +173,37 @@ a {
   width: 100%;
 }
 
-/* Tamanho Pequeno (Padrão) - 6 colunas */
+/* Tamanho Pequeno (Padrão) - Mais imagens por linha, itens menores */
 .masonry-small {
-  grid-template-columns: repeat(6, 1fr);
+  column-width: 150px;
 }
 
 @media (min-width: 1024px) {
   .masonry-small {
-    grid-template-columns: repeat(6, 1fr);
+    column-width: 150px;
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-small {
-    grid-template-columns: repeat(6, 1fr);
+    column-width: 150px;
   }
 }
 
-/* Tamanho Pequeno Expandido (sem sidebar) - 6 colunas */
+/* Tamanho Pequeno Expandido (sem sidebar) - Mais colunas, itens menores */
 .masonry-small-expanded {
-  grid-template-columns: repeat(6, 1fr);
+  column-width: 140px;
 }
 
 @media (min-width: 1024px) {
   .masonry-small-expanded {
-    grid-template-columns: repeat(6, 1fr);
+    column-width: 140px;
   }
 }
 
 @media (min-width: 1280px) {
   .masonry-small-expanded {
-    grid-template-columns: repeat(6, 1fr);
+    column-width: 140px;
   }
 }
 
