@@ -165,10 +165,11 @@ a {
   background-color: #ffffff;
 }
 
-/* Layout Masonry (Tipo Pinterest/Tetris) - Usando CSS Grid com 6 colunas */
+/* Layout Masonry (Tipo Pinterest/Tetris) */
 .masonry-container {
-  display: grid;
-  gap: 8px;
+  column-count: auto;
+  column-gap: 8px;
+  column-fill: balance;
   width: 100%;
 }
 
