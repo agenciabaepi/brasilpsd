@@ -155,7 +155,9 @@ export async function POST(request: NextRequest) {
       key: finalKey, // Key do arquivo convertido
       previewUrl: previewUrl || undefined, // Preview leve em video-previews/
       thumbnailUrl: thumbnailUrl || undefined,
-      videoMetadata: videoMetadata || undefined
+      videoMetadata: videoMetadata || undefined,
+      wasConverted: wasConverted || false, // Indica se foi convertido
+      finalFormat: 'mp4' // Formato final sempre MP4 após conversão
     })
   } catch (error: any) {
     console.error('❌ Processing error:', error)

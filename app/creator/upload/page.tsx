@@ -609,6 +609,9 @@ export default function UploadResourcePage() {
       let finalThumbnailUrl: string | null = fileData.thumbnailUrl || null
       const detectedAi = fileData.isAiGenerated
       
+      // Determinar formato final: se foi convertido para MP4, usar mp4, senão usar extensão original
+      const finalFileFormat = fileData.finalFormat || (fileData.wasConverted ? 'mp4' : file.name.split('.').pop() || '')
+      
       // Usar metadados do servidor se disponíveis (mais confiável, especialmente após conversão)
       if (fileData.videoMetadata) {
         console.log('✅ Using server-extracted video metadata:', fileData.videoMetadata)
@@ -717,7 +720,7 @@ export default function UploadResourcePage() {
         preview_url: previewUrl || null, // Versão com marca d'água para preview
         thumbnail_url: finalThumbnailUrl || null, // Thumbnail extraído automaticamente ou upload manual
         file_size: file.size,
-        file_format: file.name.split('.').pop() || '',
+        file_format: finalFileFormat, // Usar formato final (mp4 se convertido, senão extensão original)
         width: videoMetadata?.width ? Number(videoMetadata.width) : null,
         height: videoMetadata?.height ? Number(videoMetadata.height) : null,
         duration: videoMetadata?.duration ? Math.round(Number(videoMetadata.duration)) : (fileData.audioMetadata?.duration ? Math.round(Number(fileData.audioMetadata.duration)) : null),
