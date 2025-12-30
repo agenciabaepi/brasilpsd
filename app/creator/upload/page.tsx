@@ -333,14 +333,15 @@ export default function UploadResourcePage() {
   }
 
   function uploadWithProgress(file: File, type: 'resource' | 'thumbnail'): Promise<any> {
-    // Para arquivos grandes (>100MB), usar upload direto para S3
-    const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
+    // Para arquivos > 4.5MB, usar upload direto para S3 (contorna limite do Next.js/Vercel)
+    // O Next.js/Vercel tem limite de 4.5MB para body de requisições
+    const LARGE_FILE_THRESHOLD = 4.5 * 1024 * 1024 // 4.5MB
     if (file.size > LARGE_FILE_THRESHOLD) {
-      console.log('📦 Arquivo grande detectado, usando upload direto para S3')
+      console.log('📦 Arquivo grande detectado (>4.5MB), usando upload direto para S3')
       return uploadDirectToS3(file, type)
     }
 
-    // Para arquivos menores, usar o fluxo atual (processamento no servidor)
+    // Para arquivos menores ou iguais a 4.5MB, usar o fluxo atual (processamento no servidor)
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       const fd = new FormData()
@@ -536,16 +537,8 @@ export default function UploadResourcePage() {
       return
     }
 
-    // Validar tamanho do arquivo antes de iniciar upload
-    const MAX_FILE_SIZE = 4.5 * 1024 * 1024 // 4.5MB em bytes
-    if (file.size > MAX_FILE_SIZE) {
-      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      toast.error(
-        `Arquivo muito grande (${fileSizeMB}MB). O limite máximo é 4.5MB. Por favor, reduza o tamanho do arquivo ou use um formato mais compacto.`,
-        { duration: 6000 }
-      )
-      return
-    }
+    // Arquivos > 4.5MB serão enviados via upload direto ao S3 (presigned URL)
+    // Não bloquear aqui, deixar o uploadWithProgress decidir o método
     
     // Validar se arquivo não-imagem tem thumbnail obrigatória (áudios não precisam)
     if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/') && !thumbnail) {
