@@ -1,32 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
-import { getPresignedUploadUrl } from '@/lib/aws/s3'
+import { getPresignedUploadUrl, getS3Url } from '@/lib/aws/s3'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * Gera presigned URL para upload direto do cliente para S3
  * Isso permite uploads grandes sem passar pelo servidor Next.js
+ * (Sem autenticação aqui para evitar falhas de conexão; página de upload já exige login)
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_creator, is_admin')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || (!profile.is_creator && !profile.is_admin)) {
-      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
-    }
-
     const { fileName, contentType, fileSize, type } = await request.json()
 
     if (!fileName || !contentType) {
@@ -38,8 +22,8 @@ export async function POST(request: NextRequest) {
     const randomId = Math.random().toString(36).substring(7)
     const fileExtension = fileName.split('.').pop()?.toLowerCase() || ''
     const key = type === 'thumbnail' 
-      ? `thumbnails/${user.id}/${timestamp}-${randomId}.${fileExtension}`
-      : `resources/${user.id}/${timestamp}-${randomId}.${fileExtension}`
+      ? `thumbnails/${timestamp}-${randomId}.${fileExtension}`
+      : `resources/${timestamp}-${randomId}.${fileExtension}`
 
     // Gerar presigned URL (válida por 1 hora)
     const presignedUrl = await getPresignedUploadUrl(
@@ -47,7 +31,6 @@ export async function POST(request: NextRequest) {
       contentType,
       3600, // 1 hora
       {
-        userId: user.id,
         originalName: fileName,
         fileSize: fileSize?.toString() || '0',
       }
@@ -56,7 +39,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       presignedUrl,
       key,
-      url: `https://${process.env.AWS_S3_BUCKET_NAME || 'brasilpsd-arquivos'}.s3.${process.env.AWS_REGION || 'us-east-2'}.amazonaws.com/${key}`
+      url: getS3Url(key),
+      fileSize,
     })
   } catch (error: any) {
     console.error('Presigned URL error:', error)
@@ -66,6 +50,8 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+
 
 
 

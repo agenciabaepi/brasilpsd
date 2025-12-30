@@ -24,3 +24,5 @@ CREATE POLICY "Allow update to verify codes"
 -- ALTER TABLE public.email_verification_codes DISABLE ROW LEVEL SECURITY;
 
 
+
+

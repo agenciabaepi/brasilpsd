@@ -64,3 +64,5 @@ ALTER TYPE resource_type ADD VALUE 'png';
 
 Uma vez que 'png' esteja no enum e commitado, todas as funções e o código da aplicação funcionarão normalmente.
 
+
+

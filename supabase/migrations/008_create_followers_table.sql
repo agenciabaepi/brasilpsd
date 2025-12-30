@@ -34,3 +34,5 @@ COMMENT ON TABLE public.followers IS 'Relação de seguidores e criadores';
 
 
 
+
+

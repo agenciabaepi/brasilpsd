@@ -88,3 +88,5 @@ Se você está usando **sandbox** em localhost e **produção** no Vercel, certi
 - As variáveis de ambiente no Vercel estão apontando para **produção**
 
 
+
+

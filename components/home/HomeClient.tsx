@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { cn } from '@/lib/utils/cn'
-import ResourceCard from '@/components/resources/ResourceCard'
 import type { Resource } from '@/types/database'
-import { ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import Link from 'next/link'
+import JustifiedGrid from '@/components/layout/JustifiedGrid'
 
 interface HomeClientProps {
   officialResources: Resource[]
@@ -21,21 +21,6 @@ export default function HomeClient({
   freeResources 
 }: HomeClientProps) {
   const [activeTab, setActiveTab] = useState<'destaques' | 'exclusivos' | 'novos' | 'gratis'>('novos')
-  // Tamanho de exibição: 'small' (padrão) ou 'large'
-  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'small'
-    }
-    return 'small'
-  })
-
-  // Salvar preferência no localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('imageDisplaySize', imageSize)
-    }
-  }, [imageSize])
 
   const tabs = [
     { id: 'novos', label: 'Novos', data: latestResources },
@@ -49,8 +34,8 @@ export default function HomeClient({
   return (
     <section className="py-12">
       <div className="container mx-auto px-4">
-        {/* Tabs Navigation e Controle de Tamanho */}
-        <div className="flex justify-between items-center mb-12 border-b border-gray-100">
+        {/* Tabs Navigation */}
+        <div className="flex items-center mb-12 border-b border-gray-100">
           <div className="flex space-x-12">
             {tabs.map((tab) => (
               <button
@@ -70,41 +55,16 @@ export default function HomeClient({
               </button>
             ))}
           </div>
-          
-          {/* Controle de Tamanho */}
-          <div className="hidden lg:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-1">
-            <button
-              onClick={() => setImageSize('small')}
-              className={cn("p-2 rounded-lg transition-all", imageSize === 'small' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
-              title="Imagens menores"
-            >
-              <Minimize2 className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setImageSize('large')}
-              className={cn("p-2 rounded-lg transition-all", imageSize === 'large' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
-              title="Imagens maiores"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
-          </div>
         </div>
 
-        {/* Content Grid */}
-        <>
-          {/* Mobile: Grid 2 colunas */}
-          <div className="grid grid-cols-2 gap-1 min-h-[600px] lg:hidden">
-            {currentData.map((resource) => (
-              <ResourceCard key={resource.id} resource={resource} />
-            ))}
-          </div>
-          {/* Desktop: Masonry Layout */}
-          <div className={`hidden lg:block masonry-container min-h-[600px] ${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}`}>
-            {currentData.map((resource) => (
-              <ResourceCard key={resource.id} resource={resource} />
-            ))}
-          </div>
-        </>
+        {/* Content Grid - Justified Layout like Google Photos */}
+          {currentData.length > 0 && (
+            <JustifiedGrid 
+              resources={currentData}
+              rowHeight={240} // menor zoom para caber mais itens
+              margin={4}
+            />
+          )}
 
         {/* View More Button */}
         <div className="mt-16 text-center">

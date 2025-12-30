@@ -165,7 +165,93 @@ a {
   background-color: #ffffff;
 }
 
-/* Layout Masonry (Tipo Pinterest/Tetris) */
+/* Layout Auto Grid (Inspirado no gridstack.js - sem drag) */
+/* Sistema de grid que se adapta automaticamente preenchendo espaços */
+.grid-auto-fit {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: auto;
+  gap: 8px;
+  width: 100%;
+  align-items: start;
+}
+
+/* Tamanho Pequeno (Padrão) */
+.grid-auto-fit-small {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .grid-auto-fit-small {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-auto-fit-small {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+/* Tamanho Pequeno Expandido (sem sidebar) */
+.grid-auto-fit-small-expanded {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .grid-auto-fit-small-expanded {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-auto-fit-small-expanded {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+/* Tamanho Grande */
+.grid-auto-fit-large {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .grid-auto-fit-large {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-auto-fit-large {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+
+/* Tamanho Grande Expandido (sem sidebar) */
+.grid-auto-fit-large-expanded {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .grid-auto-fit-large-expanded {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-auto-fit-large-expanded {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+/* Itens do grid */
+.grid-auto-fit > * {
+  width: 100%;
+  min-width: 0;
+  break-inside: avoid;
+}
+
+/* Layout Masonry (Tipo Pinterest/Tetris) - Mantido para compatibilidade */
 .masonry-container {
   column-count: auto;
   column-gap: 8px;
@@ -250,8 +336,6 @@ a {
   width: 100%;
   margin-bottom: 8px;
 }
-
-/* Grid já cuida do layout, não precisa mais dessas regras antigas do column layout */
 
 /* Proteções de segurança para imagens */
 img[src*="s3"], 

@@ -110,8 +110,11 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   }, [])
 
   return (
-    <Link href={`/resources/${resource.id}`} className="break-inside-avoid block group w-full">
-      <div ref={cardRef} className={`relative overflow-hidden rounded-lg transition-all hover:opacity-90 transition-all duration-200 shadow-sm hover:shadow-md ${isVideo ? 'bg-black' : 'bg-gray-100'}`}>
+    <Link 
+      href={`/resources/${resource.id}`} 
+      className="break-inside-avoid block group w-full"
+    >
+      <div ref={cardRef} className={`relative overflow-hidden rounded-lg transition-all hover:opacity-90 transition-all duration-200 shadow-sm hover:shadow-md w-full h-full ${isVideo ? 'bg-black' : 'bg-gray-100'}`}>
         {/* Image/Video Container */}
         <div 
           className={`relative w-full overflow-hidden flex items-center justify-center ${isVideo ? '' : 'min-h-[150px]'}`}
@@ -285,33 +288,39 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
             <FontThumbnail resource={resource} size="medium" className="w-full" />
           ) : resource.preview_url ? (
             // Usar preview_url (com marca d'água) se disponível - protegida
-            <div className={`w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}>
+            <div 
+              className={`w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}
+              style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
+            >
               <ProtectedImage
                 src={resource.preview_url}
                 alt={resource.title}
-                width={500}
-                height={500}
+                width={resource.width || 500}
+                height={resource.height || 500}
                 className="w-full h-auto"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 priority={false}
                 loading="lazy"
                 quality={75}
-                objectFit="cover"
+                objectFit="contain"
               />
             </div>
           ) : resource.thumbnail_url ? (
-            <div className={`w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}>
+            <div 
+              className={`w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}
+              style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
+            >
               <ProtectedImage
                 src={resource.thumbnail_url}
                 alt={resource.title}
-                width={500}
-                height={500}
+                width={resource.width || 500}
+                height={resource.height || 500}
                 className="w-full h-auto"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 priority={false}
                 loading="lazy"
                 quality={75}
-                objectFit="cover"
+                objectFit="contain"
               />
             </div>
           ) : (

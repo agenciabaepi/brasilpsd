@@ -8,19 +8,20 @@ import { createSupabaseClient } from '@/lib/supabase/client'
 import type { Favorite } from '@/types/database'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import GridALicious from '@/components/layout/GridALicious'
 
 export default function SavedPage() {
   // Por enquanto, "Salvos" é igual a "Favoritos"
   // Pode ser expandido no futuro para incluir coleções salvas, etc.
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [loading, setLoading] = useState(true)
-  // Tamanho de exibição: 'small' (padrão) ou 'large'
+  // Tamanho de exibição: 'small' ou 'large' (padrão: 'large')
   const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'small'
+      return (saved === 'large' || saved === 'small') ? saved : 'large'
     }
-    return 'small'
+    return 'large'
   })
   const router = useRouter()
   const supabase = createSupabaseClient()
@@ -139,18 +140,20 @@ export default function SavedPage() {
                 )
               ))}
             </div>
-            {/* Desktop: Masonry Layout */}
-            <div className={`hidden lg:block masonry-container ${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}`}>
-              {favorites.map((favorite) => (
-                favorite.resource && (
-                  <ResourceCard
-                    key={favorite.id}
-                    resource={favorite.resource}
-                    onFavorite={handleUnfavorite}
-                    isFavorited={true}
-                  />
-                )
-              ))}
+            {/* Desktop: Grid-A-Licious Layout */}
+            <div className="hidden lg:block">
+              <GridALicious imageSize={imageSize}>
+                {favorites.map((favorite) => (
+                  favorite.resource && (
+                    <ResourceCard
+                      key={favorite.id}
+                      resource={favorite.resource}
+                      onFavorite={handleUnfavorite}
+                      isFavorited={true}
+                    />
+                  )
+                ))}
+              </GridALicious>
             </div>
           </>
         ) : (

@@ -28,3 +28,5 @@ ALTER TYPE resource_type ADD VALUE IF NOT EXISTS 'png';
 --     ELSE 'png NÃO está no enum ❌'
 --   END AS status;
 
+
+

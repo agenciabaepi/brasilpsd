@@ -139,3 +139,5 @@ await sendVerificationEmail(email, code)
 - [ ] Considerar usar serviços de email transacional (SendGrid, AWS SES, etc.)
 
 
+
+

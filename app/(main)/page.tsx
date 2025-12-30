@@ -1,7 +1,5 @@
-import { Search, TrendingUp, Star, Download, ChevronRight } from 'lucide-react'
+import { TrendingUp, Star, Download, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import Button from '@/components/ui/Button'
-import Card from '@/components/ui/Card'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import HomeClient from '@/components/home/HomeClient'
 import Image from 'next/image'
@@ -564,24 +562,6 @@ function CategoryCard({ title, href, icon, backgroundImage, hoverImage, backgrou
         </div>
       </div>
     </Link>
-  )
-}
-
-function FeatureCard({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
-  return (
-    <div className="text-center space-y-4">
-      <div className="flex justify-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-[2rem] bg-primary-50 text-primary-600">
-          <Icon className="h-7 w-7" />
-        </div>
-      </div>
-      <h3 className="text-xl font-bold text-gray-900">
-        {title}
-      </h3>
-      <p className="text-gray-500 leading-relaxed max-w-xs mx-auto text-sm font-medium">
-        {description}
-      </p>
-    </div>
   )
 }
 

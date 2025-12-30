@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import ResourceCard from '@/components/resources/ResourceCard'
-import { Search, Filter, X, Maximize2, Minimize2, Star, Layout, ImageIcon, FileType, Check, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Search, Filter, X, Star, Layout, ImageIcon, FileType, Check, ChevronRight, ChevronLeft } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { cn } from '@/lib/utils/cn'
+import JustifiedGrid from '@/components/layout/JustifiedGrid'
 
 interface ImagesClientProps {
   initialResources: any[]
@@ -26,22 +26,7 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
     color: 'all'
   })
   const [page, setPage] = useState(1)
-  // Tamanho de exibição: 'small' (padrão) ou 'large'
-  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'small'
-    }
-    return 'small'
-  })
   const supabase = createSupabaseClient()
-
-  // Salvar preferência no localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('imageDisplaySize', imageSize)
-    }
-  }, [imageSize])
 
   const filteredResources = resources.filter(resource => {
     const matchesSearch = !searchQuery || 
@@ -237,23 +222,6 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
           />
         </div>
 
-              {/* Controle de Tamanho */}
-              <div className="flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
-                <button
-                  onClick={() => setImageSize('small')}
-                  className={cn("p-2 rounded-lg transition-all", imageSize === 'small' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
-                  title="Imagens menores"
-                >
-                  <Minimize2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setImageSize('large')}
-                  className={cn("p-2 rounded-lg transition-all", imageSize === 'large' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
-                  title="Imagens maiores"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </button>
-              </div>
             </div>
           </div>
 
@@ -308,23 +276,11 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
               </div>
             ) : filteredResources.length > 0 ? (
               <>
-                {/* Mobile: Grid 2 colunas */}
-                <div className="grid grid-cols-2 gap-1 lg:hidden">
-                  {filteredResources.map((resource) => (
-                    <ResourceCard key={resource.id} resource={resource} />
-                  ))}
-                </div>
-                {/* Desktop: Masonry Layout */}
-                <div className={cn(
-                  "hidden lg:block masonry-container",
-                  imageSize === 'large' 
-                    ? (isSidebarOpen ? 'masonry-large' : 'masonry-large-expanded')
-                    : (isSidebarOpen ? 'masonry-small' : 'masonry-small-expanded')
-                )}>
-                  {filteredResources.map((resource) => (
-                    <ResourceCard key={resource.id} resource={resource} />
-                  ))}
-                </div>
+                <JustifiedGrid
+                  resources={filteredResources}
+                  rowHeight={240}
+                  margin={4}
+                />
 
                 {/* Botão Carregar Mais */}
                 {resources.length >= page * 50 && (

@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils/cn'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { isSystemProfileSync } from '@/lib/utils/system'
+import GridALicious from '@/components/layout/GridALicious'
 
 export default function CreatorProfilePage() {
   const params = useParams()
@@ -33,13 +34,13 @@ export default function CreatorProfilePage() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<Profile | null>(null)
   const [showFeatured, setShowFeatured] = useState(true)
-  // Tamanho de exibição: 'small' (padrão) ou 'large'
+  // Tamanho de exibição: 'small' ou 'large' (padrão: 'large')
   const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'small'
+      return (saved === 'large' || saved === 'small') ? saved : 'large'
     }
-    return 'small'
+    return 'large'
   })
   const supabase = createSupabaseClient()
 
@@ -463,11 +464,13 @@ export default function CreatorProfilePage() {
                   <ResourceCard key={resource.id} resource={resource} />
                 ))}
               </div>
-              {/* Desktop: Masonry Layout */}
-              <div className={`hidden lg:block masonry-container ${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}`}>
-                {resources.map((resource) => (
-                  <ResourceCard key={resource.id} resource={resource} />
-                ))}
+              {/* Desktop: Grid-A-Licious Layout */}
+              <div className="hidden lg:block">
+                <GridALicious imageSize={imageSize}>
+                  {resources.map((resource) => (
+                    <ResourceCard key={resource.id} resource={resource} />
+                  ))}
+                </GridALicious>
               </div>
             </>
           ) : (

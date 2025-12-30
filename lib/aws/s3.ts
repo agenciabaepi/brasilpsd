@@ -167,3 +167,24 @@ export async function deleteFileFromS3(key: string): Promise<void> {
     throw error
   }
 }
+
+// Conveniência: gerar signed URL de download
+export async function getSignedS3Url(key: string, expiresIn: number = 3600) {
+  return getSignedDownloadUrl(key, expiresIn)
+}
+
+// Conveniência: upload a partir de Buffer retornando publicUrl
+export async function uploadToS3FromBuffer(
+  buffer: Buffer,
+  key: string,
+  contentType: string,
+  metadata?: Record<string, string>
+) {
+  const url = await uploadFileToS3({
+    file: buffer,
+    key,
+    contentType,
+    metadata,
+  })
+  return { publicUrl: url, key }
+}

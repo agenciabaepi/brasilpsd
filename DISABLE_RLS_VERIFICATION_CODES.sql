@@ -7,3 +7,5 @@ ALTER TABLE public.email_verification_codes DISABLE ROW LEVEL SECURITY;
 -- ALTER TABLE public.email_verification_codes ENABLE ROW LEVEL SECURITY;
 
 
+
+

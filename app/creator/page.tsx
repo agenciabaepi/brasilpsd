@@ -228,6 +228,21 @@ export default function CreatorDashboardPage() {
               {resources.length > 0 ? (
                 resources.map((resource) => {
                   const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
+                  const isImagePath = (path: string | null | undefined) => {
+                    if (!path) return false
+                    const lower = path.toLowerCase()
+                    return ['.jpg', '.jpeg', '.png', '.webp', '.avif'].some(ext => lower.endsWith(ext))
+                  }
+                  const thumbSrc =
+                    resource.thumbnail_url
+                      ? (resource.thumbnail_url.startsWith('http')
+                          ? resource.thumbnail_url
+                          : `/api/image/${resource.thumbnail_url}?w=200&q=75`)
+                      : (resource.preview_url && isImagePath(resource.preview_url)
+                          ? (resource.preview_url.startsWith('http')
+                              ? resource.preview_url
+                              : `/api/image/${resource.preview_url}?w=200&q=75`)
+                          : null)
                   
                   return (
                   <div key={resource.id} className="px-8 py-5 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
@@ -247,9 +262,9 @@ export default function CreatorDashboardPage() {
                       {isVideo && (resource.preview_url || resource.file_url) ? (
                         <>
                           {/* Thumbnail - sempre visível quando não está em hover */}
-                          {resource.thumbnail_url ? (
+                          {thumbSrc ? (
                             <Image
-                              src={getS3Url(resource.thumbnail_url)}
+                              src={thumbSrc}
                               alt={resource.title}
                               width={56}
                               height={56}
@@ -268,7 +283,9 @@ export default function CreatorDashboardPage() {
                               playsInline
                               preload="metadata"
                               onLoadedData={(e) => {
-                                e.currentTarget.currentTime = 0.001
+                                const dur = e.currentTarget.duration
+                                const mid = isFinite(dur) && dur > 0 ? dur / 2 : 0.5
+                                e.currentTarget.currentTime = mid
                                 e.currentTarget.pause()
                               }}
                               onContextMenu={(e) => e.preventDefault()}
@@ -321,9 +338,9 @@ export default function CreatorDashboardPage() {
                             </div>
                           )}
                         </>
-                      ) : resource.thumbnail_url ? (
+                      ) : thumbSrc ? (
                         <Image
-                          src={getS3Url(resource.thumbnail_url)}
+                          src={thumbSrc}
                           alt={resource.title}
                           width={56}
                           height={56}
