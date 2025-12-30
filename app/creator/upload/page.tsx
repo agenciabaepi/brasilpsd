@@ -322,10 +322,42 @@ export default function UploadResourcePage() {
         }
       }
 
-      xhr.onerror = () => reject(new Error('Erro de conexão'))
-      xhr.ontimeout = () => reject(new Error('Tempo de upload excedido'))
+      xhr.onerror = (e) => {
+        console.error('❌ XHR upload error:', {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          readyState: xhr.readyState,
+          responseText: xhr.responseText?.substring(0, 200),
+          presignedUrl: presignedUrl?.substring(0, 100) + '...'
+        })
+        
+        // Verificar se é erro CORS
+        if (xhr.status === 0 && !xhr.responseText) {
+          reject(new Error('Erro de conexão: Possível problema de CORS no bucket S3. Verifique as configurações CORS do bucket.'))
+        } else if (xhr.status === 403) {
+          reject(new Error('Acesso negado: A presigned URL pode ter expirado ou estar inválida. Tente novamente.'))
+        } else if (xhr.status === 400) {
+          reject(new Error(`Erro na requisição: ${xhr.responseText || 'Verifique o arquivo e tente novamente'}`))
+        } else {
+          reject(new Error(`Erro de conexão (${xhr.status || 'network'}): ${xhr.statusText || 'Verifique sua conexão e tente novamente'}`))
+        }
+      }
+      
+      xhr.ontimeout = () => {
+        console.error('⏱️ XHR upload timeout')
+        reject(new Error('Tempo de upload excedido. O arquivo pode ser muito grande ou a conexão está lenta. Tente novamente.'))
+      }
 
       xhr.timeout = 1800000 // 30 minutos para arquivos grandes
+      
+      // Log antes de iniciar upload
+      console.log('📤 Iniciando upload direto ao S3:', {
+        fileName: file.name,
+        fileSize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`,
+        contentType: file.type,
+        presignedUrlLength: presignedUrl?.length
+      })
+      
       xhr.open('PUT', presignedUrl)
       xhr.setRequestHeader('Content-Type', file.type)
       xhr.send(file)
