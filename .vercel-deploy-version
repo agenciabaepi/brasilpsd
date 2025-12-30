@@ -1,0 +1,2 @@
+Deploy version: $(date +%Y%m%d-%H%M%S)
+Commit: $(git rev-parse HEAD)
