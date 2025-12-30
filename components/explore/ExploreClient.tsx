@@ -24,7 +24,6 @@ import Button from '@/components/ui/Button'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { useSearchParams } from 'next/navigation'
-import JustifiedGrid from '@/components/layout/JustifiedGrid'
 
 interface ExploreClientProps {
   initialResources: Resource[]
@@ -519,24 +518,34 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
               </div>
             ) : resources.length > 0 ? (
               <>
-                {viewMode === 'grid' ? (
-                  <JustifiedGrid
-                    resources={resources}
-                    rowHeight={240}
-                    margin={4}
-                  />
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {resources.map((resource) => (
-                      <ResourceCard
-                        key={resource.id}
-                        resource={resource}
-                        onFavorite={handleFavorite}
-                        isFavorited={favorites.has(resource.id)}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* Mobile: Grid 2 colunas */}
+                <div className={cn(
+                  "gap-1 lg:hidden",
+                  viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
+                )}>
+                  {resources.map((resource) => (
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      onFavorite={handleFavorite}
+                      isFavorited={favorites.has(resource.id)}
+                    />
+                  ))}
+                </div>
+                {/* Desktop: Columns masonry (Tipo Pinterest/Tetris) */}
+                <div className={cn(
+                  "hidden lg:block masonry-container",
+                  viewMode === 'grid' ? `${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}` : "flex flex-col"
+                )}>
+                  {resources.map((resource) => (
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      onFavorite={handleFavorite}
+                      isFavorited={favorites.has(resource.id)}
+                    />
+                  ))}
+                </div>
               </>
             ) : (
               <div className="text-center py-32 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">
