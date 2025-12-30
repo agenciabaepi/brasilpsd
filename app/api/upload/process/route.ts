@@ -3,6 +3,7 @@ import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { convertVideoToMp4, checkFfmpegAvailable, extractVideoMetadata } from '@/lib/video/convert'
 import { addWatermarkToVideo } from '@/lib/video/watermark'
 import { extractVideoThumbnail } from '@/lib/video/thumbnail'
+import { generateVideoPreview } from '@/lib/video/preview'
 import { uploadFileToS3, getSignedDownloadUrl } from '@/lib/aws/s3'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
@@ -45,6 +46,8 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await fileResponse.arrayBuffer()
     let buffer = Buffer.from(arrayBuffer)
     const fileExtension = fileName.split('.').pop()?.toLowerCase() || ''
+    let finalUrl = url // URL final do arquivo (pode ser convertido)
+    let finalKey = key // Key final do arquivo (pode ser convertido)
     let previewUrl: string | null = null
     let thumbnailUrl: string | null = null
     let videoMetadata: any = null
@@ -59,54 +62,87 @@ export async function POST(request: NextRequest) {
         let wasConverted = false
         
         if (fileExtension !== 'mp4') {
-          console.log('🎬 Converting video to MP4...')
+          console.log('🎬 Converting video to MP4...', { originalExtension: fileExtension })
           convertedBuffer = await convertVideoToMp4(buffer, fileExtension)
           if (convertedBuffer && convertedBuffer.length > 0) {
             buffer = convertedBuffer
             wasConverted = true
-            console.log('✅ Video converted to MP4')
+            console.log('✅ Video converted to MP4', {
+              originalSize: arrayBuffer.byteLength,
+              convertedSize: convertedBuffer.length
+            })
           }
         }
 
-        // 2. Extrair metadados
+        // 2. Extrair metadados do vídeo convertido
         const tempPath = join(tmpdir(), `process-${Date.now()}-${Math.random().toString(36)}.mp4`)
         try {
           await writeFile(tempPath, buffer)
           videoMetadata = await extractVideoMetadata(tempPath)
           await unlink(tempPath).catch(() => {})
+          console.log('✅ Video metadata extracted:', videoMetadata)
         } catch (error: any) {
           console.warn('⚠️ Could not extract metadata:', error.message)
           await unlink(tempPath).catch(() => {})
         }
 
-        // 3. Criar preview com watermark e thumbnail (em paralelo)
-        const [watermarkResult, thumbnailResult] = await Promise.allSettled([
-          addWatermarkToVideo(buffer, 'mp4', 'BRASILPSD'),
-          extractVideoThumbnail(buffer, 'mp4', 'jpeg', 85)
-        ])
-
-        if (watermarkResult.status === 'fulfilled' && watermarkResult.value) {
-          const previewFileName = `preview-${user.id}-${Date.now()}.mp4`
-          const previewKey = `previews/${user.id}/${previewFileName}`
-          previewUrl = await uploadFileToS3({
-            file: watermarkResult.value,
-            key: previewKey,
+        // 3. Reenviar arquivo convertido para resources/ (substituindo o original)
+        if (wasConverted || fileExtension === 'mp4') {
+          const mp4FileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
+          const mp4Key = `resources/${user.id}/${mp4FileName}`
+          finalUrl = await uploadFileToS3({
+            file: buffer,
+            key: mp4Key,
             contentType: 'video/mp4',
-            metadata: { userId: user.id, originalName: fileName, isPreview: 'true' },
+            metadata: {
+              userId: user.id,
+              originalName: fileName,
+              isConverted: wasConverted ? 'true' : 'false',
+              originalExtension: fileExtension
+            },
           })
-          console.log('✅ Preview with watermark uploaded')
+          finalKey = mp4Key
+          console.log('✅ Converted video uploaded to resources/', { key: mp4Key, url: finalUrl })
         }
 
-        if (thumbnailResult.status === 'fulfilled' && thumbnailResult.value) {
-          const thumbnailFileName = `thumb-${user.id}-${Date.now()}.jpg`
+        // 4. Criar preview leve (metade do vídeo) para video-previews/
+        const previewResult = await generateVideoPreview(buffer, 'mp4', videoMetadata?.duration)
+        if (previewResult && previewResult.length > 0) {
+          // Adicionar marca d'água ao preview
+          const watermarkedPreview = await addWatermarkToVideo(previewResult, 'mp4', 'BRASILPSD')
+          const finalPreview = watermarkedPreview || previewResult
+          
+          const previewFileName = `video-preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
+          const previewKey = `video-previews/${user.id}/${previewFileName}`
+          previewUrl = await uploadFileToS3({
+            file: finalPreview,
+            key: previewKey,
+            contentType: 'video/mp4',
+            metadata: {
+              userId: user.id,
+              originalName: fileName,
+              isVideoPreview: 'true'
+            },
+          })
+          console.log('✅ Video preview uploaded to video-previews/', { key: previewKey, url: previewUrl })
+        }
+
+        // 5. Extrair thumbnail (fallback)
+        const thumbnailResult = await extractVideoThumbnail(buffer, 'mp4', 'jpeg', 85)
+        if (thumbnailResult && thumbnailResult.length > 0) {
+          const thumbnailFileName = `thumb-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
           const thumbnailKey = `thumbnails/${user.id}/${thumbnailFileName}`
           thumbnailUrl = await uploadFileToS3({
-            file: thumbnailResult.value,
+            file: thumbnailResult,
             key: thumbnailKey,
             contentType: 'image/jpeg',
-            metadata: { userId: user.id, originalName: fileName, isThumbnail: 'true' },
+            metadata: {
+              userId: user.id,
+              originalName: fileName,
+              isThumbnail: 'true'
+            },
           })
-          console.log('✅ Thumbnail uploaded')
+          console.log('✅ Thumbnail uploaded', { key: thumbnailKey, url: thumbnailUrl })
         }
       }
     }
@@ -115,9 +151,9 @@ export async function POST(request: NextRequest) {
     console.log('✅ Processing completed!', { totalTime: `${totalTime}s` })
 
     return NextResponse.json({
-      url,
-      key,
-      previewUrl: previewUrl || undefined,
+      url: finalUrl, // URL do arquivo convertido (MP4) em resources/
+      key: finalKey, // Key do arquivo convertido
+      previewUrl: previewUrl || undefined, // Preview leve em video-previews/
       thumbnailUrl: thumbnailUrl || undefined,
       videoMetadata: videoMetadata || undefined
     })
