@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste CORS S3</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .success { color: green; background: #e8f5e9; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .error { color: red; background: #ffebee; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .info { color: blue; background: #e3f2fd; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste de CORS - Upload S3</h1>
+    
+    <div class="info">
+        <strong>Como usar:</strong><br>
+        1. Obtenha uma presigned URL do seu sistema<br>
+        2. Cole a URL abaixo<br>
+        3. Selecione um arquivo pequeno para teste<br>
+        4. Clique em "Testar Upload"
+    </div>
+    
+    <div>
+        <label>
+            <strong>Presigned URL:</strong><br>
+            <input type="text" id="presignedUrl" style="width: 100%; padding: 8px; margin: 10px 0;" 
+                   placeholder="Cole a presigned URL aqui">
+        </label>
+    </div>
+    
+    <div>
+        <label>
+            <strong>Arquivo de teste:</strong><br>
+            <input type="file" id="fileInput" style="margin: 10px 0;">
+        </label>
+    </div>
+    
+    <button onclick="testUpload()">Testar Upload</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        async function testUpload() {
+            const presignedUrl = document.getElementById('presignedUrl').value;
+            const fileInput = document.getElementById('fileInput');
+            const resultDiv = document.getElementById('result');
+            
+            if (!presignedUrl) {
+                resultDiv.innerHTML = '<div class="error">❌ Por favor, cole a presigned URL</div>';
+                return;
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.innerHTML = '<div class="error">❌ Por favor, selecione um arquivo</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            resultDiv.innerHTML = '<div class="info">⏳ Testando upload...</div>';
+            
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total * 100).toFixed(1);
+                    resultDiv.innerHTML = `<div class="info">📤 Upload: ${percent}%</div>`;
+                }
+            });
+            
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ <strong>SUCESSO!</strong> CORS está configurado corretamente.<br>
+                            Status: ${xhr.status}<br>
+                            Response: ${xhr.responseText || 'OK'}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ <strong>Erro HTTP:</strong> ${xhr.status}<br>
+                            Response: ${xhr.responseText || 'Sem resposta'}
+                        </div>
+                    `;
+                }
+            };
+            
+            xhr.onerror = () => {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ <strong>ERRO DE CORS!</strong><br>
+                        Status: ${xhr.status || 0}<br>
+                        StatusText: ${xhr.statusText || 'Erro de conexão'}<br>
+                        <br>
+                        <strong>Isso significa que CORS não está configurado no bucket S3.</strong><br>
+                        <br>
+                        Siga as instruções em <code>CORS_CONFIG_URGENTE.md</code> para configurar CORS.
+                    </div>
+                `;
+            };
+            
+            xhr.ontimeout = () => {
+                resultDiv.innerHTML = '<div class="error">⏱️ Timeout: O upload demorou muito</div>';
+            };
+            
+            xhr.timeout = 60000; // 1 minuto
+            xhr.open('PUT', presignedUrl);
+            xhr.setRequestHeader('Content-Type', file.type);
+            xhr.send(file);
+        }
+    </script>
+</body>
+</html>
+
