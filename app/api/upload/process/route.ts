@@ -3,7 +3,7 @@ import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { convertVideoToMp4, checkFfmpegAvailable, extractVideoMetadata } from '@/lib/video/convert'
 import { addWatermarkToVideo } from '@/lib/video/watermark'
 import { extractVideoThumbnail } from '@/lib/video/thumbnail'
-import { uploadFileToS3 } from '@/lib/aws/s3'
+import { uploadFileToS3, getSignedDownloadUrl } from '@/lib/aws/s3'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -34,8 +34,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Baixar arquivo do S3 para processar
-    console.log('⬇️ Downloading file from S3 for processing...', { key, url })
-    const fileResponse = await fetch(url)
+    // Usar URL assinada para garantir acesso mesmo se o bucket for privado
+    console.log('⬇️ Downloading file from S3 for processing...', { key })
+    const signedUrl = await getSignedDownloadUrl(key, 3600) // 1 hora de validade
+    const fileResponse = await fetch(signedUrl)
     if (!fileResponse.ok) {
       throw new Error(`Failed to download file from S3: ${fileResponse.statusText}`)
     }
