@@ -481,10 +481,24 @@ export default function UploadResourcePage() {
             try {
               const errorData = JSON.parse(xhr.responseText)
               console.error('Upload error response:', errorData)
-              reject(new Error(errorData.error || 'Erro no upload'))
+              
+              // Tratamento específico para erro 413 (Content Too Large)
+              if (xhr.status === 413 || errorData.error?.includes('413') || errorData.error?.includes('muito grande')) {
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+                reject(new Error(`Arquivo muito grande (${fileSizeMB}MB). O limite máximo é 4.5MB para upload direto. Por favor, reduza o tamanho do arquivo ou use um formato mais compacto.`))
+              } else {
+                reject(new Error(errorData.error || errorData.message || 'Erro no upload'))
+              }
             } catch (err) {
               console.error('Error parsing error response:', err)
-              reject(new Error(`Erro ${xhr.status} no servidor`))
+              
+              // Tratamento específico para erro 413 quando não é possível parsear JSON
+              if (xhr.status === 413) {
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+                reject(new Error(`Arquivo muito grande (${fileSizeMB}MB). O limite máximo é 4.5MB. Por favor, reduza o tamanho do arquivo.`))
+              } else {
+                reject(new Error(`Erro ${xhr.status} no servidor`))
+              }
             }
           }
         }
@@ -519,6 +533,17 @@ export default function UploadResourcePage() {
 
     if (!file) {
       toast.error('Selecione um arquivo principal')
+      return
+    }
+
+    // Validar tamanho do arquivo antes de iniciar upload
+    const MAX_FILE_SIZE = 4.5 * 1024 * 1024 // 4.5MB em bytes
+    if (file.size > MAX_FILE_SIZE) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+      toast.error(
+        `Arquivo muito grande (${fileSizeMB}MB). O limite máximo é 4.5MB. Por favor, reduza o tamanho do arquivo ou use um formato mais compacto.`,
+        { duration: 6000 }
+      )
       return
     }
     
