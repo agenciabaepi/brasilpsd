@@ -6,7 +6,9 @@ Para que o upload direto ao S3 funcione corretamente, é necessário configurar 
 
 1. Acesse o AWS Console e vá para o bucket S3
 2. Vá em **Permissions** > **Cross-origin resource sharing (CORS)**
-3. Cole a seguinte configuração:
+3. Clique em **Edit** (Editar)
+4. **IMPORTANTE:** O console do AWS espera APENAS o array, não um objeto com `CORSRules`
+5. Cole a seguinte configuração (sem o objeto externo):
 
 ```json
 [
@@ -37,6 +39,11 @@ Para que o upload direto ao S3 funcione corretamente, é necessário configurar 
   }
 ]
 ```
+
+**⚠️ ATENÇÃO:** 
+- NÃO inclua `{ "CORSRules": [...] }`
+- NÃO inclua a palavra "json" no início
+- Cole APENAS o array `[...]` mostrado acima
 
 ## Configuração via AWS CLI
 

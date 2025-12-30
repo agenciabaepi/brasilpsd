@@ -22,7 +22,11 @@ O erro `status: 0` e `responseText: ''` confirma que o navegador está bloqueand
 - Clique em **Edit** (Editar)
 
 ### 5️⃣ Cole a Configuração
-**APAGUE** qualquer configuração existente e cole exatamente isto:
+**APAGUE** qualquer configuração existente no editor (incluindo a palavra "json" se houver)
+
+**IMPORTANTE:** O console do AWS espera APENAS o array, não um objeto com `CORSRules`
+
+Cole exatamente isto (apenas o array, sem objetos externos):
 
 ```json
 [
@@ -53,6 +57,11 @@ O erro `status: 0` e `responseText: ''` confirma que o navegador está bloqueand
     }
 ]
 ```
+
+**⚠️ ERRO COMUM:**
+- ❌ `{ "CORSRules": [...] }` ← NÃO use isso no console web
+- ❌ `json` ← Não inclua essa palavra
+- ✅ `[...]` ← Use APENAS o array acima
 
 ### 6️⃣ Salve
 - Clique em **Save changes** (Salvar alterações)

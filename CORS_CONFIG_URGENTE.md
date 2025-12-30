@@ -13,7 +13,8 @@ O erro "Possível problema de CORS no bucket S3" indica que o bucket não está 
 2. Vá na aba **Permissions** (Permissões)
 3. Role até **Cross-origin resource sharing (CORS)**
 4. Clique em **Edit** (Editar)
-5. Cole o seguinte JSON:
+5. **IMPORTANTE:** Apague qualquer conteúdo existente no editor
+6. Cole APENAS o array abaixo (sem objetos externos, sem a palavra "json"):
 
 ```json
 [
@@ -45,7 +46,12 @@ O erro "Possível problema de CORS no bucket S3" indica que o bucket não está 
 ]
 ```
 
-6. Clique em **Save changes** (Salvar alterações)
+**⚠️ ERRO COMUM:** 
+- ❌ NÃO cole: `{ "CORSRules": [...] }` 
+- ❌ NÃO inclua a palavra "json" no início
+- ✅ Cole APENAS: `[...]` (o array mostrado acima)
+
+7. Clique em **Save changes** (Salvar alterações)
 
 ### Passo 3: Verificar
 - Aguarde 1-2 minutos para a configuração propagar
