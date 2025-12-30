@@ -281,6 +281,7 @@ export default function UploadResourcePage() {
           setUploadProgress(96)
           
           // Notificar servidor para processar o arquivo
+          // resourceId será passado após salvar no banco (ver handleSubmit)
           fetch('/api/upload/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -290,7 +291,8 @@ export default function UploadResourcePage() {
               fileName: file.name,
               contentType: file.type,
               fileSize: file.size,
-              type: type
+              type: type,
+              resourceId: undefined // Será definido após salvar no banco
             })
           })
             .then(async res => {
@@ -302,7 +304,20 @@ export default function UploadResourcePage() {
             })
             .then(data => {
               setUploadProgress(100)
-              resolve({ ...data, url, key })
+              // Se foi enfileirado, retornar dados básicos
+              if (data.processing === 'queued') {
+                resolve({ 
+                  url, 
+                  key, 
+                  previewUrl: null, 
+                  thumbnailUrl: null, 
+                  videoMetadata: null,
+                  isAiGenerated: false,
+                  processing: 'queued'
+                })
+              } else {
+                resolve({ ...data, url, key })
+              }
             })
             .catch(err => {
               console.error('Processing error:', err)
@@ -835,7 +850,39 @@ export default function UploadResourcePage() {
       
       console.log('✅ Resource saved successfully:', resource?.id)
 
-      // 5. Se for PNG, garantir que está associado à categoria "Imagens" também
+      // 5. Se for vídeo e processamento foi enfileirado, re-enfileirar com resourceId
+      if (resource && formData.resource_type === 'video' && fileData.processing === 'queued') {
+        console.log('📤 Re-enfileirando processamento com resourceId...')
+        try {
+          // Extrair key do fileUrl (pode ser URL completa ou apenas key)
+          const fileKey = fileUrl.includes('/') ? fileUrl.split('/').slice(-2).join('/') : fileUrl
+          
+          const response = await fetch('/api/upload/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              key: fileKey,
+              url: fileUrl,
+              fileName: file.name,
+              contentType: file.type,
+              fileSize: file.size,
+              type: 'resource',
+              resourceId: resource.id
+            })
+          })
+          
+          if (response.ok) {
+            console.log('✅ Processamento re-enfileirado com resourceId:', resource.id)
+          } else {
+            const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+            console.error('⚠️ Erro ao re-enfileirar:', error)
+          }
+        } catch (err) {
+          console.error('⚠️ Erro ao re-enfileirar (não crítico):', err)
+        }
+      }
+
+      // 6. Se for PNG, garantir que está associado à categoria "Imagens" também
       if (resource && formData.resource_type === 'png') {
         // Buscar categoria "Imagens"
         const { data: imagensCategory } = await supabase

@@ -5,6 +5,7 @@ import { addWatermarkToVideo } from '@/lib/video/watermark'
 import { extractVideoThumbnail } from '@/lib/video/thumbnail'
 import { generateVideoPreview } from '@/lib/video/preview'
 import { uploadFileToS3, getSignedDownloadUrl } from '@/lib/aws/s3'
+import { enqueueVideoProcessing } from '@/lib/aws/sqs'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -14,7 +15,10 @@ export const runtime = 'nodejs'
 
 /**
  * Processa arquivo já enviado para S3
- * Faz conversão, watermark e thumbnail para vídeos
+ * 
+ * NOVO FLUXO (assíncrono):
+ * - Se SQS_QUEUE_URL estiver configurado: enfileira processamento e retorna imediatamente
+ * - Se não: processa síncronamente (fallback para compatibilidade)
  */
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -28,11 +32,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { key, url, fileName, contentType, fileSize, type } = await request.json()
+    const { key, url, fileName, contentType, fileSize, type, resourceId } = await request.json()
 
     if (!key || !url) {
       return NextResponse.json({ error: 'key e url são obrigatórios' }, { status: 400 })
     }
+
+    // NOVO: Se SQS estiver configurado e for vídeo, enfileirar processamento assíncrono
+    const useAsyncProcessing = process.env.SQS_QUEUE_URL && type === 'resource' && contentType.startsWith('video/')
+    
+    if (useAsyncProcessing && resourceId) {
+      console.log('📤 Enfileirando processamento assíncrono via SQS...')
+      try {
+        await enqueueVideoProcessing({
+          resourceId,
+          key,
+          userId: user.id,
+          fileName,
+          contentType
+        })
+        
+        // Retornar imediatamente - worker processará em background
+        return NextResponse.json({
+          url, // URL original temporária
+          key, // Key original
+          previewUrl: undefined,
+          thumbnailUrl: undefined,
+          videoMetadata: undefined,
+          wasConverted: false,
+          finalFormat: fileName.split('.').pop()?.toLowerCase() || '',
+          processing: 'queued' // Indica que foi enfileirado
+        })
+      } catch (error: any) {
+        console.error('❌ Erro ao enfileirar, caindo back para processamento síncrono:', error.message)
+        // Continuar com processamento síncrono como fallback
+      }
+    }
+    
+    // Processamento síncrono (fallback ou quando SQS não está configurado)
+    console.log('🔄 Processando síncronamente...')
 
     // Baixar arquivo do S3 para processar
     // Usar URL assinada para garantir acesso mesmo se o bucket for privado

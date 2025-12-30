@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  video-worker:
+    build: .
+    container_name: brasilpsd-video-worker
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - /tmp:/tmp  # Para arquivos temporários
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
