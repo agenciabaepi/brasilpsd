@@ -660,7 +660,10 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                     // Mensagens de erro específicas
                     let errorMessage = 'Erro ao carregar vídeo'
                     if (error?.code === 4) {
-                      errorMessage = `Formato ${resource.file_format?.toUpperCase()} não é suportado por este navegador. Tente usar Chrome ou Firefox.`
+                      // Detectar formato real pela URL (arquivo pode ter sido convertido para MP4)
+                      const urlToCheck = resource.preview_url || resource.file_url || ''
+                      const actualFormat = urlToCheck.match(/\.(mp4|mov|webm|avi|mkv)$/i)?.[1]?.toUpperCase() || resource.file_format?.toUpperCase() || 'Desconhecido'
+                      errorMessage = `Formato ${actualFormat} não é suportado por este navegador. Tente usar Chrome ou Firefox.`
                       setVideoError(errorMessage)
                     } else if (error?.code === 2) {
                       errorMessage = 'Erro de rede ao carregar vídeo. Verifique sua conexão.'
@@ -694,12 +697,22 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                       <p className="font-semibold mb-2">Erro ao carregar vídeo</p>
                       <p className="text-xs text-gray-300 mb-4">{videoError}</p>
                       <p className="text-xs text-gray-400">
-                        Formato: {resource.file_format?.toUpperCase() || 'Desconhecido'}
-                        {resource.file_format?.toLowerCase() === 'mov' && (
-                          <span className="block mt-2 text-yellow-400">
-                            💡 Dica: Arquivos MOV podem não funcionar em todos os navegadores. Tente baixar o arquivo diretamente.
-                          </span>
-                        )}
+                        {/* Detectar formato real pela URL (arquivo pode ter sido convertido para MP4) */}
+                        {(() => {
+                          const urlToCheck = resource.preview_url || resource.file_url || ''
+                          const actualFormat = urlToCheck.match(/\.(mp4|mov|webm|avi|mkv)$/i)?.[1]?.toUpperCase() || resource.file_format?.toUpperCase() || 'Desconhecido'
+                          const isMov = actualFormat.toLowerCase() === 'mov'
+                          return (
+                            <>
+                              Formato: {actualFormat}
+                              {isMov && (
+                                <span className="block mt-2 text-yellow-400">
+                                  💡 Dica: Arquivos MOV podem não funcionar em todos os navegadores. Tente baixar o arquivo diretamente.
+                                </span>
+                              )}
+                            </>
+                          )
+                        })()}
                       </p>
                     </div>
                   </div>
