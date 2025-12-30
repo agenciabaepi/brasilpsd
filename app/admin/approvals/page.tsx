@@ -385,7 +385,7 @@ export default function AdminApprovalsPage() {
                             <div className="flex gap-2 mt-2 pt-2 border-t border-gray-200">
                               <button 
                                 onClick={() => handleResourceAction(font.id, 'approved')}
-                                className="flex-1 h-8 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
+                                className="flex-1 h-8 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1"
                               >
                                 <CheckCircle2 className="h-3 w-3" />
                                 Aprovar
@@ -407,7 +407,7 @@ export default function AdminApprovalsPage() {
                     <div className="flex gap-2 pt-4 border-t border-primary-200">
                       <button 
                         onClick={() => handleFamilyAction(familyId, 'approved')}
-                        className="flex-1 h-10 bg-green-500 hover:bg-green-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                        className="flex-1 h-10 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="h-4 w-4" />
                         Aprovar Família ({family.length})
@@ -453,7 +453,7 @@ export default function AdminApprovalsPage() {
                 <div className="flex gap-2 pt-4 border-t border-gray-50">
                   <button 
                     onClick={() => handleResourceAction(resource.id, 'approved')}
-                    className="flex-1 h-10 bg-green-500 hover:bg-green-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    className="flex-1 h-10 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     Aprovar
@@ -505,7 +505,7 @@ export default function AdminApprovalsPage() {
                 <div className="flex gap-2 pt-4 border-t border-gray-50">
                   <button 
                     onClick={() => handleCollectionAction(collection.id, 'approved')}
-                    className="flex-1 h-10 bg-green-500 hover:bg-green-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    className="flex-1 h-10 bg-primary-500 hover:bg-primary-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     Aprovar

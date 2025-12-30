@@ -52,7 +52,7 @@ export default function JustifiedGrid({
     const isVideo = isVideoPath(candidate) || resource.resource_type === 'video'
 
     if (isImage) {
-      const src = absolute ? candidate : `/api/image/${candidate}?q=75`
+      const src = absolute ? candidate : `/api/image/${candidate}?q=65`
       return { src, kind: 'image' }
     }
 

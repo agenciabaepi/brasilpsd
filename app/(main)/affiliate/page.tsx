@@ -31,7 +31,7 @@ export default function AffiliatePage() {
                 <p className="text-sm text-gray-600 mb-1">Comissões</p>
                 <p className="text-2xl font-bold text-gray-900">R$ 0,00</p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-green-600">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
                 <DollarSign className="h-6 w-6" />
               </div>
             </div>

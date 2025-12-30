@@ -433,7 +433,7 @@ export default function AdminResourcesPage() {
                                   </td>
                                   <td className="px-6 py-4">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                                      resource.status === 'approved' ? 'bg-green-50 text-gray-900' :
+                                      resource.status === 'approved' ? 'bg-primary-50 text-gray-900' :
                                       resource.status === 'pending' ? 'bg-yellow-50 text-gray-900' :
                                       'bg-red-50 text-gray-900'
                                     }`}>
@@ -457,7 +457,7 @@ export default function AdminResourcesPage() {
                                           <Button 
                                             variant="ghost" 
                                             size="sm" 
-                                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
+                                            className="h-8 w-8 p-0 text-primary-600 hover:text-primary-700"
                                             onClick={() => handleUpdateStatus(resource.id, 'approved')}
                                           >
                                             <Check className="h-4 w-4" />
@@ -565,7 +565,7 @@ export default function AdminResourcesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                        resource.status === 'approved' ? 'bg-green-50 text-gray-900' :
+                        resource.status === 'approved' ? 'bg-primary-50 text-gray-900' :
                         resource.status === 'pending' ? 'bg-orange-50 text-orange-600' :
                         'bg-red-50 text-red-600'
                       }`}>
@@ -577,7 +577,7 @@ export default function AdminResourcesPage() {
                         {resource.status === 'pending' && (
                           <button 
                             onClick={() => handleUpdateStatus(resource.id, 'approved')}
-                            className="p-2 text-gray-700 hover:bg-green-50 rounded-lg transition-all"
+                            className="p-2 text-gray-700 hover:bg-primary-50 rounded-lg transition-all"
                             title="Aprovar"
                           >
                             <CheckCircle2 className="h-4 w-4" />
@@ -676,7 +676,7 @@ export default function AdminResourcesPage() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                                    resource.status === 'approved' ? 'bg-green-50 text-gray-900' :
+                                    resource.status === 'approved' ? 'bg-primary-50 text-gray-900' :
                                     resource.status === 'pending' ? 'bg-orange-50 text-orange-600' :
                                     'bg-red-50 text-red-600'
                                   }`}>
@@ -688,7 +688,7 @@ export default function AdminResourcesPage() {
                                     {resource.status === 'pending' && (
                                       <button 
                                         onClick={() => handleUpdateStatus(resource.id, 'approved')}
-                                        className="p-2 text-gray-700 hover:bg-green-50 rounded-lg transition-all"
+                                        className="p-2 text-gray-700 hover:bg-primary-50 rounded-lg transition-all"
                                         title="Aprovar"
                                       >
                                         <CheckCircle2 className="h-4 w-4" />

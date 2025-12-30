@@ -1,5 +1,5 @@
 export type UserRole = 'user' | 'creator' | 'admin'
-export type ResourceType = 'image' | 'png' | 'video' | 'font' | 'psd' | 'ai' | 'audio' | 'other'
+export type ResourceType = 'image' | 'png' | 'video' | 'font' | 'psd' | 'ai' | 'audio' | 'motion' | 'other'
 export type ResourceStatus = 'pending' | 'approved' | 'rejected'
 export type SubscriptionStatus = 'active' | 'expired' | 'canceled' | 'suspended'
 export type BillingCycle = 'monthly' | 'yearly'

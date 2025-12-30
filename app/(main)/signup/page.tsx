@@ -280,7 +280,7 @@ export default function SignupPage() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
-              className={emailStatus === 'duplicate' ? 'border-red-500' : emailStatus === 'valid' ? 'border-green-500' : ''}
+              className={emailStatus === 'duplicate' ? 'border-red-500' : emailStatus === 'valid' ? 'border-primary-500' : ''}
             />
             {emailStatus === 'checking' && (
               <p className="mt-1 text-xs text-gray-500 flex items-center space-x-1">
@@ -295,7 +295,7 @@ export default function SignupPage() {
               </p>
             )}
             {emailStatus === 'valid' && (
-              <p className="mt-1 text-xs text-green-600 flex items-center space-x-1">
+              <p className="mt-1 text-xs text-primary-600 flex items-center space-x-1">
                 <CheckCircle2 className="h-3 w-3" />
                 <span>Email disponível</span>
               </p>
@@ -325,7 +325,7 @@ export default function SignupPage() {
               value={formData.cpf_cnpj}
               onChange={(e) => setFormData({ ...formData, cpf_cnpj: e.target.value.replace(/\D/g, '') })}
               maxLength={18}
-              className={cpfStatus === 'duplicate' || cpfStatus === 'invalid' ? 'border-red-500' : cpfStatus === 'valid' ? 'border-green-500' : ''}
+              className={cpfStatus === 'duplicate' || cpfStatus === 'invalid' ? 'border-red-500' : cpfStatus === 'valid' ? 'border-primary-500' : ''}
             />
             {cpfStatus === 'checking' && (
               <p className="mt-1 text-xs text-gray-500 flex items-center space-x-1">
@@ -340,7 +340,7 @@ export default function SignupPage() {
               </p>
             )}
             {cpfStatus === 'valid' && (
-              <p className="mt-1 text-xs text-green-600 flex items-center space-x-1">
+              <p className="mt-1 text-xs text-primary-600 flex items-center space-x-1">
                 <CheckCircle2 className="h-3 w-3" />
                 <span>CPF/CNPJ válido e disponível</span>
               </p>
@@ -364,7 +364,7 @@ export default function SignupPage() {
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             required
-            className={formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : formData.confirmPassword && formData.password === formData.confirmPassword && formData.password.length >= 6 ? 'border-green-500' : ''}
+            className={formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : formData.confirmPassword && formData.password === formData.confirmPassword && formData.password.length >= 6 ? 'border-primary-500' : ''}
           />
 
           <div>
@@ -375,7 +375,7 @@ export default function SignupPage() {
               value={formData.confirmPassword}
               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               required
-              className={formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : formData.confirmPassword && formData.password === formData.confirmPassword && formData.password.length >= 6 ? 'border-green-500' : ''}
+              className={formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : formData.confirmPassword && formData.password === formData.confirmPassword && formData.password.length >= 6 ? 'border-primary-500' : ''}
             />
             {formData.confirmPassword && formData.password && formData.password !== formData.confirmPassword && (
               <p className="mt-1 text-xs text-red-600 flex items-center space-x-1">
@@ -384,7 +384,7 @@ export default function SignupPage() {
               </p>
             )}
             {formData.confirmPassword && formData.password && formData.password === formData.confirmPassword && formData.password.length >= 6 && (
-              <p className="mt-1 text-xs text-green-600 flex items-center space-x-1">
+              <p className="mt-1 text-xs text-primary-600 flex items-center space-x-1">
                 <CheckCircle2 className="h-3 w-3" />
                 <span>As senhas coincidem</span>
               </p>

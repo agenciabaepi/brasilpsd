@@ -28,6 +28,7 @@ import ResourceCard from '@/components/resources/ResourceCard'
 import { formatFileSize } from '@/lib/utils/format'
 import toast from 'react-hot-toast'
 import { getS3Url } from '@/lib/aws/s3'
+import JustifiedGrid from '@/components/layout/JustifiedGrid'
 import { cn } from '@/lib/utils/cn'
 import { isSystemProfileSync } from '@/lib/utils/system'
 import FontThumbnail from '@/components/fonts/FontThumbnail'
@@ -40,12 +41,13 @@ interface ResourceDetailClientProps {
   initialUser?: Profile | null
   initialIsFavorited?: boolean
   initialDownloadStatus?: { current: number; limit: number; remaining: number; allowed: boolean } | null
+  initialAlreadyDownloadedToday?: boolean
   collection?: Collection | null
   collectionResources?: Resource[]
   relatedResources?: Resource[]
 }
 
-export default function ResourceDetailClient({ resource, initialUser, initialIsFavorited = false, initialDownloadStatus = null, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
+export default function ResourceDetailClient({ resource, initialUser, initialIsFavorited = false, initialDownloadStatus = null, initialAlreadyDownloadedToday = false, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
   const router = useRouter()
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited)
   const [downloading, setDownloading] = useState(false)
@@ -58,6 +60,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   const [videoReady, setVideoReady] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState<{ current: number; limit: number; remaining: number; allowed: boolean } | null>(initialDownloadStatus)
   const [loadingDownloadStatus, setLoadingDownloadStatus] = useState(false)
+  const [alreadyDownloadedToday, setAlreadyDownloadedToday] = useState(initialAlreadyDownloadedToday)
   const [resourceData, setResourceData] = useState(resource)
   const [fontLoaded, setFontLoaded] = useState(false)
   const [fontName, setFontName] = useState<string>('')
@@ -170,7 +173,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
     async function checkFamily() {
       if (resource.resource_type === 'font') {
         try {
-          const familyId = resource.font_family_id || resource.id
+          const familyId = (resource as any).font_family_id || resource.id
           
           const { count } = await supabase
             .from('resources')
@@ -188,62 +191,141 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
       }
     }
     checkFamily()
-  }, [resource.resource_type, resource.font_family_id, resource.id, supabase])
+  }, [resource.resource_type, resource.id, supabase])
 
   // Carregar signed URL para vídeo (na página de detalhes, sempre usar file_url completo)
   useEffect(() => {
     async function loadVideoUrl() {
-      if (resource.resource_type === 'video') {
-        // Na página de detalhes, usar file_url (vídeo completo) para o usuário ver o vídeo inteiro antes de baixar
-        // preview_url é usado apenas nos cards/grids para performance
-        const videoSourceUrl = resource.file_url || resource.preview_url
+      // Motions também são tratados como vídeo (têm preview_url como vídeo)
+      if (resource.resource_type === 'video' || resource.resource_type === 'motion') {
+        const isMotion = resource.resource_type === 'motion'
         
-        if (!videoSourceUrl) return
+        // Para motions, sempre usar preview_url (vídeo preview sem marca d'água)
+        // Para vídeos normais, usar file_url (vídeo completo) para o usuário ver o vídeo inteiro antes de baixar
+        const videoSourceUrl = isMotion 
+          ? resource.preview_url  // Motions: sempre usar preview_url (não usar file_url que é ZIP)
+          : resource.file_url || resource.preview_url  // Vídeos: preferir file_url, fallback para preview_url
+        
+        if (!videoSourceUrl) {
+          console.warn('⚠️ No video source URL available', { 
+            resource_type: resource.resource_type,
+            has_preview: !!resource.preview_url,
+            has_file: !!resource.file_url
+          })
+          setVideoError('Vídeo não disponível.')
+          return
+        }
         
         console.log('🎥 Loading video URL:', {
+          resource_type: resource.resource_type,
+          is_motion: isMotion,
           preview_url: resource.preview_url,
           file_url: resource.file_url,
+          video_source_url: videoSourceUrl,
           file_format: resource.file_format,
-          file_size: resource.file_size,
-          using_full_video: !!resource.file_url
+          file_size: resource.file_size
         })
         
-        // SEMPRE usar signed URL para segurança (nunca URL direta)
-        try {
-          const { data: { user: authUser } } = await supabase.auth.getUser()
-          if (authUser) {
-            console.log('✅ User authenticated, fetching signed URL...')
-            const response = await fetch('/api/video/url', {
+        // ESTRATÉGIA: Carregar o vídeo o mais rápido possível
+        // 1. Se tiver preview_url, usar imediatamente via proxy (mais leve e rápido)
+        // 2. Para vídeos normais (não motions), tentar obter signed URL para o vídeo completo em paralelo
+        
+        // PRIMEIRO: Para motions, usar signed URL direto (mais rápido que proxy)
+        // Para vídeos normais, usar proxy se necessário
+        if (resource.preview_url) {
+          if (isMotion) {
+            // Para motions, obter signed URL via API (mais rápido, sem proxy intermediário)
+            console.log('⚡ Fetching signed URL for motion (faster loading)...')
+            fetch('/api/video/url', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
-                fileUrl: videoSourceUrl,
-                resourceId: resource.id // Passar resourceId para validação
+                fileUrl: resource.preview_url || '',
+                resourceId: resource.id
               }),
             })
-
-            if (response.ok) {
-              const data = await response.json()
-              console.log('✅ Signed URL received:', data.url?.substring(0, 100) + '...')
+            .then(response => {
+              if (response.ok) {
+                return response.json()
+              }
+              throw new Error('Failed to get signed URL')
+            })
+            .then(data => {
               if (data.url) {
+                console.log('✅ Signed URL received for motion preview')
                 setVideoUrl(data.url)
                 setVideoLoading(true)
                 setVideoReady(false)
-                return // Usar signed URL
+              } else {
+                throw new Error('No URL in response')
               }
-            } else {
-              const errorData = await response.json()
-              console.warn('⚠️ Failed to get signed URL:', errorData)
-              setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
-              setVideoLoading(false)
-            }
+            })
+            .catch(error => {
+              console.warn('⚠️ Failed to get signed URL, falling back to proxy:', error)
+              // Fallback para proxy se signed URL falhar
+              if (resource.preview_url) {
+                const proxyUrl = `/api/video/proxy?fileUrl=${encodeURIComponent(resource.preview_url)}`
+                setVideoUrl(proxyUrl)
+                setVideoLoading(true)
+                setVideoReady(false)
+              } else {
+                setVideoError('Vídeo não disponível.')
+              }
+            })
           } else {
-            console.log('ℹ️ User not authenticated')
-            setVideoError('Você precisa estar logado para visualizar o vídeo.')
+            // Para vídeos normais, usar proxy
+            const proxyUrl = `/api/video/proxy?fileUrl=${encodeURIComponent(resource.preview_url)}`
+            console.log('⚡ Using preview URL via proxy for immediate loading')
+            setVideoUrl(proxyUrl)
+            setVideoLoading(true)
+            setVideoReady(false)
           }
-        } catch (error) {
-          console.error('❌ Error loading signed video URL:', error)
-          setVideoError('Erro ao carregar vídeo.')
+        }
+        
+        // EM PARALELO: Para vídeos normais (não motions), tentar obter signed URL para o vídeo completo (em background)
+        // Motions não precisam disso pois já usam preview_url como fonte principal
+        if (!isMotion) {
+          supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+            if (authUser && resource.file_url) {
+              console.log('✅ User authenticated, fetching signed URL for full video...')
+              fetch('/api/video/url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  fileUrl: resource.file_url,
+                  resourceId: resource.id
+                }),
+              })
+              .then(response => {
+                if (response.ok) {
+                  return response.json()
+                }
+                throw new Error('Failed to get signed URL')
+              })
+              .then(data => {
+                if (data.url) {
+                  console.log('✅ Signed URL received for full video, updating...')
+                  // Atualizar para o vídeo completo quando a signed URL estiver pronta
+                  setVideoUrl(data.url)
+                  setVideoLoading(true)
+                  setVideoReady(false)
+                }
+              })
+              .catch(error => {
+                console.warn('⚠️ Failed to get signed URL (using preview):', error)
+                // Não definir erro se já temos preview_url funcionando
+              })
+            } else if (!resource.preview_url) {
+              console.log('ℹ️ User not authenticated and no preview available')
+              setVideoError('Você precisa estar logado para visualizar o vídeo.')
+            }
+          }).catch(error => {
+            console.error('❌ Error checking auth (using preview):', error)
+            // Não definir erro se já temos preview_url funcionando
+            if (!resource.preview_url) {
+              setVideoError('Erro ao carregar vídeo.')
+            }
+          })
         }
       }
     }
@@ -292,14 +374,41 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
       loadDownloadStatus()
     }
 
+    // Função para verificar se já foi baixado hoje
+    async function checkAlreadyDownloadedToday() {
+      if (!user) return
+      
+      try {
+        const { data: checkResult } = await supabase
+          .rpc('has_user_downloaded_resource_today', {
+            p_user_id: user.id,
+            p_resource_id: resource.id
+          })
+        setAlreadyDownloadedToday(Boolean(checkResult))
+      } catch (error) {
+        console.error('Error checking if already downloaded today:', error)
+      }
+    }
+    
+    // Verificar se já foi baixado hoje quando usuário carregar
+    if (user && !initialAlreadyDownloadedToday) {
+      checkAlreadyDownloadedToday()
+    }
+
     // Listener para atualizar após download
     const handleDownloadCompleted = () => {
-      setTimeout(loadDownloadStatus, 500) // Pequeno delay para garantir que o banco foi atualizado
+      setTimeout(() => {
+        loadDownloadStatus()
+        checkAlreadyDownloadedToday()
+      }, 500) // Pequeno delay para garantir que o banco foi atualizado
     }
 
     // Listener para atualizar quando download é bloqueado
     const handleDownloadBlocked = () => {
-      setTimeout(loadDownloadStatus, 500)
+      setTimeout(() => {
+        loadDownloadStatus()
+        checkAlreadyDownloadedToday()
+      }, 500)
     }
 
     window.addEventListener('download-completed', handleDownloadCompleted)
@@ -308,7 +417,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
       window.removeEventListener('download-completed', handleDownloadCompleted)
       window.removeEventListener('download-blocked', handleDownloadBlocked)
     }
-  }, [user, initialDownloadStatus])
+  }, [user, initialDownloadStatus, initialAlreadyDownloadedToday, resource.id])
 
   // Função para extrair metadados de vídeos antigos
   async function handleExtractMetadata() {
@@ -359,15 +468,24 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   const isOfficial = resourceData.is_official || isSystemProfileSync(resourceData.creator_id)
   const authorName = isOfficial ? (resourceData.creator?.full_name || 'BrasilPSD') : (resourceData.creator?.full_name || 'BrasilPSD')
   
-  // Calcular aspect ratio do vídeo baseado nas dimensões
-  const getVideoAspectRatio = () => {
-    if (resourceData.resource_type !== 'video' || !resourceData.width || !resourceData.height) {
-      return null // Usar aspect-video padrão
-    }
-    return { aspectRatio: `${resourceData.width} / ${resourceData.height}` }
-  }
-  
-  const videoAspectRatioStyle = getVideoAspectRatio()
+         // Calcular aspect ratio do vídeo baseado nas dimensões
+         const getVideoAspectRatio = () => {
+           if ((resourceData.resource_type !== 'video' && resourceData.resource_type !== 'motion') || !resourceData.width || !resourceData.height) {
+             return null // Usar aspect-video padrão
+           }
+           return { aspectRatio: `${resourceData.width} / ${resourceData.height}` }
+         }
+         
+         const videoAspectRatioStyle = getVideoAspectRatio()
+         
+         // Detectar se é vídeo vertical (height > width)
+         const isVerticalVideo = (resourceData.resource_type === 'video' || resourceData.resource_type === 'motion') && 
+           resourceData.width && 
+           resourceData.height && 
+           resourceData.height > resourceData.width
+         
+         // Tamanho máximo para vídeos verticais (aumentado para melhor visualização)
+         const maxVideoHeight = isVerticalVideo ? '700px' : '600px'
 
   async function handleFavorite() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -481,6 +599,25 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
           allowed: downloadData.remaining > 0
         })
       }
+      
+      // Atualizar estado se já foi baixado hoje
+      if (downloadData.is_new_download !== undefined) {
+        setAlreadyDownloadedToday(!downloadData.is_new_download)
+      } else {
+        // Se não veio na resposta, verificar novamente
+        if (user) {
+          try {
+            const { data: checkResult } = await supabase
+              .rpc('has_user_downloaded_resource_today', {
+                p_user_id: user.id,
+                p_resource_id: resource.id
+              })
+            setAlreadyDownloadedToday(Boolean(checkResult))
+          } catch (error) {
+            console.error('Error checking if already downloaded:', error)
+          }
+        }
+      }
 
       // Forçar download do arquivo (ao invés de abrir em nova aba)
       // Para URLs de outros domínios (S3), precisamos baixar como blob
@@ -551,10 +688,14 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   isFavorited={isFavorited}
                 />
               </div>
-            ) : resource.resource_type === 'video' && videoUrl ? (
+            ) : (resource.resource_type === 'video' || resource.resource_type === 'motion') ? (
               <div 
-                className={`w-full bg-black flex items-center justify-center relative select-none ${!videoAspectRatioStyle ? 'aspect-video' : ''}`}
-                style={videoAspectRatioStyle || undefined}
+                className={`w-full bg-white flex items-center justify-center relative select-none ${!videoAspectRatioStyle ? 'aspect-video' : ''}`}
+                style={{
+                  ...(videoAspectRatioStyle || {}),
+                  maxHeight: (resourceData.width && resourceData.height && resourceData.height > resourceData.width) ? '700px' : '600px',
+                  margin: '0 auto'
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -582,146 +723,166 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                     msUserSelect: 'none'
                   }}
                 />
-                <video
-                  key={videoUrl} // Force re-render when URL changes
-                  src={videoUrl}
-                  controls
-                  className="w-full h-full max-h-[800px] object-contain relative z-20"
-                  preload="metadata"
-                  crossOrigin="anonymous"
-                  playsInline
-                  muted={false}
-                  loop={false}
-                  controlsList="nodownload noplaybackrate nofullscreen"
-                  disablePictureInPicture
-                  disableRemotePlayback
-                  onAuxClick={(e) => {
-                    // Bloquear clique com botão do meio
-                    e.preventDefault()
-                    return false
-                  }}
-                  onDoubleClick={(e) => {
-                    // Bloquear double-click para fullscreen
-                    e.preventDefault()
-                    return false
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    return false
-                  }}
-                  onDragStart={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    return false
-                  }}
-                  style={{
-                    pointerEvents: 'auto',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    opacity: videoReady ? 1 : 0,
-                    transition: 'opacity 0.3s ease-in-out'
-                  }}
-                  onLoadStart={() => {
-                    console.log('🎬 Video load started:', {
-                      url: videoUrl?.substring(0, 100),
-                      format: resource.file_format,
-                      hasSignedUrl: !!videoUrl
-                    })
-                    setVideoLoading(true)
-                    setVideoReady(false)
-                  }}
-                  onLoadedMetadata={(e) => {
-                    const video = e.currentTarget
-                    console.log('✅ Video metadata loaded:', {
-                      duration: video.duration,
-                      videoWidth: video.videoWidth,
-                      videoHeight: video.videoHeight,
-                      readyState: video.readyState,
-                      networkState: video.networkState
-                    })
-                    // Ir para 2 segundos se o vídeo tiver mais de 2 segundos
-                    if (video.duration >= 2) {
-                      video.currentTime = 2
-                    }
-                  }}
-                  onCanPlay={() => {
-                    console.log('✅ Video can play')
-                    setVideoLoading(false)
-                    setVideoReady(true)
-                  }}
-                  onCanPlayThrough={() => {
-                    console.log('✅ Video can play through')
-                    setVideoLoading(false)
-                    setVideoReady(true)
-                  }}
-                  onWaiting={() => {
-                    console.log('⏳ Video waiting for data...')
-                    setVideoLoading(true)
-                  }}
-                  onPlaying={() => {
-                    setVideoLoading(false)
-                    setVideoReady(true)
-                  }}
-                  onStalled={() => {
-                    console.warn('⚠️ Video stalled')
-                    setVideoLoading(true)
-                  }}
-                  onError={(e) => {
-                    const video = e.currentTarget
-                    const error = video.error
-                    console.error('❌ Video load error:', {
-                      error: error,
-                      code: error?.code,
-                      message: error?.message,
-                      src: video.src?.substring(0, 100),
-                      networkState: video.networkState,
-                      readyState: video.readyState,
-                      format: resource.file_format
-                    })
-                    
-                    setVideoLoading(false)
-                    
-                    // Mensagens de erro específicas
-                    let errorMessage = 'Erro ao carregar vídeo'
-                    if (error?.code === 4) {
-                      // Detectar formato real pela URL (arquivo pode ter sido convertido para MP4)
-                      const urlToCheck = resource.preview_url || resource.file_url || ''
-                      const actualFormat = urlToCheck.match(/\.(mp4|mov|webm|avi|mkv)$/i)?.[1]?.toUpperCase() || resource.file_format?.toUpperCase() || 'Desconhecido'
-                      errorMessage = `Formato ${actualFormat} não é suportado por este navegador. Tente usar Chrome ou Firefox.`
-                      setVideoError(errorMessage)
-                    } else if (error?.code === 2) {
-                      errorMessage = 'Erro de rede ao carregar vídeo. Verifique sua conexão.'
-                      setVideoError(errorMessage)
-                    } else if (error?.code === 3) {
-                      errorMessage = 'Erro ao decodificar vídeo. O arquivo pode estar corrompido.'
-                      setVideoError(errorMessage)
-                    } else {
-                      setVideoError(errorMessage)
-                    }
-                    
-                    // NÃO usar URL direta - sempre requerer signed URL para segurança
-                    console.error('❌ Video signed URL failed, not using direct URL for security')
-                    setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
-                  }}
-                >
-                  Seu navegador não suporta a tag de vídeo.
-                </video>
-                {(videoLoading || (!videoUrl && !videoError)) && (
-                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm bg-black/50 z-30">
+                {videoUrl ? (
+                  <video
+                    key={videoUrl} // Force re-render when URL changes
+                    src={videoUrl}
+                    controls
+                    className="w-full h-full object-contain relative z-20"
+                    preload="metadata"
+                    crossOrigin="anonymous"
+                    playsInline
+                    muted={false}
+                    loop={false}
+                    controlsList="nodownload noplaybackrate nofullscreen"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    onAuxClick={(e) => {
+                      // Bloquear clique com botão do meio
+                      e.preventDefault()
+                      return false
+                    }}
+                    onDoubleClick={(e) => {
+                      // Bloquear double-click para fullscreen
+                      e.preventDefault()
+                      return false
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      return false
+                    }}
+                    onDragStart={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      return false
+                    }}
+                    style={{
+                      pointerEvents: 'auto',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      maxHeight: (resourceData.width && resourceData.height && resourceData.height > resourceData.width) ? '700px' : '600px',
+                      opacity: videoReady ? 1 : (videoUrl ? 1 : 0),
+                      transition: 'opacity 0.2s ease-in-out'
+                    }}
+                    onLoadStart={() => {
+                      console.log('🎬 Video load started:', {
+                        url: videoUrl?.substring(0, 100),
+                        format: resource.file_format,
+                        hasSignedUrl: !!videoUrl
+                      })
+                      setVideoLoading(true)
+                      setVideoReady(false)
+                    }}
+                    onLoadedMetadata={(e) => {
+                      const video = e.currentTarget
+                      console.log('✅ Video metadata loaded:', {
+                        duration: video.duration,
+                        videoWidth: video.videoWidth,
+                        videoHeight: video.videoHeight,
+                        readyState: video.readyState,
+                        networkState: video.networkState
+                      })
+                      // Para motions, não pular para 2 segundos - deixar no início para preview rápido
+                      // Apenas para vídeos normais, pular para 2 segundos
+                      if (resource.resource_type === 'video' && video.duration >= 2) {
+                        video.currentTime = 2
+                      }
+                    }}
+                    onCanPlay={() => {
+                      console.log('✅ Video can play')
+                      setVideoLoading(false)
+                      setVideoReady(true)
+                    }}
+                    onCanPlayThrough={() => {
+                      console.log('✅ Video can play through')
+                      setVideoLoading(false)
+                      setVideoReady(true)
+                    }}
+                    onWaiting={() => {
+                      console.log('⏳ Video waiting for data...')
+                      setVideoLoading(true)
+                    }}
+                    onPlaying={() => {
+                      setVideoLoading(false)
+                      setVideoReady(true)
+                    }}
+                    onStalled={() => {
+                      console.warn('⚠️ Video stalled')
+                      setVideoLoading(true)
+                    }}
+                    onError={(e) => {
+                      const video = e.currentTarget
+                      const error = video.error
+                      console.error('❌ Video load error:', {
+                        error: error,
+                        code: error?.code,
+                        message: error?.message,
+                        src: video.src?.substring(0, 100),
+                        networkState: video.networkState,
+                        readyState: video.readyState,
+                        format: resource.file_format
+                      })
+                      
+                      setVideoLoading(false)
+                      
+                      // Mensagens de erro específicas
+                      let errorMessage = 'Erro ao carregar vídeo'
+                      if (error?.code === 4) {
+                        // Detectar formato real pela URL (arquivo pode ter sido convertido para MP4)
+                        const urlToCheck = resource.preview_url || resource.file_url || ''
+                        const actualFormat = urlToCheck.match(/\.(mp4|mov|webm|avi|mkv)$/i)?.[1]?.toUpperCase() || resource.file_format?.toUpperCase() || 'Desconhecido'
+                        errorMessage = `Formato ${actualFormat} não é suportado por este navegador. Tente usar Chrome ou Firefox.`
+                        setVideoError(errorMessage)
+                      } else if (error?.code === 2) {
+                        errorMessage = 'Erro de rede ao carregar vídeo. Verifique sua conexão.'
+                        setVideoError(errorMessage)
+                      } else if (error?.code === 3) {
+                        errorMessage = 'Erro ao decodificar vídeo. O arquivo pode estar corrompido.'
+                        setVideoError(errorMessage)
+                      } else {
+                        setVideoError(errorMessage)
+                      }
+                      
+                      // NÃO usar URL direta - sempre requerer signed URL para segurança
+                      console.error('❌ Video signed URL failed, not using direct URL for security')
+                      setVideoError('Erro ao carregar vídeo. Tente recarregar a página.')
+                    }}
+                  >
+                    Seu navegador não suporta a tag de vídeo.
+                  </video>
+                ) : (
+                  // Fallback: mostrar mensagem enquanto carrega ou se não houver URL
+                  <div className="w-full h-full flex items-center justify-center text-gray-600 text-sm">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-2"></div>
+                      <p>Preparando vídeo...</p>
+                    </div>
+                  </div>
+                )}
+                {(!videoUrl && !videoError && (resource.resource_type === 'video' || resource.resource_type === 'motion')) && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm bg-white/90 z-30">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-2"></div>
                       <p>Carregando vídeo...</p>
                     </div>
                   </div>
                 )}
+                {videoLoading && videoUrl && !videoReady && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm bg-white/70 z-30 pointer-events-none">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-2"></div>
+                      <p>Preparando vídeo...</p>
+                    </div>
+                  </div>
+                )}
                 {videoError && (
-                  <div className="absolute inset-0 flex items-center justify-center text-white text-sm bg-black/80 p-4">
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-700 text-sm bg-white/95 p-4 z-30">
                     <div className="text-center max-w-md">
-                      <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-400" />
+                      <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
                       <p className="font-semibold mb-2">Erro ao carregar vídeo</p>
-                      <p className="text-xs text-gray-300 mb-4">{videoError}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-600 mb-4">{videoError}</p>
+                      <p className="text-xs text-gray-500">
                         {/* Detectar formato real pela URL (arquivo pode ter sido convertido para MP4) */}
                         {(() => {
                           const urlToCheck = resource.preview_url || resource.file_url || ''
@@ -745,30 +906,36 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </div>
             ) : resource.preview_url ? (
               // Usar preview_url (com marca d'água) se disponível - protegida
-              <div className={`w-full flex items-center justify-center ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
-                <ProtectedImage
-                  src={resource.preview_url}
-                  alt={resource.title}
-                  width={1200}
-                  height={800}
-                  priority
-                  className="max-w-full h-auto"
-                  quality={75}
-                  objectFit="contain"
-                />
+              <div className={`w-full flex items-center justify-center min-h-[400px] ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
+                <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
+                  <ProtectedImage
+                    src={resource.preview_url}
+                    alt={resource.title}
+                    width={1200}
+                    height={800}
+                    priority
+                    className="max-w-full max-h-[600px]"
+                    quality={70}
+                    objectFit="contain"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                  />
+                </div>
               </div>
             ) : resource.thumbnail_url ? (
-              <div className={`w-full flex items-center justify-center ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
-                <ProtectedImage
-                  src={resource.thumbnail_url}
-                  alt={resource.title}
-                  width={1200}
-                  height={800}
-                  priority
-                  className="max-w-full h-auto"
-                  quality={75}
-                  objectFit="contain"
-                />
+              <div className={`w-full flex items-center justify-center min-h-[400px] ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
+                <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
+                  <ProtectedImage
+                    src={resource.thumbnail_url}
+                    alt={resource.title}
+                    width={1200}
+                    height={800}
+                    priority
+                    className="max-w-full max-h-[600px]"
+                    quality={70}
+                    objectFit="contain"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                  />
+                </div>
               </div>
             ) : resource.resource_type === 'font' ? (
               <FontPreview fontName={fontName} fontLoaded={fontLoaded} resourceTitle={resource.title} />
@@ -806,7 +973,27 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-16">
                 <div className="space-y-4">
-                  <InfoRow label="Formato do arquivo" value={resourceData.file_format?.toUpperCase()} />
+                  {resourceData.resource_type === 'motion' ? (
+                    <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                      <span className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Formato do arquivo:</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded flex items-center justify-center bg-purple-600 p-0.5">
+                          <Image 
+                            src="/images/Ae-icone.png" 
+                            alt="After Effects" 
+                            width={16} 
+                            height={16}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-gray-900">
+                          Arquivo no formato After Effects editável
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <InfoRow label="Formato do arquivo" value={resourceData.file_format?.toUpperCase()} />
+                  )}
                   <div className="flex items-center justify-between border-b border-gray-50 pb-2">
                     <span className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Resolução:</span>
                     <div className="flex items-center gap-2">
@@ -816,7 +1003,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                           : 'N/A'
                         }
                       </span>
-                      {resourceData.resource_type === 'video' && (!resourceData.width || !resourceData.height) && user && (resourceData.creator_id === user.id || user.is_admin) && (
+                      {(resourceData.resource_type === 'video' || resourceData.resource_type === 'motion') && (!resourceData.width || !resourceData.height) && user && (resourceData.creator_id === user.id || user.is_admin) && (
                         <button
                           onClick={handleExtractMetadata}
                           disabled={isExtractingMetadata}
@@ -843,7 +1030,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 <div className="space-y-4">
                   <InfoRow label="Extensão de download" value="zip" />
                   <InfoRow label="Identificação" value={`#${resourceData.id.substring(0, 8)}`} />
-                  {(resourceData.resource_type === 'video' || resourceData.resource_type === 'audio') && resourceData.duration && (
+                  {(resourceData.resource_type === 'video' || resourceData.resource_type === 'audio' || resourceData.resource_type === 'motion') && resourceData.duration && (
                     <InfoRow 
                       label="Duração" 
                       value={formatDuration(resourceData.duration)} 
@@ -854,7 +1041,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
             </div>
 
             {/* Atributos de Vídeo */}
-            {resourceData.resource_type === 'video' && (
+            {(resourceData.resource_type === 'video' || resourceData.resource_type === 'motion') && (
               <div className="pt-10 border-t border-gray-100">
                 <h2 className="text-xl font-semibold text-gray-900 tracking-tighter flex items-center mb-6">
                   <span className="h-6 w-1.5 bg-primary-500 mr-3 rounded-full" />
@@ -1112,6 +1299,23 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   </span>
                 </button>
                 
+                {/* Mostrar mensagem se já foi baixado hoje */}
+                {alreadyDownloadedToday && (
+                  <div className="mt-3 p-3 bg-primary-50 border border-primary-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-primary-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-primary-900 mb-0.5">
+                          Já baixado hoje
+                        </p>
+                        <p className="text-xs text-primary-700">
+                          Você já baixou este arquivo hoje. Pode baixar novamente sem consumir seu limite de downloads.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* Mostrar contador de downloads se disponível */}
                 {downloadStatus && (
                   <div className="text-center">
@@ -1304,14 +1508,11 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
             <p className="text-gray-600 mt-2">Outros recursos que podem interessar você</p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {relatedResources.map((relatedResource) => (
-              <ResourceCard
-                key={relatedResource.id}
-                resource={relatedResource}
-              />
-            ))}
-          </div>
+          <JustifiedGrid 
+            resources={relatedResources}
+            rowHeight={240}
+            margin={4}
+          />
         </div>
       )}
 

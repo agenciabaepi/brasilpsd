@@ -216,9 +216,9 @@ export default function CreatorApplicationsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Aprovadas</p>
-              <p className="text-2xl font-bold text-green-600">{stats.approved}</p>
+              <p className="text-2xl font-bold text-primary-600">{stats.approved}</p>
             </div>
-            <CheckCircle className="h-8 w-8 text-green-600" />
+            <CheckCircle className="h-8 w-8 text-primary-600" />
           </div>
         </Card>
 
@@ -290,7 +290,7 @@ export default function CreatorApplicationsPage() {
                         application.status === 'pending'
                           ? 'bg-yellow-100 text-yellow-700'
                           : application.status === 'approved'
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-primary-100 text-primary-700'
                           : 'bg-red-100 text-red-700'
                       }`}
                     >

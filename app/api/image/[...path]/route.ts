@@ -47,9 +47,14 @@ export async function GET(
 
     // Obter parâmetros de query
     const searchParams = request.nextUrl.searchParams
-    const quality = parseInt(searchParams.get('q') || '75', 10)
+    const quality = parseInt(searchParams.get('q') || '65', 10) // Reduzido de 75 para 65 (mais leve)
     const width = searchParams.get('w') ? parseInt(searchParams.get('w')!, 10) : undefined
     const expiresIn = 900 // 15 minutos
+
+    // Detectar suporte a WebP via Accept header (mais eficiente que JPEG/PNG)
+    const acceptHeader = request.headers.get('accept') || ''
+    const supportsWebP = acceptHeader.includes('image/webp')
+    const format = searchParams.get('f') || (supportsWebP ? 'webp' : null) // Permitir forçar formato via ?f=webp
 
     // Gerar signed URL temporária
     const command = new GetObjectCommand({
@@ -69,7 +74,7 @@ export async function GET(
     }
 
     const imageBuffer = Buffer.from(await response.arrayBuffer())
-    const contentType = response.headers.get('content-type') || 'image/png'
+    const originalContentType = response.headers.get('content-type') || 'image/png'
 
     // Processar imagem com Sharp (reduzir qualidade e redimensionar se necessário)
     let processedImage = sharp(imageBuffer)
@@ -82,41 +87,56 @@ export async function GET(
       })
     }
 
-    // Aplicar qualidade reduzida
+    // Aplicar qualidade reduzida (otimizada para WebP)
     const outputOptions: sharp.OutputOptions = {
       quality: Math.max(60, Math.min(quality, 90)), // Limitar entre 60-90%
     }
 
-    // Processar baseado no tipo
+    // Processar baseado no formato desejado (priorizar WebP para melhor compressão)
     let finalBuffer: Buffer
-    if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+    let finalContentType: string
+
+    if (format === 'webp' || (supportsWebP && !format)) {
+      // Converter para WebP (muito mais eficiente - ~30% menor que JPEG)
+      finalBuffer = await processedImage.webp({
+        quality: outputOptions.quality,
+        effort: 4, // Balance entre velocidade e compressão (0-6)
+      }).toBuffer()
+      finalContentType = 'image/webp'
+    } else if (originalContentType.includes('jpeg') || originalContentType.includes('jpg')) {
       finalBuffer = await processedImage.jpeg(outputOptions).toBuffer()
-    } else if (contentType.includes('png')) {
+      finalContentType = 'image/jpeg'
+    } else if (originalContentType.includes('png')) {
       finalBuffer = await processedImage.png({ 
         quality: outputOptions.quality,
-        compressionLevel: 9 
+        compressionLevel: 6 // Reduzido de 9 para 6 (mais rápido, ainda bom)
       }).toBuffer()
-    } else if (contentType.includes('webp')) {
+      finalContentType = 'image/png'
+    } else if (originalContentType.includes('webp')) {
       finalBuffer = await processedImage.webp(outputOptions).toBuffer()
+      finalContentType = 'image/webp'
     } else {
       // Se não for um formato suportado, retornar original
       finalBuffer = imageBuffer
+      finalContentType = originalContentType
     }
 
-    // Headers de segurança
+    // Headers de segurança e cache otimizado
     const headers = new Headers()
-    headers.set('Content-Type', contentType)
+    headers.set('Content-Type', finalContentType)
     headers.set('Content-Length', finalBuffer.length.toString())
-    headers.set('Cache-Control', 'private, max-age=900, must-revalidate') // Cache de 15 minutos
+    // Cache público mais longo (1 hora) - imagens são estáticas
+    headers.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400')
     headers.set('X-Content-Type-Options', 'nosniff')
     headers.set('X-Frame-Options', 'DENY')
     headers.set('X-XSS-Protection', '1; mode=block')
     headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     // Bloquear download direto
     headers.set('Content-Disposition', 'inline')
-    // Prevenir cache em navegadores
-    headers.set('Pragma', 'no-cache')
-    headers.set('Expires', '0')
+    // Vary header para cache correto baseado em Accept
+    if (supportsWebP) {
+      headers.set('Vary', 'Accept')
+    }
 
     return new NextResponse(finalBuffer, {
       status: 200,

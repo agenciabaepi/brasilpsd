@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get('file') as File
     const type = formData.get('type') as string
+    const noWatermark = formData.get('noWatermark') === 'true' // Flag para não adicionar marca d'água
 
     if (!file) {
       console.error('❌ No file provided')
@@ -135,6 +136,18 @@ export async function POST(request: NextRequest) {
         contentType = 'audio/mpeg' // Default para MP3
         console.log('Using default audio Content-Type:', contentType)
       }
+    }
+
+    // Garantir Content-Type correto para arquivos .zip (projetos completos)
+    if (type === 'resource' && fileExtension === 'zip') {
+      contentType = 'application/zip'
+      console.log('Set .zip Content-Type to:', contentType)
+    }
+
+    // Garantir Content-Type correto para arquivos .aep (After Effects) - mantido para compatibilidade
+    if (type === 'resource' && fileExtension === 'aep') {
+      contentType = 'application/octet-stream'
+      console.log('Set .aep Content-Type to:', contentType)
     }
 
     // 0. AI Detection - apenas para recursos (não para thumbnails)
@@ -237,7 +250,10 @@ export async function POST(request: NextRequest) {
       audioCodec?: string
     } | null = null
     
-    if (type === 'resource' && file.type.startsWith('video/') && fileExtension) {
+    // Se for noWatermark, pular conversão para preservar proporção original
+    const shouldSkipConversion = noWatermark && file.type.startsWith('video/')
+    
+    if (type === 'resource' && file.type.startsWith('video/') && fileExtension && !shouldSkipConversion) {
       console.log('🎬 Video detected, checking conversion needs...', {
         extension: fileExtension,
         contentType: file.type,
@@ -475,31 +491,59 @@ export async function POST(request: NextRequest) {
     if (type === 'resource' && file.type.startsWith('video/') && buffer) {
       const ffmpegAvailable = await checkFfmpegAvailable()
       if (ffmpegAvailable) {
-        console.log('🎬 Starting video processing (watermark + thumbnail)...')
+        console.log(`🎬 Starting video processing (${noWatermark ? 'no watermark' : 'watermark + thumbnail'})...`)
         const processingStartTime = Date.now()
         
         // Processar marca d'água, preview de vídeo (metade) e thumbnail em paralelo para acelerar
         try {
           const [previewResult, videoPreviewResult, thumbnailResult] = await Promise.allSettled([
-            // 3.1. Criar versão com marca d'água para preview completo
+            // 3.1. Criar versão com ou sem marca d'água para preview completo
             (async () => {
-              console.log('💧 Creating watermarked preview version...')
-              const watermarked = await addWatermarkToVideo(buffer, previewExtension || 'mp4', 'BRASILPSD')
-              if (watermarked && watermarked.length > 0) {
+              if (noWatermark) {
+                // Se não deve ter marca d'água, usar o buffer original (sem conversão) para preservar proporção
+                // Se o vídeo já foi convertido, usar o convertido, mas garantir que as dimensões estão corretas
+                console.log('📹 Uploading video without watermark (preserving original aspect ratio)...')
                 const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
                 const previewKey = `previews/${user.id}/${previewFileName}`
+                
+                // Para noWatermark, sempre usar o buffer original (antes de qualquer conversão)
+                // Isso preserva a proporção original do vídeo
+                const videoBuffer = originalBuffer || buffer
+                const videoContentType = file.type || 'video/mp4'
+                const videoExtension = fileExtension || 'mp4'
+                
                 const url = await uploadFileToS3({
-                  file: watermarked,
+                  file: videoBuffer,
                   key: previewKey,
-                  contentType: 'video/mp4',
+                  contentType: videoContentType,
                   metadata: {
                     userId: user.id,
                     originalName: file.name,
-                    isPreview: 'true'
+                    isPreview: 'true',
+                    noWatermark: 'true'
                   },
                 })
-                console.log('✅ Preview with watermark uploaded:', url)
-                return { buffer: watermarked, url }
+                console.log('✅ Preview without watermark uploaded (original aspect ratio preserved):', url)
+                return { buffer: videoBuffer, url }
+              } else {
+                console.log('💧 Creating watermarked preview version...')
+                const watermarked = await addWatermarkToVideo(buffer, previewExtension || 'mp4', 'BRASILPSD')
+                if (watermarked && watermarked.length > 0) {
+                  const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
+                  const previewKey = `previews/${user.id}/${previewFileName}`
+                  const url = await uploadFileToS3({
+                    file: watermarked,
+                    key: previewKey,
+                    contentType: 'video/mp4',
+                    metadata: {
+                      userId: user.id,
+                      originalName: file.name,
+                      isPreview: 'true'
+                    },
+                  })
+                  console.log('✅ Preview with watermark uploaded:', url)
+                  return { buffer: watermarked, url }
+                }
               }
               return null
             })(),
@@ -508,9 +552,12 @@ export async function POST(request: NextRequest) {
               console.log('🎬 Generating video preview (half of video) for thumbnail...')
               const videoPreview = await generateVideoPreview(buffer, previewExtension || 'mp4', videoMetadata?.duration)
               if (videoPreview && videoPreview.length > 0) {
-                // Adicionar marca d'água ao preview também
-                const watermarkedPreview = await addWatermarkToVideo(videoPreview, 'mp4', 'BRASILPSD')
-                const finalPreview = watermarkedPreview || videoPreview
+                // Adicionar marca d'água ao preview apenas se não for especificado noWatermark
+                let finalPreview = videoPreview
+                if (!noWatermark) {
+                  const watermarkedPreview = await addWatermarkToVideo(videoPreview, 'mp4', 'BRASILPSD')
+                  finalPreview = watermarkedPreview || videoPreview
+                }
                 
                 const previewFileName = `video-preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
                 const previewKey = `video-previews/${user.id}/${previewFileName}`
@@ -521,7 +568,8 @@ export async function POST(request: NextRequest) {
                   metadata: {
                     userId: user.id,
                     originalName: file.name,
-                    isVideoPreview: 'true'
+                    isVideoPreview: 'true',
+                    noWatermark: noWatermark ? 'true' : 'false'
                   },
                 })
                 console.log('✅ Video preview (half) uploaded:', url)
@@ -559,14 +607,44 @@ export async function POST(request: NextRequest) {
           if (previewResult.status === 'fulfilled' && previewResult.value) {
             previewBuffer = previewResult.value.buffer
             previewUrl = previewResult.value.url
+            // Se noWatermark for true, usar o previewUrl como o vídeo sem marca d'água
+            if (noWatermark) {
+              // O previewUrl já contém o vídeo sem marca d'água
+              console.log('✅ Video preview without watermark set as previewUrl')
+            }
           } else if (previewResult.status === 'rejected') {
-            console.warn('⚠️ Failed to create watermarked preview:', previewResult.reason)
+            console.warn('⚠️ Failed to create preview:', previewResult.reason)
+            // Se noWatermark e preview falhou, usar o buffer original como fallback
+            if (noWatermark) {
+              const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
+              const previewKey = `previews/${user.id}/${previewFileName}`
+              try {
+                const url = await uploadFileToS3({
+                  file: buffer,
+                  key: previewKey,
+                  contentType: 'video/mp4',
+                  metadata: {
+                    userId: user.id,
+                    originalName: file.name,
+                    isPreview: 'true',
+                    noWatermark: 'true'
+                  },
+                })
+                previewUrl = url
+                console.log('✅ Fallback: Video without watermark uploaded as preview')
+              } catch (error: any) {
+                console.error('❌ Failed to upload fallback preview:', error.message)
+              }
+            }
           }
           
           if (videoPreviewResult.status === 'fulfilled' && videoPreviewResult.value) {
             videoPreviewUrl = videoPreviewResult.value.url
             // Usar o preview de vídeo como thumbnail_url também (será um vídeo curto)
-            thumbnailUrl = videoPreviewResult.value.url
+            // Mas apenas se não tiver noWatermark (para manter consistência)
+            if (!noWatermark) {
+              thumbnailUrl = videoPreviewResult.value.url
+            }
             console.log('✅ Video preview (half) will be used as thumbnail')
           } else if (videoPreviewResult.status === 'rejected') {
             console.warn('⚠️ Failed to generate video preview:', videoPreviewResult.reason)

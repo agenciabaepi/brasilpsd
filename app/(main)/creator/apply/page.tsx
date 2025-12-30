@@ -157,8 +157,8 @@ export default function CreatorApplyPage() {
             )}
             {applicationStatus === 'approved' && (
               <>
-                <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                  <CheckCircle className="h-8 w-8 text-green-600" />
+                <div className="mx-auto w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mb-4">
+                  <CheckCircle className="h-8 w-8 text-primary-600" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">
                   Solicitação Aprovada!

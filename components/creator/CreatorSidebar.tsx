@@ -14,7 +14,8 @@ import {
   ChevronRight,
   FolderOpen,
   Type,
-  Music
+  Music,
+  Video
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { createSupabaseClient } from '@/lib/supabase/client'
@@ -27,6 +28,7 @@ const menuItems = [
   { name: 'Fazer Upload', href: '/creator/upload', icon: UploadCloud },
   { name: 'Upload de Fonte', href: '/creator/upload/font', icon: Type },
   { name: 'Upload de Áudio', href: '/creator/upload/audio', icon: Music },
+  { name: 'Upload de Motion', href: '/creator/upload/motion', icon: Video },
   { name: 'Coleções', href: '/creator/collections', icon: FolderOpen },
   { name: 'Minhas Comissões', href: '/creator/earnings', icon: DollarSign },
   { name: 'Perfil Criador', href: '/creator/profile', icon: User },

@@ -591,7 +591,7 @@ export default function CheckoutPage() {
               {paymentConfirmed ? (
                 <>
                   <Confetti />
-                  <div className="h-16 w-16 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto animate-bounce">
+                  <div className="h-16 w-16 bg-primary-50 text-primary-500 rounded-3xl flex items-center justify-center mx-auto animate-bounce">
                     <Check className="h-8 w-8" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900">Pagamento Confirmado!</h3>

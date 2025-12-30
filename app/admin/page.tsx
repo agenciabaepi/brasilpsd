@@ -269,7 +269,7 @@ export default function AdminDashboardPage() {
                     <div className="flex items-center space-x-2">
                       <button 
                         onClick={() => handleApprove(resource.id)}
-                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-[10px] font-semibold rounded-lg transition-all uppercase"
+                        className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-[10px] font-semibold rounded-lg transition-all uppercase"
                       >
                         Aprovar
                       </button>
@@ -312,7 +312,7 @@ function StatCard({ title, value, icon: Icon, color }: any) {
   const colors: any = {
     blue: 'bg-blue-50 text-blue-600',
     purple: 'bg-purple-50 text-purple-600',
-    green: 'bg-green-50 text-gray-900',
+    green: 'bg-primary-50 text-gray-900',
     orange: 'bg-orange-50 text-orange-600',
     primary: 'bg-primary-50 text-primary-600',
   }

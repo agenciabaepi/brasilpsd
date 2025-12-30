@@ -924,7 +924,7 @@ export default function BatchUploadPage() {
                           return category ? (
                             <span
                               key={catId}
-                              className="px-2 py-0.5 bg-green-50 text-green-700 text-xs rounded"
+                              className="px-2 py-0.5 bg-primary-50 text-primary-700 text-xs rounded"
                             >
                               {category.name}
                             </span>

@@ -128,7 +128,7 @@ export default function DownloadStats({ userId, onUpdate }: DownloadStatsProps) 
             </div>
           </div>
           {status.allowed && (
-            <div className="flex items-center space-x-1 text-green-600">
+            <div className="flex items-center space-x-1 text-primary-600">
               <TrendingUp className="h-4 w-4" />
               <span className="text-sm font-medium">Disponível</span>
             </div>

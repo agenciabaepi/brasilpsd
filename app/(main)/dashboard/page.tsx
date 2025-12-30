@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard, Sparkles } from 'lucide-react'
+import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard, Sparkles, RefreshCw, Info, FileText, Video, Image as ImageIcon, Music, FileImage, Package } from 'lucide-react'
 import Link from 'next/link'
-import type { Profile } from '@/types/database'
+import type { Profile, Download as DownloadType, Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -15,6 +15,7 @@ import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { cn } from '@/lib/utils/cn'
+import { formatPlanName, getDownloadLimitByPlan } from '@/lib/utils/download-helpers'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -60,6 +61,17 @@ export default function DashboardPage() {
   const [showAllTransactions, setShowAllTransactions] = useState(false)
   const [showAllSubscriptions, setShowAllSubscriptions] = useState(false)
   
+  // Estados para downloads
+  const [downloads, setDownloads] = useState<DownloadType[]>([])
+  const [loadingDownloads, setLoadingDownloads] = useState(false)
+  const [refreshingDownloads, setRefreshingDownloads] = useState(false)
+  const [downloadStatus, setDownloadStatus] = useState<{
+    current: number
+    limit: number
+    remaining: number
+    plan: string
+  } | null>(null)
+  
   const TRANSACTIONS_LIMIT = 5
   const SUBSCRIPTIONS_LIMIT = 3
 
@@ -76,6 +88,107 @@ export default function DashboardPage() {
   useEffect(() => {
     loadUser()
   }, [])
+
+  // Carregar downloads e status quando a seção for selecionada
+  useEffect(() => {
+    if (activeSection === 'downloads' && user) {
+      loadDownloads()
+      loadDownloadStatus()
+    }
+  }, [activeSection, user])
+
+  // Função para gerar ID de licença único baseado no download
+  function generateLicenseId(downloadId: string, downloadedAt: string): string {
+    const timestamp = new Date(downloadedAt).getTime()
+    const idHash = downloadId.split('-').join('').substring(0, 10)
+    const timestampStr = timestamp.toString().slice(-15)
+    return `#${timestampStr}${idHash}`
+  }
+
+  // Função para obter ícone e label do tipo de recurso
+  function getResourceTypeInfo(resourceType: string) {
+    const types: Record<string, { icon: typeof Package, label: string }> = {
+      video: { icon: Video, label: 'MOTION' },
+      image: { icon: ImageIcon, label: 'FILE' },
+      png: { icon: FileImage, label: 'FILE' },
+      font: { icon: FileText, label: 'FILE' },
+      psd: { icon: FileText, label: 'FILE' },
+      ai: { icon: FileText, label: 'FILE' },
+      audio: { icon: Music, label: 'AUDIO' },
+      other: { icon: Package, label: 'FILE' }
+    }
+    return types[resourceType] || types.other
+  }
+
+  async function loadDownloads() {
+    if (loadingDownloads) return
+    setLoadingDownloads(true)
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        setLoadingDownloads(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('downloads')
+        .select(`
+          *,
+          resource:resources(
+            *,
+            creator:profiles!creator_id(id, full_name, avatar_url),
+            category:categories!category_id(id, name, slug)
+          )
+        `)
+        .eq('user_id', authUser.id)
+        .order('downloaded_at', { ascending: false })
+
+      if (error) {
+        console.error('Erro na query de downloads:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
+      
+      console.log('Downloads carregados:', data?.length || 0)
+      setDownloads(data || [])
+    } catch (error: any) {
+      console.error('Erro completo ao carregar downloads:', {
+        error,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint
+      })
+      toast.error(error?.message || error?.details || 'Erro ao carregar downloads. Verifique o console para mais detalhes.')
+    } finally {
+      setLoadingDownloads(false)
+    }
+  }
+
+  async function loadDownloadStatus() {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
+
+      const response = await fetch('/api/downloads/status')
+      if (response.ok) {
+        const status = await response.json()
+        setDownloadStatus(status)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar status de downloads:', error)
+    }
+  }
+
+  async function handleRefreshDownloads() {
+    setRefreshingDownloads(true)
+    await Promise.all([loadDownloads(), loadDownloadStatus()])
+    setRefreshingDownloads(false)
+    toast.success('Downloads atualizados')
+  }
 
   // Atualizar status das transações verificando no Asaas
   async function refreshTransactionsStatus() {
@@ -404,7 +517,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[95%] xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex overflow-hidden">
           {/* Sidebar dentro do container */}
           <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
@@ -414,10 +527,25 @@ export default function DashboardPage() {
           </h3>
           {menuItems.map((item) => {
             const isActive = activeSection === item.id
+            // Redirecionar para páginas específicas quando necessário
+            const handleClick = () => {
+              if (item.id === 'favorites') {
+                router.push('/favorites')
+              } else if (item.id === 'saved') {
+                router.push('/saved')
+              } else if (item.id === 'following') {
+                router.push('/following')
+              } else if (item.id === 'affiliate') {
+                router.push('/affiliate')
+              } else {
+                setActiveSection(item.id as any)
+              }
+            }
+            
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveSection(item.id as any)}
+                onClick={handleClick}
                 className={cn(
                   "w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-semibold transition-all text-left",
                   isActive 
@@ -778,7 +906,7 @@ export default function DashboardPage() {
                             </h2>
                             <span className={cn(
                               "inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
-                              subscriptionDetails.status === 'active' ? "bg-green-100 text-green-700" :
+                              subscriptionDetails.status === 'active' ? "bg-primary-100 text-primary-700" :
                               subscriptionDetails.status === 'expired' ? "bg-red-100 text-red-700" :
                               subscriptionDetails.status === 'canceled' ? "bg-gray-100 text-gray-700" :
                               "bg-yellow-100 text-yellow-700"
@@ -887,7 +1015,7 @@ export default function DashboardPage() {
                                     </p>
                                     <span className={cn(
                                       "px-2 py-1 rounded text-xs font-bold uppercase",
-                                      transaction.status === 'paid' ? "bg-green-100 text-green-700" :
+                                      transaction.status === 'paid' ? "bg-primary-100 text-primary-700" :
                                       transaction.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
                                       transaction.status === 'overdue' ? "bg-orange-100 text-orange-700" :
                                       "bg-red-100 text-red-700"
@@ -947,7 +1075,7 @@ export default function DashboardPage() {
                           return (
                             <Card key={sub.id} className={cn(
                               "p-6 border-2 transition-all",
-                              isActive ? "border-green-200 bg-green-50/30" :
+                              isActive ? "border-primary-200 bg-primary-50/30" :
                               isExpired ? "border-red-200 bg-red-50/30" :
                               isCanceled ? "border-gray-200 bg-gray-50/30" :
                               "border-yellow-200 bg-yellow-50/30"
@@ -960,7 +1088,7 @@ export default function DashboardPage() {
                                     </h3>
                                     <span className={cn(
                                       "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
-                                      isActive ? "bg-green-100 text-green-700" :
+                                      isActive ? "bg-primary-100 text-primary-700" :
                                       isExpired ? "bg-red-100 text-red-700" :
                                       isCanceled ? "bg-gray-100 text-gray-700" :
                                       "bg-yellow-100 text-yellow-700"
@@ -1090,7 +1218,7 @@ export default function DashboardPage() {
                                 </p>
                                 <span className={cn(
                                   "px-2 py-1 rounded text-xs font-bold uppercase",
-                                  transaction.status === 'paid' ? "bg-green-100 text-green-700" :
+                                  transaction.status === 'paid' ? "bg-primary-100 text-primary-700" :
                                   transaction.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
                                   transaction.status === 'overdue' ? "bg-orange-100 text-orange-700" :
                                   "bg-red-100 text-red-700"
@@ -1176,8 +1304,192 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {/* Seção de Downloads */}
+              {activeSection === 'downloads' && (
+                <div>
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-2">Histórico de downloads</h2>
+                      <p className="text-gray-600">
+                        Veja o histórico de downloads e acesse seus recursos gráficos anteriores.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleRefreshDownloads}
+                      disabled={refreshingDownloads}
+                      variant="secondary"
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={cn("h-4 w-4", refreshingDownloads && "animate-spin")} />
+                      Atualizar
+                    </Button>
+                  </div>
+
+                  {/* Barra de Estatísticas */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+                    <div className="flex flex-wrap items-center gap-6 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                          <Info className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <span className="text-gray-600">Downloads hoje</span>
+                        <span className="font-semibold text-gray-900">
+                          {downloadStatus?.current || 0} / {downloadStatus?.limit || getDownloadLimitByPlan(user?.subscription_tier || 'free')}
+                        </span>
+                      </div>
+                      <div className="h-6 w-px bg-gray-300"></div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600">Restantes</span>
+                        <span className="font-semibold text-gray-900">
+                          {downloadStatus?.remaining || Math.max(0, (downloadStatus?.limit || getDownloadLimitByPlan(user?.subscription_tier || 'free')) - (downloadStatus?.current || 0))}
+                        </span>
+                      </div>
+                      <div className="h-6 w-px bg-gray-300"></div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600">Plano</span>
+                        <span className="font-semibold text-blue-600">
+                          {user?.subscription_tier ? formatPlanName(user.subscription_tier) : 'Grátis'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Banner de Informações Importantes */}
+                  <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-6">
+                    <div className="flex gap-3">
+                      <Info className="h-5 w-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h3 className="font-semibold text-primary-900 mb-1">Informação importante!</h3>
+                        <p className="text-sm text-primary-800">
+                          Se você baixar o mesmo arquivo várias vezes no mesmo dia, ele contará apenas como um download. 
+                          No entanto, se você atingir o limite de downloads, não poderá baixar mais nenhum arquivo, mesmo que tenha baixado o mesmo arquivo naquele dia. 
+                          Se você baixar um arquivo que já foi baixado no dia anterior, será considerado um novo download.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tabela de Downloads */}
+                  {loadingDownloads ? (
+                    <div className="text-center py-20">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                      <p className="mt-4 text-gray-600">Carregando downloads...</p>
+                    </div>
+                  ) : downloads.filter(d => d.resource).length > 0 ? (
+                    <Card className="overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Arquivo
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Licença
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Data
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {downloads.filter(d => d.resource).map((download) => {
+                              if (!download.resource) return null
+                              const resource = download.resource
+                              const downloadDate = new Date(download.downloaded_at)
+                              const licenseId = generateLicenseId(download.id, download.downloaded_at)
+                              const typeInfo = getResourceTypeInfo(resource.resource_type)
+                              const TypeIcon = typeInfo.icon
+
+                              return (
+                                <tr key={download.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center gap-3">
+                                      <Link 
+                                        href={`/resources/${resource.id}`}
+                                        className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100 group"
+                                      >
+                                        {resource.thumbnail_url ? (
+                                          <img
+                                            src={resource.thumbnail_url.startsWith('http') 
+                                              ? resource.thumbnail_url 
+                                              : `/api/image/${resource.thumbnail_url}?q=75`}
+                                            alt={resource.title}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center">
+                                            <TypeIcon className="h-6 w-6 text-gray-400" />
+                                          </div>
+                                        )}
+                                      </Link>
+                                      <div className="min-w-0 flex-1">
+                                        <Link 
+                                          href={`/resources/${resource.id}`}
+                                          className="block"
+                                        >
+                                          <p className="text-sm font-medium text-gray-900 truncate hover:text-primary-600 transition-colors">
+                                            {resource.title}
+                                          </p>
+                                        </Link>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                            {typeInfo.label}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(licenseId)
+                                        toast.success('ID da licença copiado!')
+                                      }}
+                                      className="text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                                    >
+                                      {licenseId}
+                                    </button>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-900">
+                                      {format(downloadDate, "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR })}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 rounded-full bg-primary-500"></div>
+                                      <span className="text-sm text-gray-900">Concluído</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+                  ) : (
+                    <Card className="p-12 text-center">
+                      <Download className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-lg text-gray-600 mb-2">Você ainda não fez nenhum download</p>
+                      <Link
+                        href="/explore"
+                        className="text-primary-600 hover:text-primary-700 font-medium inline-block mt-2"
+                      >
+                        Explorar recursos
+                      </Link>
+                    </Card>
+                  )}
+                </div>
+              )}
+
               {/* Placeholder para outras seções */}
-              {activeSection !== 'account' && activeSection !== 'subscriptions' && (
+              {activeSection !== 'account' && activeSection !== 'subscriptions' && activeSection !== 'downloads' && (
                 <div className="text-center py-20">
                   <p className="text-gray-500 font-semibold">Seção em desenvolvimento</p>
                 </div>

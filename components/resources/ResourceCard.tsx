@@ -29,13 +29,21 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   const isOfficial = resource.is_official || isSystemProfile(resource.creator_id)
   const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
   const canLinkToProfile = !isOfficial && resource.creator_id && !isSystemProfile(resource.creator_id)
-  const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
+  // Motions também são tratados como vídeo (têm preview_url como vídeo)
+  const isVideo = resource.resource_type === 'video' || resource.resource_type === 'motion' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
+  const isMotion = resource.resource_type === 'motion'
   
   // Função helper para obter URL do vídeo correto para exibição
   // Prioriza preview_url (video-previews/) para exibição, usa file_url (resources/) apenas se não houver preview
   const getVideoDisplayUrl = () => {
     if (!isVideo) return null
-    // Priorizar preview_url (preview leve em video-previews/) para exibição
+    
+    // Para motions, sempre usar preview_url (que é o vídeo preview sem marca d'água)
+    if (isMotion && resource.preview_url) {
+      return getS3Url(resource.preview_url)
+    }
+    
+    // Para vídeos normais, priorizar preview_url (preview leve em video-previews/) para exibição
     if (resource.preview_url) {
       return getS3Url(resource.preview_url)
     }
@@ -313,7 +321,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 priority={false}
                 loading="lazy"
-                quality={75}
+                quality={65}
                 objectFit="contain"
               />
             </div>
@@ -331,7 +339,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 priority={false}
                 loading="lazy"
-                quality={75}
+                quality={65}
                 objectFit="contain"
               />
             </div>

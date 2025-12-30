@@ -272,7 +272,7 @@ export default async function HomePage() {
               let gradientClass
 
               if (categoryType === 'mockups') {
-                gradientClass = 'from-green-400 to-green-600'
+                gradientClass = 'from-primary-400 to-primary-600'
                 iconElement = null
               } else if (categoryType === 'psd') {
                 gradientClass = 'from-blue-400 to-blue-600'

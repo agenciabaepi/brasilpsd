@@ -103,7 +103,7 @@ export default function SubscriptionModal({
             {benefits.map((benefit, index) => (
               <div key={index} className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-0.5">
-                  <Check className="h-5 w-5 text-green-500" />
+                  <Check className="h-5 w-5 text-primary-500" />
                 </div>
                 <p className="text-gray-700 text-sm">{benefit}</p>
               </div>

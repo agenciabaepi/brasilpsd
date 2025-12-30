@@ -51,7 +51,7 @@ export default function UserStatsBar({ userAvatars = [] }: UserStatsBarProps) {
         </div>
         
         {/* Ícone de plus em círculo verde claro */}
-        <div className="w-9 h-9 rounded-full bg-green-400 flex items-center justify-center flex-shrink-0">
+        <div className="w-9 h-9 rounded-full bg-primary-400 flex items-center justify-center flex-shrink-0">
           <Plus className="h-4 w-4 text-white" strokeWidth={3} />
         </div>
         

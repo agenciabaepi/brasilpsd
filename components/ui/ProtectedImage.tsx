@@ -35,7 +35,7 @@ export default function ProtectedImage({
   sizes,
   priority = false,
   loading = 'lazy',
-  quality = 75, // Qualidade reduzida por padrão
+  quality = 65, // Qualidade otimizada por padrão (mais leve)
   objectFit = 'contain'
 }: ProtectedImageProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -117,13 +117,13 @@ export default function ProtectedImage({
         const urlObj = new URL(src)
         const s3Key = urlObj.pathname.startsWith('/') ? urlObj.pathname.substring(1) : urlObj.pathname
         
-        // Usar API route protegida
+        // Usar API route protegida (WebP será detectado automaticamente via Accept header)
         return `/api/image/${s3Key}?q=${quality}&w=${width || ''}`
       }
       // Se for uma URL externa (não S3), usar diretamente
       return src
     }
-    // Se for apenas a key do S3, usar API route protegida
+    // Se for apenas a key do S3, usar API route protegida (WebP será detectado automaticamente)
     return `/api/image/${src}?q=${quality}&w=${width || ''}`
   }
 
@@ -163,34 +163,6 @@ export default function ProtectedImage({
         }
       }}
     >
-      {/* Overlay invisível para bloquear interações */}
-      <div
-        className="absolute inset-0 z-10"
-        style={{
-          pointerEvents: 'auto',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          return false
-        }}
-        onDragStart={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          return false
-        }}
-        onClick={(e) => {
-          // Permitir apenas clique esquerdo normal (para navegação)
-          if (e.button !== 0) {
-            e.preventDefault()
-            e.stopPropagation()
-            return false
-          }
-        }}
-      />
-      
       {/* Imagem com qualidade reduzida via API route protegida */}
       {/* Usar unoptimized quando for nossa API route para evitar dupla otimização */}
       {fill ? (
@@ -198,7 +170,7 @@ export default function ProtectedImage({
           src={imageUrl}
           alt={alt}
           fill
-          className={`${className} pointer-events-none`}
+          className={`${className} pointer-events-none relative z-0`}
           sizes={sizes}
           {...(priority ? { priority: true } : { loading })}
           unoptimized={imageUrl.startsWith('/api/image')}
@@ -226,7 +198,7 @@ export default function ProtectedImage({
           alt={alt}
           width={width}
           height={height}
-          className={`${className} pointer-events-none`}
+          className={`${className} pointer-events-none relative z-0`}
           sizes={sizes}
           {...(priority ? { priority: true } : { loading })}
           unoptimized={imageUrl.startsWith('/api/image')}
@@ -249,6 +221,34 @@ export default function ProtectedImage({
           }}
         />
       )}
+      
+      {/* Overlay invisível para bloquear interações - acima da imagem */}
+      <div
+        className="absolute inset-0 z-10"
+        style={{
+          pointerEvents: 'auto',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          return false
+        }}
+        onDragStart={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          return false
+        }}
+        onClick={(e) => {
+          // Permitir apenas clique esquerdo normal (para navegação)
+          if (e.button !== 0) {
+            e.preventDefault()
+            e.stopPropagation()
+            return false
+          }
+        }}
+      />
     </div>
   )
 }

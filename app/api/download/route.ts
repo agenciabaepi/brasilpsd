@@ -528,6 +528,11 @@ export async function POST(request: NextRequest) {
     deleteCacheByPrefix(`download_limit:${user.id}`)
 
     // ========================================================================
+    // 9. PREPARAR RESPOSTA COM INFORMAÇÕES DO DOWNLOAD
+    // ========================================================================
+    const isNewDownload = result.is_new_download !== false // Default true se não especificado
+
+    // ========================================================================
     // 9. VERIFICAR SE DOWNLOAD FOI REALMENTE REGISTRADO NO BANCO
     // ========================================================================
     // Verificação adicional: confirmar que o download foi inserido
@@ -562,6 +567,7 @@ export async function POST(request: NextRequest) {
       current_count: result.current_count,
       limit_count: result.limit_count,
       remaining: result.remaining,
+      is_new_download: isNewDownload,
       duration: `${duration}ms`,
       verifiedInDb: !!verifyDownload
     })
@@ -575,7 +581,10 @@ export async function POST(request: NextRequest) {
       current_count: result.current_count,
       limit_count: result.limit_count,
       remaining: result.remaining,
-      message: result.remaining === 0 
+      is_new_download: isNewDownload,
+      message: !isNewDownload
+        ? 'Download permitido (recurso já baixado hoje, não conta como novo download)'
+        : result.remaining === 0 
         ? 'Você atingiu seu limite diário de downloads.' 
         : result.remaining <= 2 
         ? `Atenção: Você tem apenas ${result.remaining} download${result.remaining > 1 ? 's' : ''} restante${result.remaining > 1 ? 's' : ''} hoje.`

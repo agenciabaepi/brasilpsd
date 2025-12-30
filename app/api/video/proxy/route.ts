@@ -20,8 +20,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Gerar signed URL e fazer redirect para ela
+    // Isso permite que o navegador carregue o vídeo diretamente do S3
     const signedUrl = await getSignedDownloadUrl(key, 3600)
-    return NextResponse.redirect(signedUrl, 302)
+    
+    // Para vídeos, fazer redirect permanente (307) para manter o método GET
+    // e permitir que o navegador carregue o vídeo diretamente
+    return NextResponse.redirect(signedUrl, 307)
   } catch (error: any) {
     console.error('Erro ao gerar signed URL de vídeo:', error)
     return NextResponse.json({ error: 'Falha ao gerar URL assinada' }, { status: 500 })

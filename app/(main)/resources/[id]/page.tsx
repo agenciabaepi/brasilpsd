@@ -37,6 +37,8 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
   let initialUser = null
   let initialIsFavorited = false
   let initialDownloadStatus = null
+  let alreadyDownloadedToday = false
+  
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (authUser) {
     // Buscar perfil completo do usuário
@@ -73,6 +75,19 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
     } catch (error) {
       // Silenciar erro - o cliente vai buscar depois se necessário
       console.error('Error fetching initial download status:', error)
+    }
+    
+    // Verificar se o recurso já foi baixado hoje
+    try {
+      const { data: downloadCheck } = await supabase
+        .rpc('has_user_downloaded_resource_today', {
+          p_user_id: authUser.id,
+          p_resource_id: params.id
+        })
+      alreadyDownloadedToday = downloadCheck || false
+    } catch (error) {
+      // Silenciar erro - o cliente vai verificar depois se necessário
+      console.error('Error checking if resource already downloaded today:', error)
     }
   }
 
@@ -178,6 +193,7 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
       initialUser={initialUser}
       initialIsFavorited={initialIsFavorited}
       initialDownloadStatus={initialDownloadStatus}
+      initialAlreadyDownloadedToday={alreadyDownloadedToday}
       collection={collection}
       collectionResources={collectionResources}
       relatedResources={relatedResources}

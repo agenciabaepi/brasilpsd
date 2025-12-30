@@ -78,6 +78,7 @@ export async function convertVideoToMp4(
           '-preset fast',
           '-crf 23', // Qualidade balanceada
           '-movflags +faststart', // Otimização para web
+          '-noautorotate', // Não rotacionar automaticamente - preservar orientação original
           '-y', // Sobrescrever arquivo de saída se existir
         ])
         .output(tempOutputPath)
@@ -174,6 +175,20 @@ export async function extractVideoMetadata(filePath: string): Promise<{
         ? parseFloat(videoStream.r_frame_rate.split('/')[0]) / parseFloat(videoStream.r_frame_rate.split('/')[1] || '1')
         : undefined
 
+      // Detectar rotação/orientação do vídeo (importante para vídeos verticais)
+      // Alguns vídeos têm uma tag de rotação que precisa ser considerada
+      let width = videoStream.width || 0
+      let height = videoStream.height || 0
+      const rotation = videoStream.tags?.rotate || videoStream.tags?.['com.apple.quicktime.rotation'] || metadata.format?.tags?.rotate
+      
+      // Se houver rotação de 90 ou 270 graus, trocar width e height
+      if (rotation && (rotation === '90' || rotation === '270' || rotation === '-90' || rotation === '-270')) {
+        console.log('🔄 Video has rotation, swapping dimensions:', { rotation, originalWidth: width, originalHeight: height })
+        const temp = width
+        width = height
+        height = temp
+      }
+
       // Detectar codec
       const codecName = videoStream.codec_name || videoStream.codec
       const codecLongName = videoStream.codec_long_name
@@ -215,8 +230,11 @@ export async function extractVideoMetadata(filePath: string): Promise<{
       const audioCodec = audioStream?.codec_name || audioStream?.codec
 
       console.log('✅ Video metadata extracted:', {
-        width: videoStream.width,
-        height: videoStream.height,
+        width: width,
+        height: height,
+        originalWidth: videoStream.width,
+        originalHeight: videoStream.height,
+        rotation,
         duration,
         frameRate,
         codec: formattedCodec,
@@ -225,8 +243,8 @@ export async function extractVideoMetadata(filePath: string): Promise<{
       })
 
       resolve({
-        width: videoStream.width || 0,
-        height: videoStream.height || 0,
+        width: width,
+        height: height,
         duration: Math.round(duration),
         frameRate: frameRate ? Math.round(frameRate * 100) / 100 : undefined,
         bitrate: metadata.format?.bit_rate ? parseInt(metadata.format.bit_rate) : undefined,

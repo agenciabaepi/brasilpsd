@@ -205,8 +205,8 @@ export default function AdminFinancePage() {
   const getPaymentStatusBadge = (status: string) => {
     const styles: any = {
       PENDING: 'bg-orange-100 text-orange-700',
-      CONFIRMED: 'bg-green-100 text-gray-900',
-      RECEIVED: 'bg-green-100 text-gray-900',
+      CONFIRMED: 'bg-primary-100 text-gray-900',
+      RECEIVED: 'bg-primary-100 text-gray-900',
       OVERDUE: 'bg-red-100 text-red-700',
       REFUNDED: 'bg-gray-100 text-gray-700',
       DELETED: 'bg-gray-100 text-gray-500',
@@ -228,7 +228,7 @@ export default function AdminFinancePage() {
 
   const getSubscriptionStatusBadge = (status: string) => {
     const styles: any = {
-      ACTIVE: 'bg-green-100 text-gray-900',
+      ACTIVE: 'bg-primary-100 text-gray-900',
       INACTIVE: 'bg-gray-100 text-gray-700',
       EXPIRED: 'bg-orange-100 text-orange-700',
       CANCELED: 'bg-red-100 text-red-700',
@@ -493,11 +493,11 @@ export default function AdminFinancePage() {
                     </td>
                     <td className="px-8 py-5">
                       {payment.calculatedNetValue !== undefined && payment.calculatedNetValue !== null ? (
-                        <span className="text-sm font-bold text-green-600">
+                        <span className="text-sm font-bold text-primary-600">
                           {formatCurrency(payment.calculatedNetValue)}
                         </span>
                       ) : payment.netValue ? (
-                        <span className="text-sm font-bold text-green-600">
+                        <span className="text-sm font-bold text-primary-600">
                           {formatCurrency(payment.netValue || 0)}
                         </span>
                       ) : (
@@ -686,14 +686,14 @@ export default function AdminFinancePage() {
                       )}
                     </td>
                     <td className="px-8 py-5">
-                      <span className="text-sm font-bold text-green-600">
+                      <span className="text-sm font-bold text-primary-600">
                         {formatCurrency(t.amount_liquid || t.amount_brute || 0)}
                       </span>
                     </td>
                     <td className="px-8 py-5">
                       <span className={cn(
                         "text-[9px] font-black px-2 py-1 rounded-md uppercase tracking-widest",
-                        t.status === 'paid' ? "bg-green-100 text-gray-900" :
+                        t.status === 'paid' ? "bg-primary-100 text-gray-900" :
                         t.status === 'pending' ? "bg-orange-100 text-orange-600" :
                         "bg-red-100 text-red-600"
                       )}>
@@ -729,7 +729,7 @@ export default function AdminFinancePage() {
 
 function FinanceStatCard({ title, value, icon: Icon, color }: any) {
   const colors: any = {
-    green: 'bg-green-50 text-gray-900',
+    green: 'bg-primary-50 text-gray-900',
     blue: 'bg-blue-50 text-blue-600',
     orange: 'bg-orange-50 text-orange-600',
     purple: 'bg-purple-50 text-purple-600',

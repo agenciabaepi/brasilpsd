@@ -515,7 +515,7 @@ export default function AdminCategoriesPage() {
                             isSelected
                               ? 'border-primary-500 ring-2 ring-primary-200'
                               : hasCategory
-                              ? 'border-green-300'
+                              ? 'border-primary-300'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                           onClick={() => toggleResourceSelection(resource.id)}
@@ -545,7 +545,7 @@ export default function AdminCategoriesPage() {
                           
                           {/* Badge se já tem categoria */}
                           {hasCategory && !isSelected && (
-                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                            <div className="absolute top-2 right-2 bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
                               Já tem
                             </div>
                           )}

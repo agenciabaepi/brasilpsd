@@ -1461,7 +1461,7 @@ export default function UploadResourcePage() {
               <span className="h-6 w-1 bg-gray-900 mr-3 rounded-full" />
               PASSO 1: Arquivo Principal
               {file && (
-                <span className="ml-3 px-3 py-1 bg-green-100 text-green-700 text-sm font-bold rounded-full">
+                <span className="ml-3 px-3 py-1 bg-primary-100 text-primary-700 text-sm font-bold rounded-full">
                   ✓ Arquivo selecionado
                 </span>
               )}
@@ -1472,7 +1472,7 @@ export default function UploadResourcePage() {
                 <label className="block text-base font-semibold text-gray-600 tracking-widest mb-4 uppercase">
                   PASSO 1: Selecione o arquivo principal
                   {file && (
-                    <span className="ml-2 text-green-600 font-bold normal-case text-sm">
+                    <span className="ml-2 text-primary-600 font-bold normal-case text-sm">
                       ✓ Arquivo selecionado
                     </span>
                   )}
@@ -1647,8 +1647,8 @@ export default function UploadResourcePage() {
                           </div>
                         )}
                         {thumbnail && (
-                          <div className="px-4 py-2 bg-green-50 border border-green-200 rounded-xl mt-2">
-                            <p className="text-sm font-semibold text-green-700 text-center">
+                          <div className="px-4 py-2 bg-primary-50 border border-primary-200 rounded-xl mt-2">
+                            <p className="text-sm font-semibold text-primary-700 text-center">
                               ✓ Thumbnail selecionada: {thumbnail.name}
                             </p>
                           </div>
@@ -1688,7 +1688,7 @@ export default function UploadResourcePage() {
                     <>
                       Faça upload da thumbnail (OBRIGATÓRIA)
                       {thumbnail && (
-                        <span className="ml-2 text-green-600 font-bold normal-case text-sm">
+                        <span className="ml-2 text-primary-600 font-bold normal-case text-sm">
                           ✓ Thumbnail selecionada - IA analisando...
                         </span>
                       )}
@@ -1700,7 +1700,7 @@ export default function UploadResourcePage() {
                     <>
                       Faça upload da thumbnail
                       {thumbnail && (
-                        <span className="ml-2 text-green-600 font-bold normal-case text-sm">
+                        <span className="ml-2 text-primary-600 font-bold normal-case text-sm">
                           ✓ Thumbnail selecionada - IA analisando...
                         </span>
                       )}
@@ -1724,7 +1724,7 @@ export default function UploadResourcePage() {
                       : file && !file.type.startsWith('image/') && !file.type.startsWith('video/') && !thumbnail
                       ? 'border-red-300 bg-red-50/50 group-hover:border-red-500 group-hover:bg-red-50/70 animate-pulse'
                       : file && !file.type.startsWith('image/') && !file.type.startsWith('video/') && thumbnail
-                      ? 'border-green-300 bg-green-50/30 group-hover:border-green-500'
+                      ? 'border-primary-300 bg-primary-50/30 group-hover:border-primary-500'
                         : 'border-gray-200 group-hover:border-gray-900 group-hover:bg-gray-50/30'
                   }`}>
                     {thumbnailPreview ? (
