@@ -31,6 +31,18 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   const canLinkToProfile = !isOfficial && resource.creator_id && !isSystemProfile(resource.creator_id)
   const isVideo = resource.resource_type === 'video' || resource.file_url?.match(/\.(mp4|webm|mov|avi|mkv)$/i)
   
+  // Função helper para obter URL do vídeo correto para exibição
+  // Prioriza preview_url (video-previews/) para exibição, usa file_url (resources/) apenas se não houver preview
+  const getVideoDisplayUrl = () => {
+    if (!isVideo) return null
+    // Priorizar preview_url (preview leve em video-previews/) para exibição
+    if (resource.preview_url) {
+      return getS3Url(resource.preview_url)
+    }
+    // Fallback para file_url (MP4 completo em resources/) se não houver preview
+    return resource.file_url ? getS3Url(resource.file_url) : null
+  }
+  
   // Calcular aspect ratio do vídeo baseado nas dimensões
   const getVideoAspectRatio = () => {
     if (!isVideo || !resource.width || !resource.height) {
@@ -191,7 +203,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
               ) : isInView ? (
                 // Fallback: mostrar preview de vídeo ou primeiro frame
                 <video
-                  src={(resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url))}
+                  src={getVideoDisplayUrl() || ''}
                   className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
                     isVideoHovered ? 'opacity-0' : 'opacity-100'
                   }`}
@@ -226,7 +238,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
                       el.play().catch(() => {})
                     }
                   }}
-                  src={resource.preview_url ? getS3Url(resource.preview_url) : getS3Url(resource.file_url)}
+                  src={getVideoDisplayUrl() || ''}
                   className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
                     isVideoHovered ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
                   }`}

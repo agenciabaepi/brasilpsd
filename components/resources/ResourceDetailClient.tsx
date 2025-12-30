@@ -190,11 +190,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
     checkFamily()
   }, [resource.resource_type, resource.font_family_id, resource.id, supabase])
 
-  // Carregar signed URL para vídeo (sempre usar preview_url com marca d'água se disponível)
+  // Carregar signed URL para vídeo (sempre usar preview_url de video-previews/ se disponível)
   useEffect(() => {
     async function loadVideoUrl() {
       if (resource.resource_type === 'video') {
-        // Priorizar preview_url (com marca d'água) sobre file_url
+        // Priorizar preview_url (preview leve em video-previews/) sobre file_url (MP4 completo em resources/)
+        // preview_url é otimizado para exibição, file_url é para download
         const videoSourceUrl = resource.preview_url || resource.file_url
         
         if (!videoSourceUrl) return
