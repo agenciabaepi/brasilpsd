@@ -17,8 +17,6 @@ import {
   Star,
   X,
   ChevronRight,
-  Maximize2,
-  Minimize2,
   ChevronLeft
 } from 'lucide-react'
 import type { Resource } from '@/types/database'
@@ -26,6 +24,7 @@ import Button from '@/components/ui/Button'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { useSearchParams } from 'next/navigation'
+import JustifiedGrid from '@/components/layout/JustifiedGrid'
 
 interface ExploreClientProps {
   initialResources: Resource[]
@@ -70,23 +69,8 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
   })
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  // Tamanho de exibição: 'small' (padrão) ou 'large'
-  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'small'
-    }
-    return 'small'
-  })
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const supabase = createSupabaseClient()
-
-  // Salvar preferência no localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('imageDisplaySize', imageSize)
-    }
-  }, [imageSize])
 
   useEffect(() => {
     loadCategories()
@@ -470,25 +454,6 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
               
               <div className="hidden sm:flex items-center gap-2">
                 {/* Controle de Tamanho (apenas no modo grid) */}
-                {viewMode === 'grid' && (
-                  <div className="flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
-                    <button
-                      onClick={() => setImageSize('small')}
-                      className={cn("p-2 rounded-lg transition-all", imageSize === 'small' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
-                      title="Imagens menores"
-                    >
-                      <Minimize2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setImageSize('large')}
-                      className={cn("p-2 rounded-lg transition-all", imageSize === 'large' ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
-                      title="Imagens maiores"
-                    >
-                      <Maximize2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-                
                 {/* Controles de Visualização */}
                 <div className="flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
                   <button 
@@ -554,38 +519,24 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
               </div>
             ) : resources.length > 0 ? (
               <>
-                {/* Mobile: Grid 2 colunas */}
-                <div className={cn(
-                  "gap-1 lg:hidden",
-                  viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
-                )}>
-                  {resources.map((resource) => (
-                    <ResourceCard
-                      key={resource.id}
-                      resource={resource}
-                      onFavorite={handleFavorite}
-                      isFavorited={favorites.has(resource.id)}
-                    />
-                  ))}
-                </div>
-                {/* Desktop: Columns masonry (Tipo Pinterest/Tetris) */}
-                <div className={cn(
-                  "hidden lg:block masonry-container",
-                  viewMode === 'grid' 
-                    ? (imageSize === 'large' 
-                        ? (isSidebarOpen ? 'masonry-large' : 'masonry-large-expanded')
-                        : (isSidebarOpen ? 'masonry-small' : 'masonry-small-expanded'))
-                    : "flex flex-col"
-                )}>
-                  {resources.map((resource) => (
-                    <ResourceCard
-                      key={resource.id}
-                      resource={resource}
-                      onFavorite={handleFavorite}
-                      isFavorited={favorites.has(resource.id)}
-                    />
-                  ))}
-                </div>
+                {viewMode === 'grid' ? (
+                  <JustifiedGrid
+                    resources={resources}
+                    rowHeight={240}
+                    margin={4}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {resources.map((resource) => (
+                      <ResourceCard
+                        key={resource.id}
+                        resource={resource}
+                        onFavorite={handleFavorite}
+                        isFavorited={favorites.has(resource.id)}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-center py-32 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">

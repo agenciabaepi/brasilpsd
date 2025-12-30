@@ -11,6 +11,12 @@ import { addWatermarkToAudio, extractAudioMetadata } from '@/lib/audio/watermark
 export const maxDuration = 300 // 5 minutos para uploads grandes
 export const runtime = 'nodejs'
 
+/**
+ * NOTA: O Next.js/Vercel tem um limite de 4.5MB para o body das requisições.
+ * Arquivos maiores que isso resultarão em erro 413 (Content Too Large) antes
+ * mesmo de chegar neste handler. Para arquivos grandes (>4.5MB), é necessário
+ * usar upload direto ao S3 via presigned URL (/api/upload/presigned).
+ */
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   console.log('📤 Upload request started')
@@ -39,6 +45,23 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('📋 Parsing form data...')
+    
+    // Tentar ler o Content-Length do header para detectar arquivos grandes
+    const contentLength = request.headers.get('content-length')
+    if (contentLength) {
+      const sizeInMB = parseInt(contentLength) / (1024 * 1024)
+      if (sizeInMB > 4.5) {
+        console.warn(`⚠️ File too large: ${sizeInMB.toFixed(2)}MB (limit: 4.5MB)`)
+        return NextResponse.json({
+          error: 'Arquivo muito grande',
+          message: `O arquivo (${sizeInMB.toFixed(2)}MB) excede o limite de 4.5MB. Para arquivos grandes, use upload direto ao S3 via presigned URL.`,
+          maxSize: 4.5 * 1024 * 1024,
+          fileSize: parseInt(contentLength),
+          usePresignedUrl: true
+        }, { status: 413 })
+      }
+    }
+    
     const formData = await request.formData()
     const file = formData.get('file') as File
     const type = formData.get('type') as string
