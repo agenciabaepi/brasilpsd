@@ -68,8 +68,23 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
   })
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  // Tamanho de exibição: 'small' (padrão) ou 'large'
+  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('imageDisplaySize')
+      return (saved === 'large' || saved === 'small') ? saved : 'small'
+    }
+    return 'small'
+  })
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const supabase = createSupabaseClient()
+
+  // Salvar preferência no localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('imageDisplaySize', imageSize)
+    }
+  }, [imageSize])
 
   useEffect(() => {
     loadCategories()
