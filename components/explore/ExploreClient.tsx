@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, Suspense } from 'react'
-import ResourceCard from '@/components/resources/ResourceCard'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import { 
   Search, 
@@ -24,6 +23,7 @@ import Button from '@/components/ui/Button'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils/cn'
 import { useSearchParams } from 'next/navigation'
+import JustifiedGrid from '@/components/layout/JustifiedGrid'
 
 interface ExploreClientProps {
   initialResources: Resource[]
@@ -68,23 +68,8 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
   })
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  // Tamanho de exibição: 'small' (padrão) ou 'large'
-  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'small'
-    }
-    return 'small'
-  })
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const supabase = createSupabaseClient()
-
-  // Salvar preferência no localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('imageDisplaySize', imageSize)
-    }
-  }, [imageSize])
 
   useEffect(() => {
     loadCategories()
@@ -467,7 +452,6 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
               </div>
               
               <div className="hidden sm:flex items-center gap-2">
-                {/* Controle de Tamanho (apenas no modo grid) */}
                 {/* Controles de Visualização */}
                 <div className="flex items-center bg-gray-50 p-1 rounded-xl border border-gray-100">
                   <button 
@@ -532,36 +516,22 @@ function ExploreContent({ initialResources, initialCategoryId, categoryName, ini
                 <p className="text-gray-600 text-sm font-medium">Buscando os melhores recursos...</p>
               </div>
             ) : resources.length > 0 ? (
-              <>
-                {/* Mobile: Grid 2 colunas */}
-                <div className={cn(
-                  "gap-1 lg:hidden",
-                  viewMode === 'grid' ? "grid grid-cols-2" : "flex flex-col"
-                )}>
+              viewMode === 'grid' ? (
+                <JustifiedGrid 
+                  resources={resources}
+                  rowHeight={240}
+                  margin={4}
+                />
+              ) : (
+                <div className="flex flex-col gap-4">
                   {resources.map((resource) => (
-                    <ResourceCard
-                      key={resource.id}
-                      resource={resource}
-                      onFavorite={handleFavorite}
-                      isFavorited={favorites.has(resource.id)}
-                    />
+                    <div key={resource.id} className="border border-gray-100 rounded-2xl p-4 hover:shadow-lg transition-shadow">
+                      {/* List view content - pode ser implementado depois se necessário */}
+                      <div className="text-gray-900 font-semibold">{resource.title}</div>
+                    </div>
                   ))}
                 </div>
-                {/* Desktop: Columns masonry (Tipo Pinterest/Tetris) */}
-                <div className={cn(
-                  "hidden lg:block masonry-container",
-                  viewMode === 'grid' ? `${imageSize === 'large' ? 'masonry-large' : 'masonry-small'}` : "flex flex-col"
-                )}>
-                  {resources.map((resource) => (
-                    <ResourceCard
-                      key={resource.id}
-                      resource={resource}
-                      onFavorite={handleFavorite}
-                      isFavorited={favorites.has(resource.id)}
-                    />
-                  ))}
-                </div>
-              </>
+              )
             ) : (
               <div className="text-center py-32 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-gray-100">
                 <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm mb-4">

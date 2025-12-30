@@ -3,8 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import justifiedLayout from 'justified-layout'
 import Link from 'next/link'
+import NextImage from 'next/image'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
+import { Crown } from 'lucide-react'
+import { isSystemProfile } from '@/lib/utils/system'
 
 const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif', '.svg']
 const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv']
@@ -98,7 +101,8 @@ export default function JustifiedGrid({
       if (!resolved || resolved.kind !== 'image') return
       const src = resolved.src
 
-      const img = new Image()
+      // Usar document.createElement para evitar conflito com Image do Next.js
+      const img = document.createElement('img')
       img.onload = () => {
         if (!img.naturalWidth || !img.naturalHeight) return
         setMeasuredDims((prev) => {
@@ -137,11 +141,24 @@ export default function JustifiedGrid({
         const item = items[index]
         if (!item) return null
         const { resource, src, kind } = item
+        const isOfficial = resource.is_official || isSystemProfile(resource.creator_id)
+        const authorName = isOfficial ? (resource.creator?.full_name || 'BrasilPSD') : (resource.creator?.full_name || 'BrasilPSD')
+        
+        // Verificar se é PNG pelo formato, tipo ou extensão do arquivo
+        const isPNG = 
+          resource.file_format?.toLowerCase() === 'png' ||
+          resource.resource_type === 'png' ||
+          resource.file_url?.toLowerCase().endsWith('.png') ||
+          resource.thumbnail_url?.toLowerCase().endsWith('.png') ||
+          resource.preview_url?.toLowerCase().endsWith('.png')
+
         return (
           <Link
             key={resource.id}
             href={`/resources/${resource.id}`}
-            className="absolute block overflow-hidden rounded-lg bg-gray-100"
+            className={`absolute block overflow-hidden rounded-lg group ${
+              isPNG ? 'bg-checkerboard' : 'bg-gray-100'
+            }`}
             style={{
               left: box.left,
               top: box.top,
@@ -181,6 +198,39 @@ export default function JustifiedGrid({
                 onContextMenu={(e) => e.preventDefault()}
               />
             )}
+            
+            {/* Premium Badge - Coroa no canto superior esquerdo */}
+            {resource.is_premium && (
+              <div className="absolute top-2 left-2 z-10">
+                <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-lg">
+                  <Crown className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+                </div>
+              </div>
+            )}
+            
+            {/* Exclusivo Badge - Selo no canto superior direito */}
+            {resource.is_official && (
+              <div className="absolute top-2 right-2 z-10">
+                <div className="bg-white/90 backdrop-blur-sm p-1 rounded-full shadow-sm">
+                  <NextImage src="/images/verificado.svg" alt="Oficial" width={12} height={12} className="w-3 h-3" />
+                </div>
+              </div>
+            )}
+            
+            {/* Overlay com título e criador (só aparece no hover) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 pointer-events-none">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-white drop-shadow-lg truncate max-w-full tracking-tight">
+                  {resource.title}
+                </span>
+                <span className="text-[10px] font-semibold text-gray-200 drop-shadow-lg flex items-center gap-1.5 tracking-tight mt-0.5">
+                  {authorName}
+                  {isOfficial && (
+                    <NextImage src="/images/verificado.svg" alt="Verificado" width={10} height={10} className="w-2.5 h-2.5" />
+                  )}
+                </span>
+              </div>
+            </div>
           </Link>
         )
       })}

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { User, UserPlus, Check, Download, Heart, Eye, MapPin, Calendar, Share2, Bookmark, ChevronDown, Files, Maximize2, Minimize2 } from 'lucide-react'
+import { User, UserPlus, Check, Download, Heart, Eye, MapPin, Calendar, Share2, Bookmark, ChevronDown, Files } from 'lucide-react'
 import type { Profile, Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import ResourceCard from '@/components/resources/ResourceCard'
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils/cn'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { isSystemProfileSync } from '@/lib/utils/system'
-import GridALicious from '@/components/layout/GridALicious'
+import JustifiedGrid from '@/components/layout/JustifiedGrid'
 
 export default function CreatorProfilePage() {
   const params = useParams()
@@ -34,22 +34,7 @@ export default function CreatorProfilePage() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<Profile | null>(null)
   const [showFeatured, setShowFeatured] = useState(true)
-  // Tamanho de exibição: 'small' ou 'large' (padrão: 'large')
-  const [imageSize, setImageSize] = useState<'small' | 'large'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('imageDisplaySize')
-      return (saved === 'large' || saved === 'small') ? saved : 'large'
-    }
-    return 'large'
-  })
   const supabase = createSupabaseClient()
-
-  // Salvar preferência no localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('imageDisplaySize', imageSize)
-    }
-  }, [imageSize])
 
   useEffect(() => {
     if (id) {
@@ -422,57 +407,18 @@ export default function CreatorProfilePage() {
 
         {/* Todos os Recursos */}
         <div>
-          <div className="flex justify-between items-center mb-6">
+          <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
               Todos os Recursos
             </h2>
-            
-            {/* Controle de Tamanho */}
-            {resources.length > 0 && (
-              <div className="hidden lg:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-1">
-                <button
-                  onClick={() => setImageSize('small')}
-                  className={`p-2 rounded-lg transition-all ${
-                    imageSize === 'small'
-                      ? 'bg-white shadow-sm text-gray-900'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="Imagens menores"
-                >
-                  <Minimize2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setImageSize('large')}
-                  className={`p-2 rounded-lg transition-all ${
-                    imageSize === 'large'
-                      ? 'bg-white shadow-sm text-gray-900'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="Imagens maiores"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </button>
-              </div>
-            )}
           </div>
 
           {resources.length > 0 ? (
-            <>
-              {/* Mobile: Grid 2 colunas */}
-              <div className="grid grid-cols-2 gap-1 lg:hidden">
-                {resources.map((resource) => (
-                  <ResourceCard key={resource.id} resource={resource} />
-                ))}
-              </div>
-              {/* Desktop: Grid-A-Licious Layout */}
-              <div className="hidden lg:block">
-                <GridALicious imageSize={imageSize}>
-                  {resources.map((resource) => (
-                    <ResourceCard key={resource.id} resource={resource} />
-                  ))}
-                </GridALicious>
-              </div>
-            </>
+            <JustifiedGrid 
+              resources={resources}
+              rowHeight={240}
+              margin={4}
+            />
           ) : (
             <div className="text-center py-20 bg-gray-50 rounded-3xl border border-gray-100">
               <p className="text-gray-600 font-semibold">Este criador ainda não publicou recursos</p>

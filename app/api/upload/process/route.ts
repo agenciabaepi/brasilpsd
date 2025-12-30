@@ -32,17 +32,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    const { key, url, fileName, contentType, fileSize, type, resourceId } = await request.json()
+    const body = await request.json()
+    const { key, url, fileName, contentType, fileSize, type, resourceId } = body
+    
+    console.log('📥 Dados recebidos na rota /api/upload/process:', {
+      hasKey: !!key,
+      hasUrl: !!url,
+      fileName,
+      contentType,
+      type,
+      hasResourceId: !!resourceId,
+      resourceId: resourceId?.substring(0, 30) + '...' || 'NÃO FORNECIDO'
+    })
 
     if (!key || !url) {
       return NextResponse.json({ error: 'key e url são obrigatórios' }, { status: 400 })
     }
 
     // NOVO: Se SQS estiver configurado e for vídeo, enfileirar processamento assíncrono
-    const useAsyncProcessing = process.env.SQS_QUEUE_URL && type === 'resource' && contentType.startsWith('video/')
+    const hasSqs = !!process.env.SQS_QUEUE_URL
+    const isVideo = type === 'resource' && contentType.startsWith('video/')
+    const useAsyncProcessing = hasSqs && isVideo
+    
+    console.log('🔍 Verificando processamento assíncrono:', {
+      hasSqs,
+      isVideo,
+      type,
+      contentType,
+      hasResourceId: !!resourceId,
+      resourceId: resourceId?.substring(0, 20) + '...',
+      useAsyncProcessing
+    })
     
     if (useAsyncProcessing && resourceId) {
-      console.log('📤 Enfileirando processamento assíncrono via SQS...')
+      console.log('📤 Enfileirando processamento assíncrono via SQS...', {
+        resourceId,
+        key,
+        userId: user.id,
+        fileName
+      })
       try {
         await enqueueVideoProcessing({
           resourceId,
@@ -51,6 +79,8 @@ export async function POST(request: NextRequest) {
           fileName,
           contentType
         })
+        
+        console.log('✅ Processamento enfileirado com sucesso na SQS')
         
         // Retornar imediatamente - worker processará em background
         return NextResponse.json({
@@ -65,8 +95,15 @@ export async function POST(request: NextRequest) {
         })
       } catch (error: any) {
         console.error('❌ Erro ao enfileirar, caindo back para processamento síncrono:', error.message)
+        console.error('❌ Erro completo:', error)
         // Continuar com processamento síncrono como fallback
       }
+    } else {
+      console.log('⚠️ Condições para processamento assíncrono não atendidas:', {
+        useAsyncProcessing,
+        hasResourceId: !!resourceId,
+        motivo: !hasSqs ? 'SQS_QUEUE_URL não configurado' : !isVideo ? 'Não é vídeo' : !resourceId ? 'resourceId não fornecido' : 'Desconhecido'
+      })
     }
     
     // Processamento síncrono (fallback ou quando SQS não está configurado)

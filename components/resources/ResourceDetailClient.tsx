@@ -190,13 +190,13 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
     checkFamily()
   }, [resource.resource_type, resource.font_family_id, resource.id, supabase])
 
-  // Carregar signed URL para vídeo (sempre usar preview_url de video-previews/ se disponível)
+  // Carregar signed URL para vídeo (na página de detalhes, sempre usar file_url completo)
   useEffect(() => {
     async function loadVideoUrl() {
       if (resource.resource_type === 'video') {
-        // Priorizar preview_url (preview leve em video-previews/) sobre file_url (MP4 completo em resources/)
-        // preview_url é otimizado para exibição, file_url é para download
-        const videoSourceUrl = resource.preview_url || resource.file_url
+        // Na página de detalhes, usar file_url (vídeo completo) para o usuário ver o vídeo inteiro antes de baixar
+        // preview_url é usado apenas nos cards/grids para performance
+        const videoSourceUrl = resource.file_url || resource.preview_url
         
         if (!videoSourceUrl) return
         
@@ -205,7 +205,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
           file_url: resource.file_url,
           file_format: resource.file_format,
           file_size: resource.file_size,
-          using_preview: !!resource.preview_url
+          using_full_video: !!resource.file_url
         })
         
         // SEMPRE usar signed URL para segurança (nunca URL direta)
@@ -482,8 +482,33 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
         })
       }
 
-      // Abrir download
-      window.open(downloadData.url, '_blank')
+      // Forçar download do arquivo (ao invés de abrir em nova aba)
+      // Para URLs de outros domínios (S3), precisamos baixar como blob
+      try {
+        const response = await fetch(downloadData.url)
+        const blob = await response.blob()
+        const objectUrl = window.URL.createObjectURL(blob)
+        
+        const link = document.createElement('a')
+        link.href = objectUrl
+        link.download = resource.title || `download-${resource.id}.${resource.file_format || 'mp4'}`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        // Limpar o object URL após o download
+        window.URL.revokeObjectURL(objectUrl)
+      } catch (fetchError) {
+        // Fallback: se fetch falhar, tentar download direto (pode abrir em nova aba)
+        console.warn('Erro ao baixar como blob, tentando download direto:', fetchError)
+        const link = document.createElement('a')
+        link.href = downloadData.url
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
       
       // Disparar evento para atualizar estatísticas de downloads (para outros componentes)
       window.dispatchEvent(new CustomEvent('download-completed', {

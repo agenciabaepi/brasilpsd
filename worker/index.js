@@ -69,6 +69,7 @@ async function downloadFromS3(key) {
 }
 
 // Função para fazer upload para S3
+// Retorna apenas a key (não a URL completa), pois o frontend usa getS3Url() que pode usar CloudFront se configurado
 async function uploadToS3(buffer, key, contentType) {
   const command = new PutObjectCommand({
     Bucket: AWS_S3_BUCKET_NAME,
@@ -79,8 +80,9 @@ async function uploadToS3(buffer, key, contentType) {
   
   await s3Client.send(command)
   
-  // Retornar URL pública
-  return `https://${AWS_S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`
+  // Retornar apenas a key (não a URL completa)
+  // O frontend usa getS3Url() que pode usar CloudFront se configurado
+  return key
 }
 
 // Função para converter vídeo para MP4
@@ -216,10 +218,12 @@ async function updateDatabase(resourceId, data) {
     return
   }
   
+  // Salvar apenas as keys (não URLs completas) no banco
+  // O frontend usa getS3Url() que pode usar CloudFront se configurado
   const updateData = {
-    file_url: data.fileUrl,
-    preview_url: data.previewUrl,
-    thumbnail_url: data.thumbnailUrl,
+    file_url: data.fileUrl, // Já é apenas a key
+    preview_url: data.previewUrl, // Já é apenas a key
+    thumbnail_url: data.thumbnailUrl, // Já é apenas a key
     file_format: 'mp4',
     width: data.metadata?.width,
     height: data.metadata?.height,
@@ -293,12 +297,12 @@ async function processVideo(message) {
     // 4. Upload MP4 para resources/
     const mp4FileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
     const mp4Key = `resources/${userId}/${mp4FileName}`
-    const mp4Url = await uploadToS3(mp4Buffer, mp4Key, 'video/mp4')
-    console.log('✅ MP4 enviado para S3:', mp4Url)
+    const mp4KeyResult = await uploadToS3(mp4Buffer, mp4Key, 'video/mp4')
+    console.log('✅ MP4 enviado para S3 (key):', mp4KeyResult)
     
     // 5. Gerar preview leve e thumbnail
-    let previewUrl = null
-    let thumbnailUrl = null
+    let previewKey = null
+    let thumbnailKey = null
     
     try {
       console.log('🎬 Gerando preview...')
@@ -308,9 +312,9 @@ async function processVideo(message) {
       
       // 6. Upload preview para video-previews/
       const previewFileName = `video-preview-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
-      const previewKey = `video-previews/${userId}/${previewFileName}`
-      previewUrl = await uploadToS3(previewBuffer, previewKey, 'video/mp4')
-      console.log('✅ Preview enviado para S3:', previewUrl)
+      const previewKeyPath = `video-previews/${userId}/${previewFileName}`
+      previewKey = await uploadToS3(previewBuffer, previewKeyPath, 'video/mp4')
+      console.log('✅ Preview enviado para S3 (key):', previewKey)
       
       // 7. Extrair thumbnail
       console.log('🖼️ Extraindo thumbnail...')
@@ -320,9 +324,9 @@ async function processVideo(message) {
       
       // 8. Upload thumbnail para thumbnails/
       const thumbnailFileName = `thumb-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
-      const thumbnailKey = `thumbnails/${userId}/${thumbnailFileName}`
-      thumbnailUrl = await uploadToS3(thumbnailBuffer, thumbnailKey, 'image/jpeg')
-      console.log('✅ Thumbnail enviado para S3:', thumbnailUrl)
+      const thumbnailKeyPath = `thumbnails/${userId}/${thumbnailFileName}`
+      thumbnailKey = await uploadToS3(thumbnailBuffer, thumbnailKeyPath, 'image/jpeg')
+      console.log('✅ Thumbnail enviado para S3 (key):', thumbnailKey)
     } catch (previewError) {
       console.error('⚠️ Erro ao gerar preview/thumbnail (continuando):', previewError.message)
       // Continuar mesmo se preview falhar
@@ -344,9 +348,9 @@ async function processVideo(message) {
     // 10. Atualizar banco de dados
     console.log('💾 Atualizando banco de dados...')
     await updateDatabase(resourceId, {
-      fileUrl: mp4Url,
-      previewUrl: previewUrl,
-      thumbnailUrl: thumbnailUrl,
+      fileUrl: mp4KeyResult, // Key do MP4
+      previewUrl: previewKey, // Key do preview
+      thumbnailUrl: thumbnailKey, // Key do thumbnail
       metadata: metadata
     })
     

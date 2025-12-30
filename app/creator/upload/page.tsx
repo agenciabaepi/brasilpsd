@@ -276,62 +276,20 @@ export default function UploadResourcePage() {
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          // Upload direto concluído, agora processar no servidor
-          setUploadPhase('processing')
-          setUploadProgress(96)
+          // Upload direto concluído
+          setUploadProgress(100)
           
-          // Notificar servidor para processar o arquivo
-          // resourceId será passado após salvar no banco (ver handleSubmit)
-          fetch('/api/upload/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              key,
-              url,
-              fileName: file.name,
-              contentType: file.type,
-              fileSize: file.size,
-              type: type,
-              resourceId: undefined // Será definido após salvar no banco
-            })
+          // Para vídeos, o processamento será enfileirado após salvar no banco (ver handleSubmit)
+          // Retornar dados básicos para permitir continuar com o fluxo
+          resolve({ 
+            url, 
+            key, 
+            previewUrl: null, 
+            thumbnailUrl: null, 
+            videoMetadata: null,
+            isAiGenerated: false,
+            processing: type === 'resource' && file.type.startsWith('video/') ? 'queued' : undefined
           })
-            .then(async res => {
-              if (!res.ok) {
-                const error = await res.json()
-                throw new Error(error.error || 'Erro ao processar arquivo')
-              }
-              return res.json()
-            })
-            .then(data => {
-              setUploadProgress(100)
-              // Se foi enfileirado, retornar dados básicos
-              if (data.processing === 'queued') {
-                resolve({ 
-                  url, 
-                  key, 
-                  previewUrl: null, 
-                  thumbnailUrl: null, 
-                  videoMetadata: null,
-                  isAiGenerated: false,
-                  processing: 'queued'
-                })
-              } else {
-                resolve({ ...data, url, key })
-              }
-            })
-            .catch(err => {
-              console.error('Processing error:', err)
-              // Mesmo se processar falhar, o arquivo foi enviado
-              // Retornar dados básicos para permitir continuar
-              resolve({ 
-                url, 
-                key, 
-                previewUrl: null, 
-                thumbnailUrl: null, 
-                videoMetadata: null,
-                isAiGenerated: false
-              })
-            })
         } else {
           reject(new Error(`Erro ${xhr.status} no upload`))
         }
@@ -850,12 +808,24 @@ export default function UploadResourcePage() {
       
       console.log('✅ Resource saved successfully:', resource?.id)
 
-      // 5. Se for vídeo e processamento foi enfileirado, re-enfileirar com resourceId
-      if (resource && formData.resource_type === 'video' && fileData.processing === 'queued') {
-        console.log('📤 Re-enfileirando processamento com resourceId...')
+      // 5. Se for vídeo, enfileirar processamento com resourceId (para processamento assíncrono via SQS)
+      if (resource && formData.resource_type === 'video' && file.type.startsWith('video/')) {
+        console.log('📤 Enfileirando processamento de vídeo com resourceId...')
         try {
           // Extrair key do fileUrl (pode ser URL completa ou apenas key)
-          const fileKey = fileUrl.includes('/') ? fileUrl.split('/').slice(-2).join('/') : fileUrl
+          // O fileUrl pode estar em formato: https://bucket.s3.region.amazonaws.com/path/key
+          // ou apenas: path/key
+          let fileKey = fileUrl
+          if (fileUrl.includes('amazonaws.com')) {
+            // Se for URL completa, extrair a parte após o domínio
+            const urlParts = fileUrl.split('.amazonaws.com/')
+            fileKey = urlParts.length > 1 ? urlParts[1] : fileUrl.split('/').slice(-2).join('/')
+          } else if (fileUrl.includes('/')) {
+            // Se for apenas path, usar os últimos 2 segmentos (ex: resources/timestamp-random.ext)
+            fileKey = fileUrl.split('/').slice(-2).join('/')
+          }
+          
+          console.log('📤 Enviando para SQS:', { resourceId: resource.id, key: fileKey, fileName: file.name })
           
           const response = await fetch('/api/upload/process', {
             method: 'POST',
@@ -872,13 +842,14 @@ export default function UploadResourcePage() {
           })
           
           if (response.ok) {
-            console.log('✅ Processamento re-enfileirado com resourceId:', resource.id)
+            const result = await response.json()
+            console.log('✅ Processamento enfileirado com resourceId:', resource.id, result)
           } else {
             const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
-            console.error('⚠️ Erro ao re-enfileirar:', error)
+            console.error('⚠️ Erro ao enfileirar processamento:', error)
           }
         } catch (err) {
-          console.error('⚠️ Erro ao re-enfileirar (não crítico):', err)
+          console.error('⚠️ Erro ao enfileirar processamento (não crítico):', err)
         }
       }
 
