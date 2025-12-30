@@ -8,8 +8,12 @@ import { useEffect } from 'react'
  */
 export default function ImageProtection() {
   useEffect(() => {
+    // TEMPORARIAMENTE DESABILITADO PARA DEBUG
     // Bloquear DevTools (tentativa básica)
     const blockDevTools = () => {
+      // DESABILITADO TEMPORARIAMENTE
+      return
+      /*
       const widthThreshold = window.outerWidth - window.innerWidth > 160
       const heightThreshold = window.outerHeight - window.innerHeight > 160
       
@@ -19,10 +23,14 @@ export default function ImageProtection() {
         console.log('%c⚠️ Acesso Negado', 'color: red; font-size: 50px; font-weight: bold;')
         console.log('%cEsta página está protegida contra inspeção de elementos.', 'color: red; font-size: 20px;')
       }
+      */
     }
 
     // Bloquear atalhos de teclado
     const handleKeyDown = (e: KeyboardEvent) => {
+      // DESABILITADO TEMPORARIAMENTE PARA DEBUG
+      return
+      /*
       // Bloquear F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S, Ctrl+P
       if (
         e.key === 'F12' ||
@@ -33,6 +41,7 @@ export default function ImageProtection() {
         e.stopPropagation()
         return false
       }
+      */
     }
 
     // Helper para verificar se é uma imagem ou elemento relacionado

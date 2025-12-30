@@ -83,6 +83,9 @@ export default function ProtectedImage({
 
     // Bloquear DevTools (tentativa básica)
     const handleDevTools = () => {
+      // TEMPORARIAMENTE DESABILITADO PARA DEBUG
+      return
+      /*
       const widthThreshold = window.outerWidth - window.innerWidth > 160
       const heightThreshold = window.outerHeight - window.innerHeight > 160
       
@@ -90,6 +93,7 @@ export default function ProtectedImage({
         // DevTools pode estar aberto, mas não podemos fazer muito
         console.clear()
       }
+      */
     }
 
     const interval = setInterval(handleDevTools, 1000)
