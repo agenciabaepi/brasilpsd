@@ -953,7 +953,7 @@ export default function UploadResourcePage() {
 
       console.log('✅ All upload steps completed successfully')
       toast.success('Arquivo enviado com sucesso!')
-      router.push('/creator')
+      router.push('/creator/resources')
     } catch (error: any) {
       console.error('❌ Upload failed:', error)
       toast.error(error.message || 'Erro ao enviar recurso')

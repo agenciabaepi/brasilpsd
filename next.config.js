@@ -66,7 +66,27 @@ const nextConfig = {
         compression: 'gzip',
         maxMemoryGenerations: 1,
       }
+      
+      // Ignorar módulos que só funcionam no servidor (evita erros de build)
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+        child_process: false,
+      }
     }
+    
+    // Ignorar módulo 'psd' durante análise estática do webpack
+    // O módulo só será carregado dinamicamente no servidor quando necessário
+    const webpack = require('webpack')
+    config.plugins = config.plugins || []
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^psd$/,
+      })
+    )
+    
     return config
   },
   

@@ -96,7 +96,7 @@ export default function PremiumPage() {
     {
       id: 'lite',
       name: 'Premium Lite',
-      price: '5,00',
+      price: '19,90',
       description: 'Ideal para iniciantes',
       icon: Zap,
       color: 'secondary',
@@ -113,7 +113,7 @@ export default function PremiumPage() {
     {
       id: 'pro',
       name: 'Premium Pro',
-      price: '6,00',
+      price: '29,90',
       description: 'Para profissionais criativos',
       icon: Crown,
       color: 'primary',
@@ -132,7 +132,7 @@ export default function PremiumPage() {
     {
       id: 'plus',
       name: 'Premium Plus',
-      price: '7,00',
+      price: '49,90',
       description: 'Máximo desempenho',
       icon: Star,
       color: 'secondary',

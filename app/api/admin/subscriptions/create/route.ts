@@ -53,11 +53,11 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Configuração de Preços e Ciclos (valores mínimos para testes - mínimo do Asaas é R$ 5,00)
+    // Configuração de Preços e Ciclos
     const prices: Record<string, any> = {
-      'lite': { monthly: 5.00, yearly: 5.00 },
-      'pro': { monthly: 6.00, yearly: 6.00 },
-      'plus': { monthly: 7.00, yearly: 7.00 }
+      'lite': { monthly: 19.90, yearly: 19.90 },
+      'pro': { monthly: 29.90, yearly: 29.90 },
+      'plus': { monthly: 49.90, yearly: 49.90 }
     }
 
     const tierData = prices[tier.toLowerCase()]

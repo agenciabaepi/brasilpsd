@@ -34,19 +34,19 @@ export default function CheckoutPage() {
     ccv: ''
   })
 
-  // Preços corretos dos planos (valores mínimos para testes do Asaas)
+  // Preços corretos dos planos
   const planInfo: any = {
     lite: { 
       name: 'Premium Lite', 
-      price: cycle === 'monthly' ? 5.00 : 5.00 
+      price: cycle === 'monthly' ? 19.90 : 19.90 
     },
     pro: { 
       name: 'Premium Pro', 
-      price: cycle === 'monthly' ? 6.00 : 6.00 
+      price: cycle === 'monthly' ? 29.90 : 29.90 
     },
     plus: { 
       name: 'Premium Plus', 
-      price: cycle === 'monthly' ? 7.00 : 7.00 
+      price: cycle === 'monthly' ? 49.90 : 49.90 
     },
   }
 

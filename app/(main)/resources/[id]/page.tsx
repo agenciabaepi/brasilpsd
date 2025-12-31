@@ -146,22 +146,72 @@ export default async function ResourceDetailPage({ params }: { params: { id: str
     }
   }
 
-  // Buscar recursos relacionados (mesma categoria primeiro, depois mesmo tipo)
+  // Buscar recursos relacionados (mesma subcategoria primeiro, depois mesmo tipo)
   let relatedResources = []
   
-  // Tentar buscar por categoria primeiro
+  // Tentar buscar por subcategoria primeiro
   if (resource.category_id) {
-    const { data: categoryResources } = await supabase
-      .from('resources')
-      .select('*, creator:profiles!creator_id(*)')
-      .eq('status', 'approved')
-      .eq('category_id', resource.category_id)
-      .neq('id', params.id)
-      .order('view_count', { ascending: false })
-      .limit(8)
+    // Buscar informações da categoria do recurso
+    const { data: currentCategory } = await supabase
+      .from('categories')
+      .select('id, parent_id')
+      .eq('id', resource.category_id)
+      .single()
 
-    if (categoryResources && categoryResources.length > 0) {
-      relatedResources = categoryResources
+    if (currentCategory) {
+      // Se a categoria tem parent_id, é uma subcategoria - buscar apenas da mesma subcategoria
+      if (currentCategory.parent_id) {
+        const { data: subcategoryResources } = await supabase
+          .from('resources')
+          .select('*, creator:profiles!creator_id(*)')
+          .eq('status', 'approved')
+          .eq('category_id', resource.category_id) // Mesma subcategoria
+          .neq('id', params.id)
+          .order('view_count', { ascending: false })
+          .limit(8)
+
+        if (subcategoryResources && subcategoryResources.length > 0) {
+          relatedResources = subcategoryResources
+        }
+      } else {
+        // Se é categoria principal, buscar todas as subcategorias dessa categoria
+        // Primeiro, buscar todas as subcategorias
+        const { data: subcategories } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('parent_id', currentCategory.id)
+
+        if (subcategories && subcategories.length > 0) {
+          const subcategoryIds = subcategories.map(c => c.id)
+          // Buscar recursos de todas as subcategorias + a categoria principal
+          const { data: categoryResources } = await supabase
+            .from('resources')
+            .select('*, creator:profiles!creator_id(*)')
+            .eq('status', 'approved')
+            .in('category_id', [resource.category_id, ...subcategoryIds])
+            .neq('id', params.id)
+            .order('view_count', { ascending: false })
+            .limit(8)
+
+          if (categoryResources && categoryResources.length > 0) {
+            relatedResources = categoryResources
+          }
+        } else {
+          // Se não tem subcategorias, buscar apenas da mesma categoria
+          const { data: categoryResources } = await supabase
+            .from('resources')
+            .select('*, creator:profiles!creator_id(*)')
+            .eq('status', 'approved')
+            .eq('category_id', resource.category_id)
+            .neq('id', params.id)
+            .order('view_count', { ascending: false })
+            .limit(8)
+
+          if (categoryResources && categoryResources.length > 0) {
+            relatedResources = categoryResources
+          }
+        }
+      }
     }
   }
 
