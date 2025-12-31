@@ -251,10 +251,27 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     c.slug.toLowerCase() === 'psd' || c.name.toLowerCase() === 'psd'
   )
   
-  // Subcategorias de PSD (única categoria com subcategorias)
+  // Subcategorias de PSD
   const psdSubItems = psdCategory 
     ? categories
         .filter(c => c.parent_id === psdCategory.id)
+        .sort((a, b) => a.order_index - b.order_index)
+        .map(sub => ({
+          id: `subcategory-${sub.id}`,
+          name: sub.name,
+          href: `/categories/${sub.slug}`
+        }))
+    : []
+  
+  // Encontrar categoria Mockups para verificar subcategorias
+  const mockupsCategory = mainCategories.find(c => 
+    c.slug.toLowerCase() === 'mockups' || c.name.toLowerCase() === 'mockups'
+  )
+  
+  // Subcategorias de Mockups
+  const mockupsSubItems = mockupsCategory 
+    ? categories
+        .filter(c => c.parent_id === mockupsCategory.id)
         .sort((a, b) => a.order_index - b.order_index)
         .map(sub => ({
           id: `subcategory-${sub.id}`,
@@ -277,14 +294,18 @@ export default function Header({ initialUser, initialSubscription, initialCatego
 
   const menuItems = [
     ...mainCategories.map(category => {
-      // Apenas PSD tem dropdown com subcategorias
+      // PSD e Mockups têm dropdown com subcategorias
       const isPSD = category.slug.toLowerCase() === 'psd'
+      const isMockups = category.slug.toLowerCase() === 'mockups'
+      const hasDropdown = (isPSD && psdSubItems.length > 0) || (isMockups && mockupsSubItems.length > 0)
+      const subItems = isPSD ? psdSubItems : (isMockups ? mockupsSubItems : [])
+      
       return {
         id: `category-${category.id}`,
         name: category.name,
         href: getCategoryHref(category.slug),
-        hasDropdown: isPSD && psdSubItems.length > 0,
-        subItems: isPSD ? psdSubItems : []
+        hasDropdown: hasDropdown,
+        subItems: subItems
       }
     }),
     { id: 'png', name: 'PNG', href: '/png' },

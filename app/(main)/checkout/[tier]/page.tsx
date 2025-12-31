@@ -279,20 +279,22 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50/50 py-12 px-4">
+      <div className="max-w-6xl mx-auto">
         
-        <Link href="/premium" className="inline-flex items-center text-sm font-semibold text-gray-500 hover:text-gray-900 mb-8 transition-colors">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+        <Link href="/premium" className="inline-flex items-center text-sm font-semibold text-gray-500 hover:text-gray-900 mb-8 transition-colors group">
+          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           Voltar para Planos
         </Link>
 
         {/* Alerta de Autenticação */}
         {isAuthenticated === false && (
-          <div className="mb-6 bg-amber-50 border-2 border-amber-200 rounded-2xl p-6">
+          <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl p-6 shadow-lg">
             <div className="flex items-start space-x-4">
               <div className="flex-shrink-0">
-                <AlertCircle className="h-6 w-6 text-amber-600" />
+                <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                  <AlertCircle className="h-6 w-6 text-amber-600" />
+                </div>
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-amber-900 mb-2">
@@ -303,7 +305,7 @@ export default function CheckoutPage() {
                 </p>
                 <Link
                   href={`/login?redirect=/checkout/${tier}?cycle=${cycle}`}
-                  className="inline-flex items-center space-x-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-colors"
+                  className="inline-flex items-center space-x-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                 >
                   <LogIn className="h-4 w-4" />
                   <span>Fazer Login</span>
@@ -318,62 +320,107 @@ export default function CheckoutPage() {
           {/* Coluna de Pagamento */}
           <div className="lg:col-span-3 space-y-6">
             <div className={cn(
-              "bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm",
+              "bg-white rounded-3xl p-10 border border-gray-100 shadow-xl backdrop-blur-sm relative overflow-hidden",
               !isAuthenticated && "opacity-75"
             )}>
-              <h1 className="text-2xl font-bold text-gray-900 mb-8">Como deseja pagar?</h1>
+              {/* Decorative element */}
+              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary-100/30 to-blue-100/30 rounded-full blur-3xl -mr-32 -mt-32"></div>
               
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="mb-8 relative z-10">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Como deseja pagar?</h1>
+                <p className="text-sm text-gray-500">Escolha a forma de pagamento mais conveniente para você</p>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 mb-8 relative z-10">
                 <MethodBtn active={method === 'PIX'} onClick={() => setMethod('PIX')} icon={QrCode} label="PIX" />
                 <MethodBtn active={method === 'CREDIT_CARD'} onClick={() => setMethod('CREDIT_CARD')} icon={CreditCard} label="Cartão" />
                 <MethodBtn active={method === 'BOLETO'} onClick={() => setMethod('BOLETO')} icon={Barcode} label="Boleto" />
               </div>
 
               {method === 'CREDIT_CARD' && (
-                <div className="space-y-4">
+                <div className="space-y-5 mb-6 relative z-10">
                   <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Nome no Cartão</label>
-                    <input type="text" className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none" placeholder="João Silva" value={card.holderName} onChange={e => setCard({...card, holderName: e.target.value})} />
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block">Nome no Cartão</label>
+                    <input 
+                      type="text" 
+                      className="w-full h-14 px-5 rounded-xl border-2 border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 outline-none transition-all bg-gray-50/50 hover:bg-white" 
+                      placeholder="João Silva" 
+                      value={card.holderName} 
+                      onChange={e => setCard({...card, holderName: e.target.value})} 
+                    />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Número do Cartão</label>
-                    <input type="text" className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none" placeholder="0000 0000 0000 0000" value={card.number} onChange={e => setCard({...card, number: e.target.value})} />
+                    <label className="text-sm font-semibold text-gray-700 mb-2 block">Número do Cartão</label>
+                    <input 
+                      type="text" 
+                      className="w-full h-14 px-5 rounded-xl border-2 border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 outline-none transition-all bg-gray-50/50 hover:bg-white font-mono" 
+                      placeholder="0000 0000 0000 0000" 
+                      value={card.number} 
+                      onChange={e => setCard({...card, number: e.target.value})} 
+                    />
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Mês</label>
-                      <input type="text" className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none" placeholder="12" value={card.expiryMonth} onChange={e => setCard({...card, expiryMonth: e.target.value})} />
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Mês</label>
+                      <input 
+                        type="text" 
+                        className="w-full h-14 px-5 rounded-xl border-2 border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 outline-none transition-all bg-gray-50/50 hover:bg-white" 
+                        placeholder="12" 
+                        value={card.expiryMonth} 
+                        onChange={e => setCard({...card, expiryMonth: e.target.value})} 
+                      />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Ano</label>
-                      <input type="text" className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none" placeholder="2029" value={card.expiryYear} onChange={e => setCard({...card, expiryYear: e.target.value})} />
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Ano</label>
+                      <input 
+                        type="text" 
+                        className="w-full h-14 px-5 rounded-xl border-2 border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 outline-none transition-all bg-gray-50/50 hover:bg-white" 
+                        placeholder="2029" 
+                        value={card.expiryYear} 
+                        onChange={e => setCard({...card, expiryYear: e.target.value})} 
+                      />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-gray-600 mb-1 block">CVC</label>
-                      <input type="text" className="w-full h-12 px-4 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none" placeholder="123" value={card.ccv} onChange={e => setCard({...card, ccv: e.target.value})} />
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">CVC</label>
+                      <input 
+                        type="text" 
+                        className="w-full h-14 px-5 rounded-xl border-2 border-gray-200 text-sm focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 outline-none transition-all bg-gray-50/50 hover:bg-white font-mono" 
+                        placeholder="123" 
+                        value={card.ccv} 
+                        onChange={e => setCard({...card, ccv: e.target.value})} 
+                      />
                     </div>
                   </div>
                 </div>
               )}
 
               {method === 'PIX' && (
-                <div className="bg-primary-50 p-6 rounded-2xl border-2 border-primary-200 text-center space-y-2 mb-6">
-                  <p className="text-sm font-bold text-primary-700">Aprovação Imediata</p>
-                  <p className="text-xs text-gray-600 font-medium">O QR Code será gerado após você clicar em "Finalizar Assinatura".</p>
+                <div className="bg-gradient-to-br from-primary-50 to-green-50 p-6 rounded-2xl border-2 border-primary-300 text-center space-y-3 mb-8 shadow-sm relative z-10">
+                  <div className="inline-flex items-center justify-center h-10 w-10 bg-primary-100 rounded-xl mb-2">
+                    <Check className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <p className="text-base font-bold text-primary-700">Aprovação Imediata</p>
+                  <p className="text-sm text-gray-600 font-medium">O QR Code será gerado após você clicar em "Finalizar Assinatura".</p>
                 </div>
               )}
 
               {method === 'BOLETO' && (
-                <div className="bg-blue-50 p-6 rounded-2xl border-2 border-blue-200 text-center space-y-2 mb-6">
-                  <p className="text-sm font-bold text-blue-700">Até 3 dias úteis para aprovar</p>
-                  <p className="text-xs text-gray-600 font-medium">O boleto será gerado após você clicar em "Finalizar Assinatura".</p>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border-2 border-blue-300 text-center space-y-3 mb-8 shadow-sm relative z-10">
+                  <div className="inline-flex items-center justify-center h-10 w-10 bg-blue-100 rounded-xl mb-2">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <p className="text-base font-bold text-blue-700">Até 3 dias úteis para aprovar</p>
+                  <p className="text-sm text-gray-600 font-medium">O boleto será gerado após você clicar em "Finalizar Assinatura".</p>
                 </div>
               )}
 
               {method === 'CREDIT_CARD' && (
-                <div className="bg-gray-50 p-6 rounded-2xl border-2 border-gray-200 text-center space-y-2 mb-6">
-                  <p className="text-sm font-bold text-gray-700">Aprovação Imediata</p>
-                  <p className="text-xs text-gray-600 font-medium">Seu cartão será processado de forma segura.</p>
+                <div className="bg-gradient-to-br from-gray-50 to-slate-50 p-6 rounded-2xl border-2 border-gray-300 text-center space-y-3 mb-8 shadow-sm relative z-10">
+                  <div className="inline-flex items-center justify-center h-10 w-10 bg-gray-100 rounded-xl mb-2">
+                    <Check className="h-5 w-5 text-gray-600" />
+                  </div>
+                  <p className="text-base font-bold text-gray-700">Aprovação Imediata</p>
+                  <p className="text-sm text-gray-600 font-medium">Seu cartão será processado de forma segura e criptografada.</p>
                 </div>
               )}
 
@@ -381,63 +428,109 @@ export default function CheckoutPage() {
                 onClick={handlePayment} 
                 disabled={loading || !isAuthenticated} 
                 className={cn(
-                  "w-full h-14 text-white rounded-2xl font-bold text-sm transition-all",
+                  "w-full h-16 text-white rounded-2xl font-bold text-base transition-all shadow-lg relative z-10",
                   isAuthenticated 
-                    ? "bg-gray-900 hover:bg-black disabled:opacity-50" 
+                    ? "bg-gradient-to-r from-gray-900 to-black hover:from-black hover:to-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]" 
                     : "bg-gray-400 cursor-not-allowed"
                 )}
               >
-                {loading ? 'Processando...' : !isAuthenticated ? 'Faça login para continuar' : 'Finalizar Assinatura'}
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Processando...
+                  </span>
+                ) : !isAuthenticated ? (
+                  'Faça login para continuar'
+                ) : (
+                  'Finalizar Assinatura'
+                )}
               </button>
             </div>
 
-            <div className="flex items-center justify-center space-x-6 text-gray-500">
-              <div className="flex items-center space-x-2">
-                <ShieldCheck className="h-4 w-4" />
-                <span className="text-xs font-semibold">SSL Seguro</span>
+            <div className="flex items-center justify-center space-x-8 text-gray-600 bg-white/60 backdrop-blur-sm rounded-2xl p-6 border border-gray-100 shadow-sm">
+              <div className="flex items-center space-x-2.5">
+                <div className="h-10 w-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <ShieldCheck className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-900">SSL Seguro</p>
+                  <p className="text-[10px] text-gray-500">Conexão protegida</p>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Lock className="h-4 w-4" />
-                <span className="text-xs font-semibold">Dados Criptografados</span>
+              <div className="flex items-center space-x-2.5">
+                <div className="h-10 w-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Lock className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-900">Dados Criptografados</p>
+                  <p className="text-[10px] text-gray-500">Informações seguras</p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Coluna de Resumo */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm sticky top-8">
-              <h2 className="text-sm font-bold text-gray-400 mb-6">Resumo da Compra</h2>
+            <div className="bg-gradient-to-br from-white to-gray-50 rounded-3xl p-8 border border-gray-100 shadow-xl sticky top-8 relative overflow-hidden">
+              {/* Decorative element */}
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-blue-100/40 to-primary-100/40 rounded-full blur-3xl -ml-24 -mb-24"></div>
               
-              <div className="flex items-start justify-between mb-8">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">{currentPlan.name}</h3>
-                  <p className="text-xs font-semibold text-gray-500 mt-1">Plano {cycle === 'monthly' ? 'Mensal' : 'Anual'}</p>
+              <div className="mb-8 relative z-10">
+                <h2 className="text-lg font-bold text-gray-400 uppercase tracking-wider mb-1 text-xs">Resumo da Compra</h2>
+                <div className="h-1 w-12 bg-primary-500 rounded-full"></div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-primary-50 to-blue-50 rounded-2xl p-6 mb-8 border-2 border-primary-100 relative z-10">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">{currentPlan.name}</h3>
+                    <p className="text-sm font-semibold text-gray-600">Plano {cycle === 'monthly' ? 'Mensal' : 'Anual'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-black text-gray-900">
+                      R$ {currentPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">por mês</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-gray-900">
-                    R$ {currentPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
+                
+                <div className="mt-4 pt-4 border-t border-primary-200/50">
+                  <div className="flex items-center space-x-2 text-sm text-gray-700">
+                    <Check className="h-4 w-4 text-primary-600" />
+                    <span className="font-medium">Acesso ilimitado a todos os recursos</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm text-gray-700 mt-2">
+                    <Check className="h-4 w-4 text-primary-600" />
+                    <span className="font-medium">Download sem limites diários</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm text-gray-700 mt-2">
+                    <Check className="h-4 w-4 text-primary-600" />
+                    <span className="font-medium">Suporte prioritário</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-4 py-6 border-y border-gray-100 mb-8">
-                <div className="flex justify-between text-sm">
-                  <span className="font-semibold text-gray-500">Subtotal</span>
-                  <span className="font-bold text-gray-900">
+              <div className="space-y-4 py-6 border-y border-gray-200 mb-6 relative z-10">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-gray-600">Subtotal</span>
+                  <span className="text-sm font-bold text-gray-900">
                     R$ {currentPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-semibold text-gray-500">Taxas</span>
-                  <span className="font-bold text-gray-900">R$ 0,00</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-semibold text-gray-600">Taxas</span>
+                  <span className="text-sm font-bold text-green-600">R$ 0,00</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold text-gray-900">Total</span>
-                <span className="text-2xl font-bold text-primary-600">
-                  R$ {currentPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+              <div className="bg-gradient-to-r from-primary-600 to-blue-600 rounded-2xl p-6 relative z-10">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-bold text-white">Total</span>
+                  <span className="text-3xl font-black text-white">
+                    R$ {currentPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-xs text-white/80 mt-2 font-medium">Pagamento único • Sem taxa adicional</p>
               </div>
             </div>
           </div>
@@ -635,14 +728,29 @@ function MethodBtn({ active, onClick, icon: Icon, label }: any) {
     <button 
       onClick={onClick} 
       className={cn(
-        "flex flex-col items-center justify-center space-y-2 py-6 rounded-2xl border-2 transition-all",
+        "flex flex-col items-center justify-center space-y-3 py-6 rounded-2xl border-2 transition-all relative overflow-hidden group",
         active 
-          ? "bg-primary-50 border-primary-500 text-primary-600 shadow-md" 
-          : "bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:bg-gray-50"
+          ? "bg-gradient-to-br from-primary-50 to-blue-50 border-primary-500 text-primary-700 shadow-lg scale-105" 
+          : "bg-white border-gray-200 text-gray-400 hover:border-primary-300 hover:bg-gray-50 hover:text-gray-600 hover:shadow-md"
       )}
     >
-      <Icon className="h-6 w-6" />
-      <span className="text-xs font-bold">{label}</span>
+      {active && (
+        <div className="absolute top-2 right-2">
+          <div className="h-5 w-5 bg-primary-500 rounded-full flex items-center justify-center">
+            <Check className="h-3 w-3 text-white" />
+          </div>
+        </div>
+      )}
+      <div className={cn(
+        "transition-all",
+        active ? "transform scale-110" : "group-hover:scale-105"
+      )}>
+        <Icon className="h-7 w-7" strokeWidth={active ? 2.5 : 2} />
+      </div>
+      <span className={cn(
+        "text-sm font-bold transition-all",
+        active ? "text-primary-700" : ""
+      )}>{label}</span>
     </button>
   )
 }
