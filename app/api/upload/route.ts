@@ -167,32 +167,32 @@ export async function POST(request: NextRequest) {
     // 1. Thumbnail Processing + Watermark (otimizado)
     if (type === 'thumbnail') {
       try {
-        // Criar marca d'água em padrão de grid (quadrados com linhas)
+        // Criar marca d'água em padrão de grid (quadrados com linhas) - tamanho maior para menos repetição
         const watermarkTile = Buffer.from(`
-          <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+          <svg width="1200" height="1200" xmlns="http://www.w3.org/2000/svg">
             <!-- Linhas horizontais -->
-            <line x1="0" y1="0" x2="400" y2="0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="300" x2="400" y2="300" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="400" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="0" y1="0" x2="1200" y2="0" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="300" x2="1200" y2="300" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="600" x2="1200" y2="600" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="900" x2="1200" y2="900" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="1200" x2="1200" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
             <!-- Linhas verticais -->
-            <line x1="0" y1="0" x2="0" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="100" y1="0" x2="100" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="300" y1="0" x2="300" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="400" y1="0" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="0" y1="0" x2="0" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="300" y1="0" x2="300" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="600" y1="0" x2="600" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="900" y1="0" x2="900" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="1200" y1="0" x2="1200" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
             <!-- Texto no centro -->
             <text 
               x="50%" 
               y="50%" 
               font-family="Arial, sans-serif" 
               font-weight="600" 
-              font-size="60" 
-              fill="rgba(255,255,255,0.12)" 
+              font-size="180" 
+              fill="rgba(255,255,255,0.05)" 
               text-anchor="middle" 
               dominant-baseline="middle"
-              transform="rotate(-30 200 200)"
+              transform="rotate(-30 600 600)"
             >
               BRASILPSD
             </text>
@@ -332,6 +332,7 @@ export async function POST(request: NextRequest) {
     let previewUrl: string | null = null
     let thumbnailBuffer: Buffer | null = null
     let thumbnailUrl: string | null = null
+    let imageMetadata: { width?: number, height?: number } | null = null
     
     // 3.1. Processar imagens: criar preview com marca d'água e thumbnail
     if (type === 'resource' && file.type.startsWith('image/') && buffer) {
@@ -340,32 +341,41 @@ export async function POST(request: NextRequest) {
         const image = sharp(buffer)
         const metadata = await image.metadata()
         
-        // Criar marca d'água em padrão de grid (quadrados com linhas)
+        // Extrair dimensões da imagem
+        if (metadata.width && metadata.height) {
+          imageMetadata = {
+            width: metadata.width,
+            height: metadata.height
+          }
+          console.log('📐 Image dimensions extracted:', imageMetadata)
+        }
+        
+        // Criar marca d'água em padrão de grid (quadrados com linhas) - tamanho maior para menos repetição
         const watermarkTile = Buffer.from(`
-          <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+          <svg width="1200" height="1200" xmlns="http://www.w3.org/2000/svg">
             <!-- Linhas horizontais -->
-            <line x1="0" y1="0" x2="400" y2="0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="300" x2="400" y2="300" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="0" y1="400" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="0" y1="0" x2="1200" y2="0" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="300" x2="1200" y2="300" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="600" x2="1200" y2="600" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="900" x2="1200" y2="900" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="0" y1="1200" x2="1200" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
             <!-- Linhas verticais -->
-            <line x1="0" y1="0" x2="0" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="100" y1="0" x2="100" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="300" y1="0" x2="300" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-            <line x1="400" y1="0" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <line x1="0" y1="0" x2="0" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="300" y1="0" x2="300" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="600" y1="0" x2="600" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="900" y1="0" x2="900" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+            <line x1="1200" y1="0" x2="1200" y2="1200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
             <!-- Texto no centro -->
             <text 
               x="50%" 
               y="50%" 
               font-family="Arial, sans-serif" 
               font-weight="600" 
-              font-size="60" 
-              fill="rgba(255,255,255,0.12)" 
+              font-size="180" 
+              fill="rgba(255,255,255,0.05)" 
               text-anchor="middle" 
               dominant-baseline="middle"
-              transform="rotate(-30 200 200)"
+              transform="rotate(-30 600 600)"
             >
               BRASILPSD
             </text>
@@ -745,6 +755,7 @@ export async function POST(request: NextRequest) {
       isAiGenerated,
       videoMetadata: videoMetadata || undefined,
       audioMetadata: audioMetadata || undefined,
+      imageMetadata: imageMetadata || undefined, // Dimensões da imagem
       wasProcessed: !!(previewUrl || thumbnailUrl) // Indica se foi processado
     })
   } catch (error: any) {

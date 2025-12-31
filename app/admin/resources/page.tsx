@@ -22,6 +22,8 @@ export default function AdminResourcesPage() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [isLoadingResources, setIsLoadingResources] = useState(false)
   const [generatingThumbnails, setGeneratingThumbnails] = useState(false)
+  const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
   const supabase = createSupabaseClient()
   const router = useRouter()
 
@@ -213,9 +215,89 @@ export default function AdminResourcesPage() {
       })
       
       setResources(resources.filter(r => r.id !== id))
+      setSelectedResources(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     } catch (error: any) {
       console.error('Delete error:', error)
       toast.error(error.message || 'Erro ao excluir recurso')
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedResources.size === 0) return
+
+    const count = selectedResources.size
+    if (!confirm(`Tem certeza que deseja excluir ${count} recurso(s) permanentemente?\n\nEsta ação irá:\n- Deletar os arquivos do banco de dados\n- Deletar os arquivos da Amazon S3\n- Deletar os thumbnails e previews (se existirem)\n\nEsta ação NÃO pode ser desfeita!`)) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch('/api/admin/resources/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resourceIds: Array.from(selectedResources) })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir recursos')
+      }
+
+      if (data.warnings && data.warnings.length > 0) {
+        toast.error(
+          `${data.deleted.length} recurso(s) deletado(s), mas alguns arquivos do S3 não foram removidos.`,
+          { duration: 6000 }
+        )
+      } else {
+        toast.success(data.message || `${data.deleted.length} recurso(s) excluído(s) com sucesso`)
+      }
+
+      // Remover recursos deletados da lista
+      setResources(resources.filter(r => !data.deleted.includes(r.id)))
+      setSelectedResources(new Set())
+
+      if (data.failed && data.failed.length > 0) {
+        console.warn('Alguns recursos não foram deletados:', data.failed)
+      }
+    } catch (error: any) {
+      console.error('Bulk delete error:', error)
+      toast.error(error.message || 'Erro ao excluir recursos')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const toggleResourceSelection = (id: string) => {
+    setSelectedResources(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
+
+  const toggleSelectAll = (resourceIds: string[]) => {
+    const allSelected = resourceIds.every(id => selectedResources.has(id))
+    if (allSelected) {
+      setSelectedResources(prev => {
+        const newSet = new Set(prev)
+        resourceIds.forEach(id => newSet.delete(id))
+        return newSet
+      })
+    } else {
+      setSelectedResources(prev => {
+        const newSet = new Set(prev)
+        resourceIds.forEach(id => newSet.add(id))
+        return newSet
+      })
     }
   }
 
@@ -280,6 +362,16 @@ export default function AdminResourcesPage() {
           <p className="text-gray-500 text-sm mt-1">Gerencie todos os recursos enviados para a plataforma.</p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedResources.size > 0 && (
+            <Button
+              onClick={handleBulkDelete}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600 rounded-xl font-bold uppercase text-[10px] tracking-widest flex items-center gap-2"
+            >
+              <Trash2 className="h-3 w-3" />
+              {isDeleting ? 'Deletando...' : `Deletar Selecionados (${selectedResources.size})`}
+            </Button>
+          )}
           <Button 
             onClick={handleGenerateThumbnails}
             disabled={generatingThumbnails}
@@ -391,6 +483,14 @@ export default function AdminResourcesPage() {
                           <table className="w-full text-left">
                             <thead>
                               <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-6 py-3 w-12">
+                                  <input
+                                    type="checkbox"
+                                    checked={pngResources.length > 0 && pngResources.every(r => selectedResources.has(r.id))}
+                                    onChange={() => toggleSelectAll(pngResources.map(r => r.id))}
+                                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                </th>
                                 <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recurso</th>
                                 <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Autor</th>
                                 <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo/Tamanho</th>
@@ -401,6 +501,14 @@ export default function AdminResourcesPage() {
                             <tbody className="divide-y divide-gray-50">
                               {pngResources.map((resource) => (
                                 <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors">
+                                  <td className="px-6 py-4">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedResources.has(resource.id)}
+                                      onChange={() => toggleResourceSelection(resource.id)}
+                                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                    />
+                                  </td>
                                   <td className="px-6 py-4">
                                     <div className="flex items-center gap-4">
                                       <div className={`h-12 w-12 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-checkerboard`}>
@@ -523,6 +631,14 @@ export default function AdminResourcesPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-6 py-3 w-12">
+                                  <input
+                                    type="checkbox"
+                                    checked={categoryResources.length > 0 && categoryResources.every(r => selectedResources.has(r.id))}
+                                    onChange={() => toggleSelectAll(categoryResources.map(r => r.id))}
+                                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                </th>
                                 <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recurso</th>
                                 <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Autor</th>
                                 <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo/Tamanho</th>
@@ -533,6 +649,14 @@ export default function AdminResourcesPage() {
             <tbody className="divide-y divide-gray-50">
                               {categoryResources.map((resource) => (
                   <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedResources.has(resource.id)}
+                        onChange={() => toggleResourceSelection(resource.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
                         <div className={`h-12 w-12 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>
@@ -634,6 +758,14 @@ export default function AdminResourcesPage() {
                         <table className="w-full text-left">
                           <thead>
                             <tr className="bg-gray-50 border-b border-gray-100">
+                              <th className="px-6 py-3 w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={uncategorized.length > 0 && uncategorized.every(r => selectedResources.has(r.id))}
+                                  onChange={() => toggleSelectAll(uncategorized.map(r => r.id))}
+                                  className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                />
+                              </th>
                               <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recurso</th>
                               <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Autor</th>
                               <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tipo/Tamanho</th>
@@ -644,6 +776,14 @@ export default function AdminResourcesPage() {
                           <tbody className="divide-y divide-gray-50">
                             {uncategorized.map((resource) => (
                               <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="px-6 py-4">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedResources.has(resource.id)}
+                                    onChange={() => toggleResourceSelection(resource.id)}
+                                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                </td>
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-4">
                                     <div className={`h-12 w-12 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>

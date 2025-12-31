@@ -682,6 +682,15 @@ export default function UploadResourcePage() {
       // Se for oficial, usar o perfil do sistema como criador
       const creatorId = formData.is_official ? getSystemProfileIdSync() : user.id
       
+      // Usar metadata de imagem do servidor se disponível, senão usar do vídeo
+      const imageMetadata = fileData.imageMetadata
+      const finalWidth = imageMetadata?.width 
+        ? Number(imageMetadata.width) 
+        : (videoMetadata?.width ? Number(videoMetadata.width) : null)
+      const finalHeight = imageMetadata?.height 
+        ? Number(imageMetadata.height) 
+        : (videoMetadata?.height ? Number(videoMetadata.height) : null)
+      
       // Dados básicos do recurso (campos que sempre existem)
       const basicResourceData: any = {
         title: formData.title,
@@ -694,8 +703,8 @@ export default function UploadResourcePage() {
         thumbnail_url: finalThumbnailUrl || null, // Thumbnail extraído automaticamente ou upload manual
         file_size: file.size,
         file_format: finalFileFormat, // Usar formato final (mp4 se convertido, senão extensão original)
-        width: videoMetadata?.width ? Number(videoMetadata.width) : null,
-        height: videoMetadata?.height ? Number(videoMetadata.height) : null,
+        width: finalWidth,
+        height: finalHeight,
         duration: videoMetadata?.duration ? Math.round(Number(videoMetadata.duration)) : (fileData.audioMetadata?.duration ? Math.round(Number(fileData.audioMetadata.duration)) : null),
         keywords: formData.keywords ? formData.keywords.split(',').map(k => k.trim()).filter(Boolean) : [],
         is_premium: formData.is_premium || false,

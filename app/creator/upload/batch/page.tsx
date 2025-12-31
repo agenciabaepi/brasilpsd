@@ -479,7 +479,7 @@ export default function BatchUploadPage() {
     }
 
     const uploadData = await uploadResponse.json()
-    const { url: fileUrl, previewUrl, thumbnailUrl, isAiGenerated, videoMetadata } = uploadData
+    const { url: fileUrl, previewUrl, thumbnailUrl, isAiGenerated, videoMetadata, imageMetadata } = uploadData
 
     // 2. Buscar perfil do usuário para verificar se é admin
     const { data: profile } = await supabase
@@ -515,6 +515,14 @@ export default function BatchUploadPage() {
     // Usar a primeira categoria como category_id principal (para compatibilidade)
     const primaryCategoryId = finalCategoryIds.length > 0 ? finalCategoryIds[0] : null
     
+    // Usar imageMetadata do servidor se disponível (mais confiável), senão usar do cliente
+    const finalWidth = imageMetadata?.width 
+      ? Number(imageMetadata.width) 
+      : (image.metadata?.width ? Number(image.metadata.width) : null)
+    const finalHeight = imageMetadata?.height 
+      ? Number(imageMetadata.height) 
+      : (image.metadata?.height ? Number(image.metadata.height) : null)
+    
     const resourceData: any = {
       title: image.title,
       description: image.description || null,
@@ -526,8 +534,8 @@ export default function BatchUploadPage() {
       thumbnail_url: thumbnailUrl || null,
       file_size: image.file.size,
       file_format: fileExtension,
-      width: image.metadata?.width || null,
-      height: image.metadata?.height || null,
+      width: finalWidth,
+      height: finalHeight,
       keywords: image.keywords.length > 0 ? image.keywords : [],
       is_premium: image.is_premium || false,
       is_official: false,

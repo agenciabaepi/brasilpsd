@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { uploadFileToS3 } from '@/lib/aws/s3'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
+import sharp from 'sharp'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -34,6 +35,25 @@ export async function POST(request: NextRequest) {
         ? `thumbnails/${user.id}/${timestamp}-${randomId}.${ext}`
         : `resources/${user.id}/${timestamp}-${randomId}.${ext}`
 
+    // Extrair dimensões da imagem se for imagem
+    let imageMetadata: { width?: number, height?: number } | null = null
+    if (type === 'resource' && file.type.startsWith('image/')) {
+      try {
+        const image = sharp(buffer)
+        const metadata = await image.metadata()
+        if (metadata.width && metadata.height) {
+          imageMetadata = {
+            width: metadata.width,
+            height: metadata.height
+          }
+          console.log('📐 Image dimensions extracted:', imageMetadata)
+        }
+      } catch (error: any) {
+        console.warn('⚠️ Could not extract image metadata:', error.message)
+        // Continuar mesmo sem metadata
+      }
+    }
+
     const url = await uploadFileToS3({
       file: buffer,
       key,
@@ -50,6 +70,7 @@ export async function POST(request: NextRequest) {
       url,
       key,
       presignedUrl: null,
+      imageMetadata: imageMetadata || undefined,
     })
   } catch (error: any) {
     console.error('Upload direct error:', error)

@@ -44,17 +44,17 @@ export async function addWatermarkToVideo(
     const watermarkTile = Buffer.from(`
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
         <!-- Linhas horizontais -->
-        <line x1="0" y1="0" x2="400" y2="0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="0" y1="300" x2="400" y2="300" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="0" y1="400" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="0" y1="0" x2="400" y2="0" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="0" y1="300" x2="400" y2="300" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="0" y1="400" x2="400" y2="400" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
         <!-- Linhas verticais -->
-        <line x1="0" y1="0" x2="0" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="100" y1="0" x2="100" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="300" y1="0" x2="300" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <line x1="400" y1="0" x2="400" y2="400" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        <line x1="0" y1="0" x2="0" y2="400" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="100" y1="0" x2="100" y2="400" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="300" y1="0" x2="300" y2="400" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="400" y1="0" x2="400" y2="400" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
         <!-- Texto no centro -->
         <text 
           x="50%" 
@@ -62,7 +62,7 @@ export async function addWatermarkToVideo(
           font-family="Arial, sans-serif" 
           font-weight="600" 
           font-size="50" 
-          fill="rgba(255,255,255,0.12)" 
+          fill="rgba(255,255,255,0.05)" 
           text-anchor="middle" 
           dominant-baseline="middle"
           transform="rotate(-30 200 200)"

@@ -36,6 +36,8 @@ export default function CreatorResourcesPage() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null)
   const [isLoadingResources, setIsLoadingResources] = useState(false)
+  const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
   const supabase = createSupabaseClient()
 
@@ -243,9 +245,89 @@ export default function CreatorResourcesPage() {
       })
       
       setResources(resources.filter(r => r.id !== id))
+      setSelectedResources(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
     } catch (error: any) {
       console.error('Delete error:', error)
       toast.error(error.message || 'Erro ao excluir arquivo')
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedResources.size === 0) return
+
+    const count = selectedResources.size
+    if (!confirm(`Tem certeza que deseja excluir ${count} arquivo(s) permanentemente?\n\nEsta ação irá:\n- Deletar os arquivos do banco de dados\n- Deletar os arquivos da Amazon S3\n- Deletar os thumbnails e previews (se existirem)\n\nEsta ação NÃO pode ser desfeita!`)) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch('/api/creator/resources/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resourceIds: Array.from(selectedResources) })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir recursos')
+      }
+
+      if (data.warnings && data.warnings.length > 0) {
+        toast.error(
+          `${data.deleted.length} recurso(s) deletado(s), mas alguns arquivos do S3 não foram removidos.`,
+          { duration: 6000 }
+        )
+      } else {
+        toast.success(data.message || `${data.deleted.length} recurso(s) excluído(s) com sucesso`)
+      }
+
+      // Remover recursos deletados da lista
+      setResources(resources.filter(r => !data.deleted.includes(r.id)))
+      setSelectedResources(new Set())
+
+      if (data.failed && data.failed.length > 0) {
+        console.warn('Alguns recursos não foram deletados:', data.failed)
+      }
+    } catch (error: any) {
+      console.error('Bulk delete error:', error)
+      toast.error(error.message || 'Erro ao excluir arquivos')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const toggleResourceSelection = (id: string) => {
+    setSelectedResources(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
+
+  const toggleSelectAll = (resourceIds: string[]) => {
+    const allSelected = resourceIds.every(id => selectedResources.has(id))
+    if (allSelected) {
+      setSelectedResources(prev => {
+        const newSet = new Set(prev)
+        resourceIds.forEach(id => newSet.delete(id))
+        return newSet
+      })
+    } else {
+      setSelectedResources(prev => {
+        const newSet = new Set(prev)
+        resourceIds.forEach(id => newSet.add(id))
+        return newSet
+      })
     }
   }
 
@@ -258,6 +340,16 @@ export default function CreatorResourcesPage() {
           <p className="text-gray-500 font-medium">Gerencie e edite seus recursos enviados.</p>
         </div>
         <div className="flex gap-3">
+          {selectedResources.size > 0 && (
+            <Button
+              onClick={handleBulkDelete}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600 h-12 px-6 rounded-xl font-semibold space-x-2"
+            >
+              <Trash2 className="h-5 w-5" />
+              <span>Deletar Selecionados ({selectedResources.size})</span>
+            </Button>
+          )}
           <Link href="/creator/upload">
             <Button className="bg-primary-500 hover:bg-primary-600 h-12 px-6 rounded-xl font-semibold space-x-2">
               <Plus className="h-5 w-5" />
@@ -362,6 +454,14 @@ export default function CreatorResourcesPage() {
                           <table className="w-full text-left">
                             <thead className="bg-gray-50/50 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
                               <tr>
+                                <th className="px-8 py-4 w-12">
+                                  <input
+                                    type="checkbox"
+                                    checked={pngResources.length > 0 && pngResources.every(r => selectedResources.has(r.id))}
+                                    onChange={() => toggleSelectAll(pngResources.map(r => r.id))}
+                                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                </th>
                                 <th className="px-8 py-4">Arquivo</th>
                                 <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4 text-center">Downloads</th>
@@ -373,6 +473,14 @@ export default function CreatorResourcesPage() {
                             <tbody className="divide-y divide-gray-50">
                               {pngResources.map((resource) => (
                                 <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors group">
+                                  <td className="px-8 py-5">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedResources.has(resource.id)}
+                                      onChange={() => toggleResourceSelection(resource.id)}
+                                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                    />
+                                  </td>
                                   <td className="px-8 py-5">
                                     <div className="flex items-center space-x-4">
                                       <div className={`h-12 w-12 rounded-lg bg-checkerboard border border-gray-100 overflow-hidden flex-shrink-0 relative`}>
@@ -476,6 +584,14 @@ export default function CreatorResourcesPage() {
           <table className="w-full text-left">
             <thead className="bg-gray-50/50 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
               <tr>
+                <th className="px-8 py-4 w-12">
+                  <input
+                    type="checkbox"
+                    checked={categoryResources.length > 0 && categoryResources.every(r => selectedResources.has(r.id))}
+                    onChange={() => toggleSelectAll(categoryResources.map(r => r.id))}
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                </th>
                 <th className="px-8 py-4">Arquivo</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-center">Downloads</th>
@@ -487,6 +603,14 @@ export default function CreatorResourcesPage() {
             <tbody className="divide-y divide-gray-50">
                               {categoryResources.map((resource) => (
                   <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors group">
+                    <td className="px-8 py-5">
+                      <input
+                        type="checkbox"
+                        checked={selectedResources.has(resource.id)}
+                        onChange={() => toggleResourceSelection(resource.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    </td>
                     <td className="px-8 py-5">
                       <div className="flex items-center space-x-4">
                         <div 
@@ -679,6 +803,14 @@ export default function CreatorResourcesPage() {
                         <table className="w-full text-left">
                           <thead className="bg-gray-50/50 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
                             <tr>
+                              <th className="px-8 py-4 w-12">
+                                <input
+                                  type="checkbox"
+                                  checked={uncategorized.length > 0 && uncategorized.every(r => selectedResources.has(r.id))}
+                                  onChange={() => toggleSelectAll(uncategorized.map(r => r.id))}
+                                  className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                />
+                              </th>
                               <th className="px-8 py-4">Arquivo</th>
                               <th className="px-6 py-4">Status</th>
                               <th className="px-6 py-4 text-center">Downloads</th>
@@ -690,6 +822,14 @@ export default function CreatorResourcesPage() {
                           <tbody className="divide-y divide-gray-50">
                             {uncategorized.map((resource) => (
                               <tr key={resource.id} className="hover:bg-gray-50/50 transition-colors group">
+                                <td className="px-8 py-5">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedResources.has(resource.id)}
+                                    onChange={() => toggleResourceSelection(resource.id)}
+                                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                  />
+                                </td>
                                 <td className="px-8 py-5">
                                   <div className="flex items-center space-x-4">
                                     <div 

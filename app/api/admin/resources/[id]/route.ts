@@ -94,7 +94,7 @@ export async function DELETE(
     // Buscar o recurso antes de deletar para pegar as URLs dos arquivos
     const { data: resource, error: resourceError } = await adminSupabase
       .from('resources')
-      .select('file_url, thumbnail_url, creator_id')
+      .select('file_url, thumbnail_url, preview_url, creator_id')
       .eq('id', resourceId)
       .single()
 
@@ -110,6 +110,7 @@ export async function DELETE(
     console.log('Starting S3 deletion process...')
     console.log('Resource file_url:', resource.file_url)
     console.log('Resource thumbnail_url:', resource.thumbnail_url)
+    console.log('Resource preview_url:', resource.preview_url)
 
     // Deletar arquivo principal
     if (resource.file_url) {
@@ -166,6 +167,34 @@ export async function DELETE(
       }
     } else {
       console.log('ℹ️ No thumbnail_url found in resource (this is OK)')
+    }
+
+    // Deletar preview (se existir)
+    if (resource.preview_url) {
+      const previewKey = extractS3Key(resource.preview_url)
+      console.log('Extracted preview key:', previewKey, 'from URL:', resource.preview_url)
+      
+      if (previewKey) {
+        try {
+          console.log('Attempting to delete preview from S3 with key:', previewKey)
+          await deleteFileFromS3(previewKey)
+          deletedFiles.push(`Preview: ${previewKey}`)
+          console.log('✅ Successfully deleted preview from S3:', previewKey)
+        } catch (error: any) {
+          console.error('❌ Error deleting preview from S3:', {
+            key: previewKey,
+            error: error.message,
+            code: error.Code || error.code,
+            name: error.name
+          })
+          errors.push(`Erro ao deletar preview (${previewKey}): ${error.message || error.Code || 'Erro desconhecido'}`)
+        }
+      } else {
+        console.warn('⚠️ Could not extract S3 key from preview_url:', resource.preview_url)
+        errors.push(`Não foi possível extrair a key do preview. URL: ${resource.preview_url}`)
+      }
+    } else {
+      console.log('ℹ️ No preview_url found in resource (this is OK)')
     }
 
     // Deletar do banco de dados usando admin client (bypassa RLS)
