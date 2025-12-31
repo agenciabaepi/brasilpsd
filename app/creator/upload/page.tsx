@@ -1040,7 +1040,7 @@ export default function UploadResourcePage() {
         detectedType = 'png'
       } else if (file.type.includes('psd') || file.name.toLowerCase().endsWith('.psd')) {
         detectedType = 'psd'
-      } else if (file.type.includes('ai') || file.name.toLowerCase().endsWith('.ai')) {
+      } else if (file.type.includes('ai') || file.name.toLowerCase().endsWith('.ai') || file.name.toLowerCase().endsWith('.eps')) {
         detectedType = 'ai'
       } else if (file.type.includes('font') || file.name.toLowerCase().match(/\.(ttf|otf|woff|woff2)$/)) {
         detectedType = 'font'
@@ -1377,7 +1377,7 @@ export default function UploadResourcePage() {
       detectedType = 'png'
     } else if (selectedFile.type.includes('psd') || selectedFile.name.toLowerCase().endsWith('.psd')) {
       detectedType = 'psd'
-    } else if (selectedFile.type.includes('ai') || selectedFile.name.toLowerCase().endsWith('.ai')) {
+    } else if (selectedFile.type.includes('ai') || selectedFile.name.toLowerCase().endsWith('.ai') || selectedFile.name.toLowerCase().endsWith('.eps')) {
       detectedType = 'ai'
     } else if (selectedFile.type.includes('font') || selectedFile.name.toLowerCase().match(/\.(ttf|otf|woff|woff2)$/)) {
       detectedType = 'font'
@@ -1485,7 +1485,7 @@ export default function UploadResourcePage() {
                     type="file"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     onChange={handleFileChange}
-                    accept="image/*,video/*,.psd,.ai,.zip,.rar,.7z,.ttf,.otf,.woff,.woff2,audio/*"
+                    accept="image/*,video/*,.psd,.ai,.eps,.zip,.rar,.7z,.ttf,.otf,.woff,.woff2,audio/*"
                     required
                   />
                   <div className={`h-48 rounded-3xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-6 text-center relative overflow-hidden ${
@@ -1635,8 +1635,10 @@ export default function UploadResourcePage() {
                         <p className="text-sm text-gray-500 text-center mb-4 max-w-xs">
                           {file.type.includes('psd') || file.name.toLowerCase().endsWith('.psd')
                             ? 'Arquivo PSD - Faça upload de uma thumbnail para visualizar'
-                            : file.type.includes('ai') || file.name.toLowerCase().endsWith('.ai')
-                            ? 'Arquivo Adobe Illustrator - Faça upload de uma thumbnail para visualizar'
+                            : file.type.includes('ai') || file.name.toLowerCase().endsWith('.ai') || file.name.toLowerCase().endsWith('.eps')
+                            ? file.name.toLowerCase().endsWith('.eps') 
+                              ? 'Arquivo EPS (Illustrator) - Faça upload de uma thumbnail para visualizar'
+                              : 'Arquivo Adobe Illustrator - Faça upload de uma thumbnail para visualizar'
                             : 'Arquivo não suporta preview direto - Faça upload de uma thumbnail para visualizar'}
                         </p>
                         {!thumbnail && (
@@ -1886,7 +1888,7 @@ export default function UploadResourcePage() {
                     <option value="video">Vídeo</option>
                     <option value="font">Fonte</option>
                     <option value="psd">PSD</option>
-                    <option value="ai">AI</option>
+                    <option value="ai">AI / EPS</option>
                     <option value="audio">Áudio</option>
                     <option value="other">Outro</option>
                   </select>

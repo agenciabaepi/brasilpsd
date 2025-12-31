@@ -14,13 +14,14 @@ import { getSystemProfileIdSync } from '@/lib/utils/system'
 export default function UploadAudioPage() {
   const [userProfile, setUserProfile] = useState<Profile | null>(null)
   const [categories, setCategories] = useState<any[]>([])
+  const [audiosCategoryId, setAudiosCategoryId] = useState<string | null>(null) // ID da categoria principal "Áudios"
   const [collections, setCollections] = useState<any[]>([])
   const [showNewCollectionForm, setShowNewCollectionForm] = useState(false)
   const [newCollectionTitle, setNewCollectionTitle] = useState('')
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category_id: '',
+    category_id: '', // Esta será uma subcategoria
     keywords: '',
     is_premium: false,
     is_official: false,
@@ -54,14 +55,10 @@ export default function UploadAudioPage() {
           .maybeSingle()
         
         if (audiosCategory) {
-          // Buscar a categoria principal
-          const { data: mainCat } = await supabase
-            .from('categories')
-            .select('id, name, parent_id')
-            .eq('id', audiosCategory.id)
-            .single()
+          // Salvar o ID da categoria principal "Áudios" para usar automaticamente
+          setAudiosCategoryId(audiosCategory.id)
           
-          // Buscar subcategorias
+          // Buscar apenas as subcategorias (não incluir a categoria principal)
           const { data: subCats } = await supabase
             .from('categories')
             .select('id, name, parent_id')
@@ -69,12 +66,8 @@ export default function UploadAudioPage() {
             .order('order_index', { ascending: true })
             .order('name', { ascending: true })
           
-          // Combinar categoria principal e subcategorias
-          const audioCategories = [
-            ...(mainCat ? [mainCat] : []),
-            ...(subCats || [])
-          ]
-          setCategories(audioCategories)
+          // Mostrar apenas subcategorias no dropdown
+          setCategories(subCats || [])
         } else {
           // Fallback: buscar todas as categorias
           const { data: cats } = await supabase
@@ -228,22 +221,14 @@ export default function UploadAudioPage() {
       
       let categoriesList: any[] = []
       if (audiosCategory) {
-        const { data: mainCat } = await supabase
-          .from('categories')
-          .select('id, name, parent_id, slug')
-          .eq('id', audiosCategory.id)
-          .single()
-        
+        // Buscar apenas subcategorias (não precisa da categoria principal)
         const { data: subCats } = await supabase
           .from('categories')
           .select('id, name, parent_id, slug')
           .eq('parent_id', audiosCategory.id)
           .order('order_index', { ascending: true })
         
-        categoriesList = [
-          ...(mainCat ? [mainCat] : []),
-          ...(subCats || [])
-        ]
+        categoriesList = subCats || []
       }
       
       // Processar cada arquivo
@@ -354,22 +339,14 @@ export default function UploadAudioPage() {
       
       let categoriesList: any[] = []
       if (audiosCategory) {
-        const { data: mainCat } = await supabase
-          .from('categories')
-          .select('id, name, parent_id, slug')
-          .eq('id', audiosCategory.id)
-          .single()
-        
+        // Buscar apenas subcategorias (não precisa da categoria principal)
         const { data: subCats } = await supabase
           .from('categories')
           .select('id, name, parent_id, slug')
           .eq('parent_id', audiosCategory.id)
           .order('order_index', { ascending: true })
         
-        categoriesList = [
-          ...(mainCat ? [mainCat] : []),
-          ...(subCats || [])
-        ]
+        categoriesList = subCats || []
       }
 
       // Chamar API de IA
@@ -484,13 +461,16 @@ export default function UploadAudioPage() {
             : formData.title
 
         // 2. Criar recurso no banco
+        // Se uma subcategoria foi selecionada, usar ela. Caso contrário, usar a categoria principal "Áudios"
+        const finalCategoryId = formData.category_id || audiosCategoryId || null
+        
         const { data: resource, error: resourceError } = await supabase
           .from('resources')
           .insert({
             title: audioTitle,
             description: formData.description || null,
             resource_type: 'audio',
-            category_id: formData.category_id || null,
+            category_id: finalCategoryId,
             creator_id: creatorId,
             file_url: uploadData.url,
             preview_url: uploadData.previewUrl || null, // Versão com marca d'água
