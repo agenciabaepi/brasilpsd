@@ -48,11 +48,26 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Preços
+    // Preços (valor anual = mensal * 12 com 15% de desconto)
+    const monthlyPrices = { lite: 19.90, pro: 29.90, plus: 49.90 }
+    const calculateYearlyPrice = (monthly: number) => {
+      const yearlyTotal = monthly * 12
+      return Math.round(yearlyTotal * 0.85 * 100) / 100 // 15% desconto, arredondado
+    }
+
     const prices: Record<string, any> = {
-      'lite': { monthly: 19.90, yearly: 19.90 },
-      'pro': { monthly: 29.90, yearly: 29.90 },
-      'plus': { monthly: 49.90, yearly: 49.90 }
+      'lite': { 
+        monthly: monthlyPrices.lite, 
+        yearly: calculateYearlyPrice(monthlyPrices.lite) 
+      },
+      'pro': { 
+        monthly: monthlyPrices.pro, 
+        yearly: calculateYearlyPrice(monthlyPrices.pro) 
+      },
+      'plus': { 
+        monthly: monthlyPrices.plus, 
+        yearly: calculateYearlyPrice(monthlyPrices.plus) 
+      }
     }
 
     const tierData = prices[newTier.toLowerCase()]

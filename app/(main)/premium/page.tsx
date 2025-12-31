@@ -92,11 +92,25 @@ export default function PremiumPage() {
     }
   }
 
+  // Preços dos planos (valor anual = mensal * 12 com 15% de desconto)
+  const monthlyPrices = { lite: 19.90, pro: 29.90, plus: 49.90 }
+  const calculateYearlyPrice = (monthly: number) => {
+    const yearlyTotal = monthly * 12
+    return Math.round(yearlyTotal * 0.85 * 100) / 100 // 15% desconto, arredondado
+  }
+
+  const planPrices = {
+    lite: { monthly: monthlyPrices.lite, yearly: calculateYearlyPrice(monthlyPrices.lite) },
+    pro: { monthly: monthlyPrices.pro, yearly: calculateYearlyPrice(monthlyPrices.pro) },
+    plus: { monthly: monthlyPrices.plus, yearly: calculateYearlyPrice(monthlyPrices.plus) }
+  }
+
   const plans = [
     {
       id: 'lite',
       name: 'Premium Lite',
-      price: '19,90',
+      monthlyPrice: planPrices.lite.monthly,
+      yearlyPrice: planPrices.lite.yearly,
       description: 'Ideal para iniciantes',
       icon: Zap,
       color: 'secondary',
@@ -113,7 +127,8 @@ export default function PremiumPage() {
     {
       id: 'pro',
       name: 'Premium Pro',
-      price: '29,90',
+      monthlyPrice: planPrices.pro.monthly,
+      yearlyPrice: planPrices.pro.yearly,
       description: 'Para profissionais criativos',
       icon: Crown,
       color: 'primary',
@@ -132,7 +147,8 @@ export default function PremiumPage() {
     {
       id: 'plus',
       name: 'Premium Plus',
-      price: '49,90',
+      monthlyPrice: planPrices.plus.monthly,
+      yearlyPrice: planPrices.plus.yearly,
       description: 'Máximo desempenho',
       icon: Star,
       color: 'secondary',
@@ -192,10 +208,33 @@ export default function PremiumPage() {
                 <div className="space-y-4 text-left">
                   <plan.icon className={cn("h-10 w-10", plan.color === 'primary' ? "text-primary-500" : "text-secondary-600")} />
                   <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{plan.name}</h3>
-                  <div className="flex items-baseline space-x-1">
-                    <span className="text-2xl font-semibold text-gray-900">R$</span>
-                    <span className="text-5xl font-semibold text-gray-900 tracking-tighter">{plan.price}</span>
-                    <span className="text-gray-400 text-sm font-semibold">/mês</span>
+                  <div className="space-y-2">
+                    {billingCycle === 'yearly' && (
+                      <div className="flex items-center space-x-2 animate-bounce-in">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold shadow-lg animate-pulse hover:animate-none transition-all transform hover:scale-110">
+                          <span className="relative flex h-2 w-2 mr-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                          </span>
+                          15% OFF
+                        </span>
+                        <span className="text-xs text-gray-400 line-through animate-fade-in">
+                          R$ {(plan.monthlyPrice * 12).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-baseline space-x-1">
+                      <span className="text-2xl font-semibold text-gray-900">R$</span>
+                      <span className="text-5xl font-semibold text-gray-900 tracking-tighter">
+                        {(billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-gray-400 text-sm font-semibold">/mês</span>
+                    </div>
+                    {billingCycle === 'yearly' && (
+                      <p className="text-xs text-gray-500 font-medium">
+                        Total anual: R$ {plan.yearlyPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-4 text-left">

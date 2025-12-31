@@ -5,6 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { CreditCard, QrCode, Barcode, Check, X, Copy, ShieldCheck, ArrowLeft, Lock, Clock, AlertCircle, LogIn } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import Link from 'next/link'
+import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { createSupabaseClient } from '@/lib/supabase/client'
 
@@ -34,19 +35,25 @@ export default function CheckoutPage() {
     ccv: ''
   })
 
-  // Preços corretos dos planos
+  // Preços corretos dos planos (valor anual = mensal * 12 com 15% de desconto)
+  const monthlyPrices = { lite: 19.90, pro: 29.90, plus: 49.90 }
+  const calculateYearlyPrice = (monthly: number) => {
+    const yearlyTotal = monthly * 12
+    return Math.round(yearlyTotal * 0.85 * 100) / 100 // 15% desconto, arredondado
+  }
+
   const planInfo: any = {
     lite: { 
       name: 'Premium Lite', 
-      price: cycle === 'monthly' ? 19.90 : 19.90 
+      price: cycle === 'monthly' ? monthlyPrices.lite : calculateYearlyPrice(monthlyPrices.lite)
     },
     pro: { 
       name: 'Premium Pro', 
-      price: cycle === 'monthly' ? 29.90 : 29.90 
+      price: cycle === 'monthly' ? monthlyPrices.pro : calculateYearlyPrice(monthlyPrices.pro)
     },
     plus: { 
       name: 'Premium Plus', 
-      price: cycle === 'monthly' ? 49.90 : 49.90 
+      price: cycle === 'monthly' ? monthlyPrices.plus : calculateYearlyPrice(monthlyPrices.plus)
     },
   }
 
@@ -396,10 +403,20 @@ export default function CheckoutPage() {
 
               {method === 'PIX' && (
                 <div className="bg-gradient-to-br from-primary-50 to-green-50 p-6 rounded-2xl border-2 border-primary-300 text-center space-y-3 mb-8 shadow-sm relative z-10">
-                  <div className="inline-flex items-center justify-center h-10 w-10 bg-primary-100 rounded-xl mb-2">
-                    <Check className="h-5 w-5 text-primary-600" />
+                  <div className="inline-flex items-center justify-center mb-2">
+                    <div className="relative h-12 w-32">
+                      <Image
+                        src="/images/logo-pix.png"
+                        alt="Logo PIX"
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
                   </div>
-                  <p className="text-base font-bold text-primary-700">Aprovação Imediata</p>
+                  <div className="inline-flex items-center justify-center space-x-2 text-primary-700 mb-1">
+                    <Check className="h-5 w-5" />
+                    <p className="text-base font-bold">Aprovação Imediata</p>
+                  </div>
                   <p className="text-sm text-gray-600 font-medium">O QR Code será gerado após você clicar em "Finalizar Assinatura".</p>
                 </div>
               )}
@@ -490,7 +507,14 @@ export default function CheckoutPage() {
                     <p className="text-xl font-black text-gray-900">
                       R$ {currentPlan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">por mês</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {cycle === 'monthly' ? 'por mês' : 'valor anual (com 15% desconto)'}
+                    </p>
+                    {cycle === 'yearly' && (
+                      <p className="text-xs text-green-600 font-semibold mt-1 animate-fade-in">
+                        Economia de 15%
+                      </p>
+                    )}
                   </div>
                 </div>
                 
@@ -565,7 +589,17 @@ export default function CheckoutPage() {
               ) : (
                 <div className="space-y-5">
                   {/* Header */}
-                  <div className="text-center space-y-1">
+                  <div className="text-center space-y-3">
+                    <div className="flex justify-center mb-2">
+                      <div className="relative h-10 w-28">
+                        <Image
+                          src="/images/logo-pix.png"
+                          alt="Logo PIX"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                    </div>
                     <h2 className="text-2xl font-bold text-gray-900">Pagamento via PIX</h2>
                     <p className="text-sm text-gray-500">
                       Escaneie o QR Code com seu app do banco e aguarde a confirmação.
@@ -724,6 +758,8 @@ export default function CheckoutPage() {
 }
 
 function MethodBtn({ active, onClick, icon: Icon, label }: any) {
+  const isPix = label === 'PIX'
+  
   return (
     <button 
       onClick={onClick} 
@@ -742,10 +778,22 @@ function MethodBtn({ active, onClick, icon: Icon, label }: any) {
         </div>
       )}
       <div className={cn(
-        "transition-all",
+        "transition-all flex items-center justify-center",
         active ? "transform scale-110" : "group-hover:scale-105"
       )}>
-        <Icon className="h-7 w-7" strokeWidth={active ? 2.5 : 2} />
+        {isPix ? (
+          <div className="relative h-10 w-24">
+            <Image
+              src="/images/logo-pix.png"
+              alt="Logo PIX"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+        ) : (
+          <Icon className="h-7 w-7" strokeWidth={active ? 2.5 : 2} />
+        )}
       </div>
       <span className={cn(
         "text-sm font-bold transition-all",
