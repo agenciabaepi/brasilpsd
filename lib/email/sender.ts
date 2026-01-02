@@ -9,6 +9,7 @@ export interface EmailOptions {
   to: string
   subject: string
   html: string
+  text?: string // Versão texto (Gmail prefere texto + HTML)
   from?: string
   fromName?: string
 }
@@ -44,15 +45,31 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       throw new Error(`Falha na conexão SMTP: ${verifyError.message}`)
     }
 
+    // Se não tiver versão texto, criar do HTML (Gmail prefere emails com texto + HTML)
+    const textVersion = options.text || options.html
+      .replace(/<[^>]+>/g, '') // Remove tags HTML
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .trim()
+
     const info = await transporter.sendMail({
       from: fromAddress,
       to: options.to,
       subject: options.subject,
+      text: textVersion, // Versão texto para Gmail (sempre incluir)
       html: options.html,
-      // Headers básicos (simplificados para evitar rejeição)
+      // Headers otimizados para Gmail
       headers: {
         'X-Mailer': 'BrasilPSD',
         'Message-ID': `<${Date.now()}-${Math.random().toString(36)}@brasilpsd.com.br>`,
+        'X-Priority': '1',
+        'Importance': 'normal',
+        'Precedence': 'bulk',
+        'Auto-Submitted': 'auto-generated',
       },
       // Reply-to para melhorar reputação
       replyTo: DEFAULT_FROM_EMAIL,
@@ -60,6 +77,10 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       priority: 'normal',
       // Encoding UTF-8
       encoding: 'UTF-8',
+      // Lista de unsubscribe (Gmail verifica isso)
+      list: {
+        unsubscribe: `<${getAppUrl()}/unsubscribe>`,
+      },
     })
 
     // Log detalhado da resposta
@@ -114,12 +135,17 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
  * Envia email de verificação de código
  */
 export async function sendVerificationCodeEmail(email: string, code: string, name?: string): Promise<void> {
-  const { getVerificationCodeTemplate } = await import('./templates')
+  const { getVerificationCodeTemplate, getVerificationCodeTextTemplate } = await import('./templates')
+  
+  // Gmail prefere emails com versão texto + HTML
+  const textVersion = getVerificationCodeTextTemplate(code, name)
+  const htmlVersion = getVerificationCodeTemplate(code, name)
   
   await sendEmail({
     to: email,
     subject: 'Código de Verificação - BrasilPSD',
-    html: getVerificationCodeTemplate(code, name),
+    html: htmlVersion,
+    text: textVersion, // Versão texto explícita para Gmail
   })
 }
 

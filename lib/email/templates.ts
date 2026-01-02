@@ -276,6 +276,35 @@ const baseHTML = (content: string, title: string) => {
 }
 
 /**
+ * Template de texto para código de verificação (Gmail prefere texto + HTML)
+ */
+export function getVerificationCodeTextTemplate(code: string, name?: string): string {
+  const greeting = name ? `Olá, ${name}!` : 'Olá!'
+  return `
+${greeting}
+
+Você solicitou verificar seu email no BrasilPSD. Use o código abaixo para completar a verificação:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CÓDIGO DE VERIFICAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${code}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Este código expira em 15 minutos.
+
+Digite este código na página de verificação para confirmar seu endereço de email.
+
+⚠️ IMPORTANTE: Se você não solicitou esta verificação, pode ignorar este email com segurança. Ninguém terá acesso à sua conta sem este código.
+
+Atenciosamente,
+Equipe BrasilPSD
+  `.trim()
+}
+
+/**
  * Template para código de verificação de email
  */
 export function getVerificationCodeTemplate(code: string, name?: string) {
