@@ -66,6 +66,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao gerar código de verificação' }, { status: 500 })
     }
 
+    // Verificar se SMTP está configurado antes de tentar enviar
+    const smtpHost = process.env.SMTP_HOST
+    const smtpPort = process.env.SMTP_PORT
+    const smtpUser = process.env.SMTP_USER
+    const smtpPassword = process.env.SMTP_PASSWORD
+
+    if (!smtpHost || !smtpPort || !smtpUser || !smtpPassword) {
+      const missing = []
+      if (!smtpHost) missing.push('SMTP_HOST')
+      if (!smtpPort) missing.push('SMTP_PORT')
+      if (!smtpUser) missing.push('SMTP_USER')
+      if (!smtpPassword) missing.push('SMTP_PASSWORD')
+      
+      console.error('❌ SMTP não configurado. Variáveis faltando:', missing.join(', '))
+      
+      // Em desenvolvimento, retornar o código mesmo sem SMTP configurado
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📧 [DEV] SMTP não configurado. Código de verificação para ${email}: ${code}`)
+        console.log(`⏰ Expira em: ${expiresAt.toISOString()}`)
+        return NextResponse.json({ 
+          success: true,
+          message: 'Código de verificação gerado (SMTP não configurado - modo desenvolvimento)',
+          code,
+          warning: 'SMTP não configurado. Configure as variáveis de ambiente SMTP_* para enviar emails.'
+        })
+      }
+      
+      return NextResponse.json({ 
+        error: 'Serviço de email não configurado',
+        message: `As seguintes variáveis de ambiente estão faltando: ${missing.join(', ')}. Configure o SMTP para enviar emails.`,
+        code: process.env.NODE_ENV === 'development' ? code : undefined
+      }, { status: 500 })
+    }
+
     // Enviar email com código
     try {
       const { sendVerificationCodeEmail } = await import('@/lib/email/sender')
@@ -79,22 +113,29 @@ export async function POST(request: NextRequest) {
         code: emailError.code,
         command: emailError.command,
         response: emailError.response,
-        responseCode: emailError.responseCode
+        responseCode: emailError.responseCode,
+        hostname: emailError.hostname,
+        port: emailError.port
       })
       
-      // Em desenvolvimento, logar o código
+      // Em desenvolvimento, sempre retornar o código mesmo se falhar
       if (process.env.NODE_ENV === 'development') {
-        console.log(`📧 [DEV] Código de verificação para ${email}: ${code}`)
+        console.log(`📧 [DEV] Erro ao enviar email, mas retornando código para desenvolvimento: ${code}`)
         console.log(`⏰ Expira em: ${expiresAt.toISOString()}`)
+        return NextResponse.json({ 
+          success: true,
+          message: 'Código de verificação gerado (erro ao enviar email - modo desenvolvimento)',
+          code,
+          warning: `Erro ao enviar email: ${emailError.message}. Use o código acima para testar.`
+        })
       }
       
-      // Retornar erro para o cliente saber que o email não foi enviado
+      // Em produção, retornar erro mas ainda permitir usar o código se necessário
       return NextResponse.json({ 
         error: 'Erro ao enviar email de verificação',
         message: emailError.message || 'Não foi possível enviar o email. Verifique as configurações SMTP.',
-        details: process.env.NODE_ENV === 'development' ? emailError.message : undefined,
-        // Em desenvolvimento, retornar o código mesmo se falhar
-        ...(process.env.NODE_ENV === 'development' && { code })
+        details: emailError.message,
+        // Não retornar código em produção por segurança
       }, { status: 500 })
     }
 

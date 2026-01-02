@@ -233,7 +233,40 @@ export default function SignupPage() {
         if (sendCodeData.error?.includes('já está cadastrado')) {
           setEmailStatus('duplicate')
         }
-        throw new Error(sendCodeData.error || 'Erro ao enviar código de verificação')
+        
+        // Se tiver código na resposta (modo desenvolvimento ou fallback), usar mesmo com erro
+        if (sendCodeData.code) {
+          console.log('📧 Código de verificação gerado:', sendCodeData.code)
+          if (sendCodeData.warning) {
+            console.warn('⚠️', sendCodeData.warning)
+            toast.warning(sendCodeData.warning, { duration: 6000 })
+          }
+          
+          // Guardar dados e código para usar na verificação
+          sessionStorage.setItem('signup_data', JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            fullName: formData.fullName,
+            phone: formData.phone,
+            cpf_cnpj: formData.cpf_cnpj,
+            dev_code: sendCodeData.code // Código para desenvolvimento/fallback
+          }))
+          
+          router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
+          return
+        }
+        
+        // Mostrar mensagem de erro detalhada
+        const errorMessage = sendCodeData.message || sendCodeData.error || 'Erro ao enviar código de verificação'
+        throw new Error(errorMessage)
+      }
+
+      // Se tiver código na resposta, mostrar no console (modo desenvolvimento)
+      if (sendCodeData.code) {
+        console.log('📧 Código de verificação gerado:', sendCodeData.code)
+        if (sendCodeData.warning) {
+          console.warn('⚠️', sendCodeData.warning)
+        }
       }
 
       // 2. Guardar dados do formulário no sessionStorage para usar após verificação
@@ -242,11 +275,16 @@ export default function SignupPage() {
         password: formData.password,
         fullName: formData.fullName,
         phone: formData.phone,
-        cpf_cnpj: formData.cpf_cnpj
+        cpf_cnpj: formData.cpf_cnpj,
+        ...(sendCodeData.code && { dev_code: sendCodeData.code })
       }))
 
       // 3. Redirecionar para página de verificação
-      toast.success('Código de verificação enviado para seu email!')
+      if (sendCodeData.warning) {
+        toast.success('Código gerado! ' + sendCodeData.warning, { duration: 5000 })
+      } else {
+        toast.success('Código de verificação enviado para seu email!')
+      }
       router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
     } catch (error: any) {
       toast.error(error.message || 'Erro ao criar conta')
