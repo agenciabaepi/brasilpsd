@@ -56,31 +56,31 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       .replace(/&#39;/g, "'")
       .trim()
 
+    // Detectar se é Gmail para ajustes específicos
+    const isGmail = options.to.toLowerCase().includes('@gmail.com') || 
+                    options.to.toLowerCase().includes('@googlemail.com')
+    
+    // Headers mínimos e seguros (Gmail é muito sensível a headers incorretos)
+    const headers: Record<string, string> = {
+      'Message-ID': `<${Date.now()}-${Math.random().toString(36).substring(2, 15)}@brasilpsd.com.br>`,
+    }
+    
+    // Para Gmail, usar headers ainda mais simples
+    if (!isGmail) {
+      headers['X-Mailer'] = 'BrasilPSD'
+    }
+
     const info = await transporter.sendMail({
       from: fromAddress,
       to: options.to,
       subject: options.subject,
       text: textVersion, // Versão texto para Gmail (sempre incluir)
       html: options.html,
-      // Headers otimizados para Gmail
-      headers: {
-        'X-Mailer': 'BrasilPSD',
-        'Message-ID': `<${Date.now()}-${Math.random().toString(36)}@brasilpsd.com.br>`,
-        'X-Priority': '1',
-        'Importance': 'normal',
-        'Precedence': 'bulk',
-        'Auto-Submitted': 'auto-generated',
-      },
+      headers,
       // Reply-to para melhorar reputação
       replyTo: DEFAULT_FROM_EMAIL,
-      // Prioridade normal
-      priority: 'normal',
       // Encoding UTF-8
       encoding: 'UTF-8',
-      // Lista de unsubscribe (Gmail verifica isso)
-      list: {
-        unsubscribe: `<${getAppUrl()}/unsubscribe>`,
-      },
     })
 
     // Log detalhado da resposta
