@@ -41,9 +41,18 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
         'X-Priority': '3',
         'List-Unsubscribe': `<${getAppUrl()}/unsubscribe>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'Message-ID': `<${Date.now()}-${Math.random().toString(36)}@brasilpsd.com.br>`,
+        'Date': new Date().toUTCString(),
+        'MIME-Version': '1.0',
+        'Content-Type': 'text/html; charset=UTF-8',
+        'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36)}`,
       },
       // Reply-to para melhorar reputação
       replyTo: DEFAULT_FROM_EMAIL,
+      // Prioridade normal
+      priority: 'normal',
+      // Encoding UTF-8
+      encoding: 'UTF-8',
     })
 
     console.log('✅ Email enviado com sucesso:', {

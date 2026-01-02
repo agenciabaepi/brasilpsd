@@ -49,9 +49,20 @@ export function createEmailTransporter() {
     tls: {
       // Não rejeitar conexões não autorizadas (para desenvolvimento)
       rejectUnauthorized: process.env.NODE_ENV === 'production',
+      minVersion: 'TLSv1.2',
     },
+    // Timeout para conexão
+    connectionTimeout: 10000, // 10 segundos
+    // Timeout para comandos
+    greetingTimeout: 5000, // 5 segundos
+    // Socket timeout
+    socketTimeout: 10000, // 10 segundos
     debug: process.env.NODE_ENV === 'development', // Habilitar debug em desenvolvimento
     logger: process.env.NODE_ENV === 'development', // Logar em desenvolvimento
+    // Pool de conexões para melhor performance
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 3,
   })
 
   return transporter
