@@ -52,17 +52,18 @@ export function createEmailTransporter() {
       minVersion: 'TLSv1.2',
     },
     // Timeout para conexão
-    connectionTimeout: 10000, // 10 segundos
+    connectionTimeout: 15000, // 15 segundos (aumentado)
     // Timeout para comandos
-    greetingTimeout: 5000, // 5 segundos
+    greetingTimeout: 10000, // 10 segundos (aumentado)
     // Socket timeout
-    socketTimeout: 10000, // 10 segundos
-    debug: process.env.NODE_ENV === 'development', // Habilitar debug em desenvolvimento
-    logger: process.env.NODE_ENV === 'development', // Logar em desenvolvimento
-    // Pool de conexões para melhor performance
-    pool: true,
-    maxConnections: 1,
-    maxMessages: 3,
+    socketTimeout: 15000, // 15 segundos (aumentado)
+    debug: true, // Sempre habilitar debug para identificar problemas
+    logger: true, // Sempre logar para identificar problemas
+    // Pool de conexões desabilitado para evitar problemas de conexão
+    pool: false,
+    // Retry em caso de falha
+    maxRetries: 3,
+    retryDelay: 2000,
   })
 
   return transporter

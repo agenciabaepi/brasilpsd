@@ -30,22 +30,29 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       subject: options.subject,
     })
 
+    // Verificar conexão antes de enviar
+    try {
+      await transporter.verify()
+      console.log('✅ Conexão SMTP verificada com sucesso')
+    } catch (verifyError: any) {
+      console.error('❌ Erro ao verificar conexão SMTP:', {
+        error: verifyError.message,
+        code: verifyError.code,
+        command: verifyError.command,
+        response: verifyError.response,
+      })
+      throw new Error(`Falha na conexão SMTP: ${verifyError.message}`)
+    }
+
     const info = await transporter.sendMail({
       from: fromAddress,
       to: options.to,
       subject: options.subject,
       html: options.html,
-      // Headers para melhorar autenticação e reduzir spam
+      // Headers básicos (simplificados para evitar rejeição)
       headers: {
         'X-Mailer': 'BrasilPSD',
-        'X-Priority': '3',
-        'List-Unsubscribe': `<${getAppUrl()}/unsubscribe>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         'Message-ID': `<${Date.now()}-${Math.random().toString(36)}@brasilpsd.com.br>`,
-        'Date': new Date().toUTCString(),
-        'MIME-Version': '1.0',
-        'Content-Type': 'text/html; charset=UTF-8',
-        'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36)}`,
       },
       // Reply-to para melhorar reputação
       replyTo: DEFAULT_FROM_EMAIL,
@@ -55,12 +62,34 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       encoding: 'UTF-8',
     })
 
-    console.log('✅ Email enviado com sucesso:', {
+    // Log detalhado da resposta
+    const responseDetails = {
       to: options.to,
       subject: options.subject,
       messageId: info.messageId,
       response: info.response,
-    })
+      accepted: info.accepted,
+      rejected: info.rejected,
+      pending: info.pending,
+      envelope: info.envelope,
+    }
+
+    console.log('✅ Email enviado com sucesso:', responseDetails)
+
+    // Verificar se o email foi realmente aceito
+    if (info.rejected && info.rejected.length > 0) {
+      console.error('⚠️ Email foi rejeitado pelo servidor:', {
+        rejected: info.rejected,
+        response: info.response,
+      })
+      throw new Error(`Email rejeitado pelo servidor: ${info.rejected.join(', ')}`)
+    }
+
+    // Verificar se foi aceito
+    if (!info.accepted || info.accepted.length === 0) {
+      console.error('⚠️ Email não foi aceito pelo servidor:', responseDetails)
+      throw new Error('Email não foi aceito pelo servidor SMTP')
+    }
   } catch (error: any) {
     console.error('❌ Erro ao enviar email:', {
       to: options.to,
