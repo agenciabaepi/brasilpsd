@@ -251,7 +251,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     c.slug.toLowerCase() === 'psd' || c.name.toLowerCase() === 'psd'
   )
   
-  // Subcategorias de PSD
+  // Subcategorias de PSD (incluindo Mockups)
   const psdSubItems = psdCategory 
     ? categories
         .filter(c => c.parent_id === psdCategory.id)
@@ -263,22 +263,11 @@ export default function Header({ initialUser, initialSubscription, initialCatego
         }))
     : []
   
-  // Encontrar categoria Mockups para verificar subcategorias
-  const mockupsCategory = mainCategories.find(c => 
-    c.slug.toLowerCase() === 'mockups' || c.name.toLowerCase() === 'mockups'
+  // Encontrar subcategoria Mockups de PSD para adicionar como item direto no menu
+  const mockupsSubcategory = categories.find(c => 
+    (c.slug.toLowerCase() === 'mockups-psd' || c.name.toLowerCase() === 'mockups') 
+    && c.parent_id === psdCategory?.id
   )
-  
-  // Subcategorias de Mockups
-  const mockupsSubItems = mockupsCategory 
-    ? categories
-        .filter(c => c.parent_id === mockupsCategory.id)
-        .sort((a, b) => a.order_index - b.order_index)
-        .map(sub => ({
-          id: `subcategory-${sub.id}`,
-          name: sub.name,
-          href: `/categories/${sub.slug}`
-        }))
-    : []
   
   // Construir menu com todas as categorias principais
   // Mapear slugs para rotas específicas quando existirem, senão usar /categories/{slug}
@@ -293,21 +282,29 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   }
 
   const menuItems = [
-    ...mainCategories.map(category => {
-      // PSD e Mockups têm dropdown com subcategorias
-      const isPSD = category.slug.toLowerCase() === 'psd'
-      const isMockups = category.slug.toLowerCase() === 'mockups'
-      const hasDropdown = (isPSD && psdSubItems.length > 0) || (isMockups && mockupsSubItems.length > 0)
-      const subItems = isPSD ? psdSubItems : (isMockups ? mockupsSubItems : [])
-      
-      return {
-        id: `category-${category.id}`,
-        name: category.name,
-        href: getCategoryHref(category.slug),
-        hasDropdown: hasDropdown,
-        subItems: subItems
-      }
-    }),
+    ...mainCategories
+      .filter(category => category.slug.toLowerCase() !== 'mockups') // Excluir categoria Mockups principal
+      .map(category => {
+        // Apenas PSD tem dropdown com subcategorias
+        const isPSD = category.slug.toLowerCase() === 'psd'
+        const hasDropdown = isPSD && psdSubItems.length > 0
+        
+        return {
+          id: `category-${category.id}`,
+          name: category.name,
+          href: getCategoryHref(category.slug),
+          hasDropdown: hasDropdown,
+          subItems: isPSD ? psdSubItems : []
+        }
+      }),
+    // Adicionar Mockups como item direto (subcategoria de PSD)
+    ...(mockupsSubcategory ? [{
+      id: `mockups-subcategory-${mockupsSubcategory.id}`,
+      name: 'Mockups',
+      href: `/categories/${mockupsSubcategory.slug}`,
+      hasDropdown: false,
+      subItems: []
+    }] : []),
     { id: 'png', name: 'PNG', href: '/png' },
     { id: 'collections', name: 'Coleções', href: '/collections' }
   ]

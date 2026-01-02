@@ -19,7 +19,6 @@ export default function UploadResourcePage() {
   const [newCollectionTitle, setNewCollectionTitle] = useState('')
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
     resource_type: 'image' as ResourceType,
     category_id: '',
     keywords: '',
@@ -65,6 +64,43 @@ export default function UploadResourcePage() {
   
   const router = useRouter()
   const supabase = createSupabaseClient()
+
+  // Função para obter descrição padrão baseada no tipo de arquivo
+  function getDefaultDescription(resourceType: ResourceType, fileFormat?: string): string {
+    const format = fileFormat?.toLowerCase() || ''
+    
+    switch (resourceType) {
+      case 'psd':
+        return 'Arquivo PSD editável do Photoshop. Perfeito para designers que precisam de flexibilidade total na edição. Inclui todas as camadas organizadas e prontas para personalização.'
+      
+      case 'ai':
+        if (format === 'eps') {
+          return 'Arquivo EPS (Encapsulated PostScript) vetorial de alta qualidade. Compatível com Adobe Illustrator e outros softwares de design vetorial. Ideal para impressão e escalonamento sem perda de qualidade.'
+        }
+        return 'Arquivo AI (Adobe Illustrator) vetorial editável. Perfeito para designers que precisam de gráficos escaláveis e editáveis. Inclui todas as camadas e elementos organizados.'
+      
+      case 'image':
+        return 'Imagem de alta qualidade pronta para uso em seus projetos. Formatos otimizados para web e impressão, com cores vibrantes e detalhes nítidos.'
+      
+      case 'png':
+        return 'Imagem PNG com fundo transparente. Perfeita para uso em designs onde você precisa de transparência. Alta qualidade e compatível com todos os principais softwares de design.'
+      
+      case 'video':
+        return 'Vídeo profissional de alta qualidade. Pronto para uso em projetos de marketing, apresentações e conteúdo digital. Formatos otimizados para diferentes plataformas.'
+      
+      case 'audio':
+        return 'Áudio profissional de alta qualidade. Efeitos sonoros, músicas e trilhas prontas para uso em seus projetos. Formatos otimizados para diferentes necessidades.'
+      
+      case 'font':
+        return 'Fonte tipográfica profissional. Compatível com Windows, Mac e Linux. Inclui todos os caracteres e variações necessárias para uso em projetos de design.'
+      
+      case 'motion':
+        return 'Animação e motion graphics profissionais. Prontos para uso em projetos de vídeo, apresentações e conteúdo digital. Formatos otimizados para diferentes plataformas.'
+      
+      default:
+        return 'Recurso profissional de alta qualidade, pronto para uso em seus projetos de design.'
+    }
+  }
 
   // Função para carregar todas as categorias cadastradas
   async function loadAllCategories() {
@@ -691,10 +727,13 @@ export default function UploadResourcePage() {
         ? Number(imageMetadata.height) 
         : (videoMetadata?.height ? Number(videoMetadata.height) : null)
       
+      // Obter descrição padrão baseada no tipo de arquivo
+      const defaultDescription = getDefaultDescription(formData.resource_type, finalFileFormat)
+      
       // Dados básicos do recurso (campos que sempre existem)
       const basicResourceData: any = {
         title: formData.title,
-        description: formData.description || null,
+        description: defaultDescription, // Usar descrição padrão
         resource_type: formData.resource_type, // Manter o tipo selecionado (png, image, etc.)
         category_id: formData.category_id || null,
         creator_id: creatorId,
@@ -1265,11 +1304,7 @@ export default function UploadResourcePage() {
         }, 100)
       }
       
-      if (aiData.description) {
-        setTimeout(() => {
-          setFormData(prev => ({ ...prev, description: aiData.description }))
-        }, 200)
-      }
+      // Descrição não é mais gerada pela IA, usamos descrições padrão
       
       if (aiData.keywords && aiData.keywords.length > 0) {
         setTimeout(() => {
@@ -1376,7 +1411,7 @@ export default function UploadResourcePage() {
     setThumbnailPreview(null)
     setPreview(null)
     setVideoPreview(null)
-    setFormData(prev => ({ ...prev, title: '', description: '', keywords: '', category_id: '' }))
+    setFormData(prev => ({ ...prev, title: '', keywords: '', category_id: '' }))
     
     // PASSO 1.1: Detectar tipo automaticamente
     let detectedType: ResourceType = 'image'
@@ -1524,7 +1559,7 @@ export default function UploadResourcePage() {
                             Analisando com IA...
                           </p>
                           <p className="text-sm font-medium text-gray-600 mb-3">
-                            Gerando título, descrição e categoria
+                            Gerando título e categoria
                           </p>
                           <button
                             type="button"
@@ -1704,7 +1739,7 @@ export default function UploadResourcePage() {
                         </span>
                       )}
                       <span className="ml-2 text-red-500 font-bold normal-case text-sm block mt-1">
-                        A IA analisará esta imagem para gerar título, descrição e categoria
+                        A IA analisará esta imagem para gerar título e categoria
                       </span>
                     </>
                   ) : (
@@ -1716,7 +1751,7 @@ export default function UploadResourcePage() {
                         </span>
                       )}
                         <span className="ml-2 text-gray-700 font-bold normal-case text-sm block mt-1">
-                          A IA analisará esta imagem para gerar título, descrição e categoria automaticamente
+                          A IA analisará esta imagem para gerar título e categoria automaticamente
                         </span>
                     </>
                   )}
@@ -1840,37 +1875,6 @@ export default function UploadResourcePage() {
                 )}
               </div>
 
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-400 tracking-widest mb-2 uppercase">
-                  Descrição do Recurso
-                  {isAiProcessing && (
-                      <span className="ml-2 text-gray-700 text-sm animate-pulse">
-                        <Sparkles className="h-2.5 w-2.5 inline mr-1" />
-                        IA gerando...
-                      </span>
-                  )}
-                </label>
-                <div className="relative">
-                  {isAiProcessing && !formData.description && (
-                    <div className="absolute inset-0 bg-gray-50 rounded-2xl animate-pulse z-0">
-                      <div className="h-full bg-gradient-to-r from-transparent via-gray-100 to-transparent animate-[shimmer_1.5s_infinite]"></div>
-                    </div>
-                  )}
-                <textarea
-                    className={`flex min-h-[120px] w-full rounded-2xl border px-5 py-4 text-base text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-4 focus:ring-gray-900/5 focus:border-gray-900/20 transition-all relative z-10 ${
-                        isAiProcessing && !formData.description 
-                          ? 'border-gray-300 bg-gray-50/30' 
-                          : formData.description && isAiProcessing
-                          ? 'border-gray-900 bg-gray-50/20 animate-[fadeIn_0.5s_ease-in]'
-                          : 'border-gray-100 bg-gray-50/50'
-                      }`}
-                  placeholder="Dê detalhes sobre o que está incluído no arquivo..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  required
-                />
-                </div>
-              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
