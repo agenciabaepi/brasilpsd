@@ -187,22 +187,22 @@ export default function CreatorDashboardPage() {
   }
 
   return (
-    <div className="space-y-10">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 lg:space-y-10">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex flex-col space-y-2">
-          <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">Painel do Criador</h1>
-          <p className="text-gray-400 font-medium text-sm tracking-wider">Acompanhe seu desempenho e envie novos arquivos.</p>
+          <h1 className="text-2xl lg:text-4xl font-semibold text-gray-900 tracking-tight">Painel do Criador</h1>
+          <p className="text-xs lg:text-sm text-gray-400 font-medium tracking-wider">Acompanhe seu desempenho e envie novos arquivos.</p>
         </div>
-        <div className="flex gap-3">
-          <Link href="/creator/upload">
-            <Button className="bg-primary-500 hover:bg-primary-600 rounded-2xl px-8 h-14 border-none font-semibold tracking-tighter uppercase">
-              <Upload className="mr-3 h-5 w-5" />
+        <div className="flex flex-col sm:flex-row gap-2 lg:gap-3">
+          <Link href="/creator/upload" className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto bg-primary-500 hover:bg-primary-600 rounded-2xl px-6 lg:px-8 h-12 lg:h-14 border-none font-semibold tracking-tighter uppercase text-xs lg:text-sm">
+              <Upload className="mr-2 lg:mr-3 h-4 w-4 lg:h-5 lg:w-5" />
               Enviar Novo
             </Button>
           </Link>
-          <Link href="/creator/upload/batch">
-            <Button variant="outline" className="rounded-2xl px-8 h-14 font-semibold tracking-tighter uppercase">
-              <Upload className="mr-3 h-5 w-5" />
+          <Link href="/creator/upload/batch" className="w-full sm:w-auto">
+            <Button variant="outline" className="w-full sm:w-auto rounded-2xl px-6 lg:px-8 h-12 lg:h-14 font-semibold tracking-tighter uppercase text-xs lg:text-sm">
+              <Upload className="mr-2 lg:mr-3 h-4 w-4 lg:h-5 lg:w-5" />
               Upload em Lote
             </Button>
           </Link>
@@ -210,19 +210,19 @@ export default function CreatorDashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
         <CreatorStatCard title="Arquivos" value={stats.totalResources} icon={Files} color="primary" />
         <CreatorStatCard title="Downloads" value={stats.totalDownloads} icon={TrendingUp} color="primary" />
         <CreatorStatCard title="Pendentes" value={stats.pending} icon={Clock} color="primary" />
         <CreatorStatCard title="Visualizações" value={stats.totalViews} icon={Eye} color="primary" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8">
         <div className="lg:col-span-2">
           <Card className="border-none overflow-hidden p-0">
-            <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-800 tracking-tight text-sm">Envios Recentes</h3>
-              <Link href="/creator/resources" className="text-[10px] font-semibold text-primary-500 uppercase tracking-widest hover:text-primary-600">Ver Tudo</Link>
+            <div className="px-4 lg:px-8 py-4 lg:py-6 border-b border-gray-50 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-800 tracking-tight text-xs lg:text-sm">Envios Recentes</h3>
+              <Link href="/creator/resources" className="text-[9px] lg:text-[10px] font-semibold text-primary-500 uppercase tracking-widest hover:text-primary-600">Ver Tudo</Link>
             </div>
             <div className="divide-y divide-gray-50">
               {resources.length > 0 ? (
@@ -245,9 +245,9 @@ export default function CreatorDashboardPage() {
                           : null)
                   
                   return (
-                  <div key={resource.id} className="px-8 py-5 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
+                  <div key={resource.id} className="px-4 lg:px-8 py-4 lg:py-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 hover:bg-gray-50 transition-colors">
                     <div 
-                      className="h-14 w-14 rounded-xl bg-gray-50 border border-gray-100 flex-shrink-0 overflow-hidden relative"
+                      className="h-12 w-12 lg:h-14 lg:w-14 rounded-xl bg-gray-50 border border-gray-100 flex-shrink-0 overflow-hidden relative"
                       onMouseEnter={() => {
                         if (isVideo) {
                           setHoveredVideoId(resource.id)
@@ -349,35 +349,35 @@ export default function CreatorDashboardPage() {
                         />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-gray-300">
-                          <Files className="h-5 w-5" />
+                          <Files className="h-4 w-4 lg:h-5 lg:w-5" />
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate tracking-tight">{resource.title}</p>
-                      <div className="flex items-center space-x-3 mt-1">
-                        <span className={`text-[9px] font-semibold px-2 py-0.5 rounded uppercase ${
+                      <p className="text-xs lg:text-sm font-semibold text-gray-900 truncate tracking-tight">{resource.title}</p>
+                      <div className="flex items-center flex-wrap gap-2 lg:gap-3 mt-1">
+                        <span className={`text-[8px] lg:text-[9px] font-semibold px-2 py-0.5 rounded uppercase ${
                           resource.status === 'approved' ? 'bg-primary-50 text-gray-900' :
                           resource.status === 'pending' ? 'bg-primary-50 text-primary-600' :
                           'bg-red-50 text-red-600'
                         }`}>
                           {resource.status}
                         </span>
-                        <span className="text-[10px] font-medium text-gray-300 tracking-tighter">
+                        <span className="text-[9px] lg:text-[10px] font-medium text-gray-300 tracking-tighter">
                           {new Date(resource.created_at).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900 tracking-tighter">{resource.download_count}</p>
-                      <p className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Downloads</p>
+                    <div className="text-left sm:text-right w-full sm:w-auto">
+                      <p className="text-sm lg:text-base font-semibold text-gray-900 tracking-tighter">{resource.download_count}</p>
+                      <p className="text-[8px] lg:text-[9px] font-medium text-gray-400 uppercase tracking-widest">Downloads</p>
                     </div>
                   </div>
                   )
                 })
               ) : (
-                <div className="p-20 text-center">
-                  <p className="text-gray-300 font-medium uppercase text-xs">Nenhum arquivo enviado</p>
+                <div className="p-12 lg:p-20 text-center">
+                  <p className="text-gray-300 font-medium uppercase text-[10px] lg:text-xs">Nenhum arquivo enviado</p>
                 </div>
               )}
             </div>
@@ -385,11 +385,11 @@ export default function CreatorDashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <Card className="bg-gray-900 border-none p-8 text-white rounded-[2rem]">
-            <h3 className="font-semibold tracking-tight text-xl mb-4 text-primary-500 uppercase">Saldo Atual</h3>
-            <p className="text-4xl font-semibold tracking-tighter mb-2">R$ 0,00</p>
-            <p className="text-gray-500 text-xs font-medium uppercase tracking-widest mb-8">Disponível para saque em breve</p>
-            <button className="w-full py-4 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl font-semibold uppercase text-xs tracking-widest transition-all">
+          <Card className="bg-gray-900 border-none p-6 lg:p-8 text-white rounded-2xl lg:rounded-[2rem]">
+            <h3 className="font-semibold tracking-tight text-lg lg:text-xl mb-3 lg:mb-4 text-primary-500 uppercase">Saldo Atual</h3>
+            <p className="text-3xl lg:text-4xl font-semibold tracking-tighter mb-2">R$ 0,00</p>
+            <p className="text-gray-500 text-[10px] lg:text-xs font-medium uppercase tracking-widest mb-6 lg:mb-8">Disponível para saque em breve</p>
+            <button className="w-full py-3 lg:py-4 bg-primary-500 hover:bg-primary-600 text-white rounded-xl lg:rounded-2xl font-semibold uppercase text-[10px] lg:text-xs tracking-widest transition-all">
               Configurar Saques
             </button>
           </Card>
@@ -408,13 +408,13 @@ function CreatorStatCard({ title, value, icon: Icon, color }: any) {
     purple: 'bg-purple-50 text-purple-600',
   }
   return (
-    <Card className="border-none flex items-center space-x-4 p-6 hover:translate-y-[-4px] transition-all">
-      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${colors[color]}`}>
-        <Icon className="h-6 w-6" />
+    <Card className="border-none flex items-center space-x-2 lg:space-x-4 p-3 lg:p-6 hover:translate-y-[-2px] lg:hover:translate-y-[-4px] transition-all">
+      <div className={`h-8 w-8 lg:h-12 lg:w-12 rounded-xl lg:rounded-2xl flex items-center justify-center flex-shrink-0 ${colors[color]}`}>
+        <Icon className="h-4 w-4 lg:h-6 lg:w-6" />
       </div>
-      <div>
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{title}</p>
-        <p className="text-2xl font-semibold text-gray-900 tracking-tighter leading-none mt-1">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] lg:text-[10px] font-semibold text-gray-400 uppercase tracking-widest truncate">{title}</p>
+        <p className="text-lg lg:text-2xl font-semibold text-gray-900 tracking-tighter leading-none mt-0.5 lg:mt-1">{value}</p>
       </div>
     </Card>
   )

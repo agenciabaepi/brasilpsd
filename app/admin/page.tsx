@@ -215,14 +215,14 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6 lg:space-y-10">
       <div className="flex flex-col space-y-2">
-        <h1 className="text-4xl font-semibold text-gray-900 tracking-tight">Painel Administrativo</h1>
-        <p className="text-gray-500 font-medium">Bem-vindo à central de gestão do BrasilPSD.</p>
+        <h1 className="text-2xl lg:text-4xl font-semibold text-gray-900 tracking-tight">Painel Administrativo</h1>
+        <p className="text-sm lg:text-base text-gray-500 font-medium">Bem-vindo à central de gestão do BrasilPSD.</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 lg:gap-6">
         <StatCard title="Total de Usuários" value={stats.totalUsers} icon={Users} color="blue" />
         <StatCard title="Criadores" value={stats.totalCreators} icon={Users} color="purple" />
         <StatCard title="Total de Recursos" value={stats.totalResources} icon={FileCheck} color="green" />
@@ -231,51 +231,51 @@ export default function AdminDashboardPage() {
         <StatCard title="Total Downloads" value={stats.totalDownloads} icon={TrendingUp} color="primary" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8">
         {/* Pending Resources */}
         <div className="lg:col-span-2">
           <Card className="border-none overflow-hidden p-0">
-            <div className="bg-white px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800 tracking-tight text-sm">
+            <div className="bg-white px-4 lg:px-6 py-4 lg:py-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 tracking-tight text-xs lg:text-sm">
                 Recursos Aguardando Aprovação
               </h2>
-              <span className="bg-orange-100 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded-md uppercase">
+              <span className="bg-orange-100 text-orange-600 text-[9px] lg:text-[10px] font-semibold px-2 py-1 rounded-md uppercase">
                 {pendingResources.length} Pendentes
               </span>
             </div>
             <div className="divide-y divide-gray-50">
               {pendingResources.length > 0 ? (
                 pendingResources.map((resource) => (
-                  <div key={resource.id} className="p-6 flex items-center space-x-4 hover:bg-gray-50 transition-colors">
-                    <div className="h-16 w-16 rounded-xl bg-gray-100 border border-gray-200 flex-shrink-0 overflow-hidden">
+                  <div key={resource.id} className="p-4 lg:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 hover:bg-gray-50 transition-colors">
+                    <div className="h-14 w-14 lg:h-16 lg:w-16 rounded-xl bg-gray-100 border border-gray-200 flex-shrink-0 overflow-hidden">
                       {resource.thumbnail_url ? (
                         <img src={getS3Url(resource.thumbnail_url)} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center text-gray-400">
-                          <FileCheck className="h-6 w-6" />
+                          <FileCheck className="h-5 w-5 lg:h-6 lg:w-6" />
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-gray-900 truncate tracking-tight">
+                      <h3 className="text-xs lg:text-sm font-semibold text-gray-900 truncate tracking-tight">
                         {resource.title}
                       </h3>
-                      <div className="flex items-center space-x-3 mt-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
-                        <span>{(resource as any).creator?.full_name}</span>
-                        <span className="h-1 w-1 rounded-full bg-gray-300" />
-                        <span>{resource.resource_type}</span>
+                      <div className="flex items-center space-x-2 lg:space-x-3 mt-1 text-[10px] lg:text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
+                        <span className="truncate">{(resource as any).creator?.full_name}</span>
+                        <span className="h-1 w-1 rounded-full bg-gray-300 flex-shrink-0" />
+                        <span className="truncate">{resource.resource_type}</span>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
                       <button 
                         onClick={() => handleApprove(resource.id)}
-                        className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-[10px] font-semibold rounded-lg transition-all uppercase"
+                        className="flex-1 sm:flex-initial px-3 lg:px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-[9px] lg:text-[10px] font-semibold rounded-lg transition-all uppercase"
                       >
                         Aprovar
                       </button>
                       <button 
                         onClick={() => handleReject(resource.id, '')}
-                        className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-500 text-[10px] font-semibold rounded-lg transition-all uppercase"
+                        className="flex-1 sm:flex-initial px-3 lg:px-4 py-2 bg-red-50 hover:bg-red-100 text-red-500 text-[9px] lg:text-[10px] font-semibold rounded-lg transition-all uppercase"
                       >
                         Rejeitar
                       </button>
@@ -283,7 +283,7 @@ export default function AdminDashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="p-10 text-center text-gray-400 font-semibold text-xs tracking-widest uppercase">
+                <div className="p-8 lg:p-10 text-center text-gray-400 font-semibold text-[10px] lg:text-xs tracking-widest uppercase">
                   Tudo limpo por aqui!
                 </div>
               )}
@@ -293,10 +293,10 @@ export default function AdminDashboardPage() {
 
         {/* Quick Links */}
         <div className="space-y-6">
-          <Card className="bg-primary-500 border-none p-8 text-white">
-            <h3 className="font-semibold text-xl mb-2 uppercase">Acesso Rápido</h3>
-            <p className="text-primary-100 text-sm font-medium mb-6">Acesse as ferramentas de gestão do sistema.</p>
-            <div className="space-y-3">
+          <Card className="bg-primary-500 border-none p-6 lg:p-8 text-white">
+            <h3 className="font-semibold text-lg lg:text-xl mb-2 uppercase">Acesso Rápido</h3>
+            <p className="text-primary-100 text-xs lg:text-sm font-medium mb-4 lg:mb-6">Acesse as ferramentas de gestão do sistema.</p>
+            <div className="space-y-2 lg:space-y-3">
               <QuickLink href="/admin/users" title="Gestão de Usuários" />
               <QuickLink href="/admin/resources" title="Biblioteca de Arquivos" />
               <QuickLink href="/admin/analytics" title="Relatórios de Performance" />
@@ -317,13 +317,13 @@ function StatCard({ title, value, icon: Icon, color }: any) {
     primary: 'bg-primary-50 text-primary-600',
   }
   return (
-    <Card className="border-none flex items-center space-x-4 p-6">
-      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${colors[color]}`}>
-        <Icon className="h-6 w-6" />
+    <Card className="border-none flex items-center space-x-2 lg:space-x-4 p-3 lg:p-6">
+      <div className={`h-8 w-8 lg:h-12 lg:w-12 rounded-xl lg:rounded-2xl flex items-center justify-center flex-shrink-0 ${colors[color]}`}>
+        <Icon className="h-4 w-4 lg:h-6 lg:w-6" />
       </div>
-      <div>
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{title}</p>
-        <p className="text-2xl font-semibold text-gray-900 tracking-tighter leading-none mt-1">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] lg:text-[10px] font-semibold text-gray-400 uppercase tracking-widest truncate">{title}</p>
+        <p className="text-lg lg:text-2xl font-semibold text-gray-900 tracking-tighter leading-none mt-0.5 lg:mt-1">{value}</p>
       </div>
     </Card>
   )
@@ -333,10 +333,10 @@ function QuickLink({ href, title }: { href: string, title: string }) {
   return (
     <Link 
       href={href} 
-      className="flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10 group"
+      className="flex items-center justify-between p-3 lg:p-4 bg-white/10 hover:bg-white/20 rounded-xl transition-all border border-white/10 group"
     >
-      <span className="text-xs font-semibold uppercase tracking-tight">{title}</span>
-      <TrendingUp className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-all" />
+      <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-tight">{title}</span>
+      <TrendingUp className="h-3 w-3 lg:h-4 lg:w-4 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0" />
     </Link>
   )
 }

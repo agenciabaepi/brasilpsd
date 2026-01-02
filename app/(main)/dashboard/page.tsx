@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard, Sparkles, RefreshCw, Info, FileText, Video, Image as ImageIcon, Music, FileImage, Package } from 'lucide-react'
+import { Upload, User, Save, LogOut, CreditCard, Download, Heart, Users, Gift, MessageCircle, Mail, ChevronDown, ChevronUp, LayoutDashboard, Sparkles, RefreshCw, Info, FileText, Video, Image as ImageIcon, Music, FileImage, Package, Menu, X } from 'lucide-react'
 import Link from 'next/link'
 import type { Profile, Download as DownloadType, Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
@@ -71,6 +71,7 @@ export default function DashboardPage() {
     remaining: number
     plan: string
   } | null>(null)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   
   const TRANSACTIONS_LIMIT = 5
   const SUBSCRIPTIONS_LIMIT = 3
@@ -96,6 +97,23 @@ export default function DashboardPage() {
       loadDownloadStatus()
     }
   }, [activeSection, user])
+
+  // Fechar menu mobile ao mudar de seção
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [activeSection])
+
+  // Prevenir scroll do body quando menu mobile está aberto
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isMobileMenuOpen])
 
   // Função para gerar ID de licença único baseado no download
   function generateLicenseId(downloadId: string, downloadedAt: string): string {
@@ -516,11 +534,36 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] py-8">
+    <div className="min-h-screen bg-[#F8F9FA] py-4 lg:py-8">
       <div className="max-w-[95%] xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex overflow-hidden">
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="lg:hidden fixed top-4 left-4 z-40 p-2 bg-white rounded-lg shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          aria-label="Toggle menu"
+        >
+          {isMobileMenuOpen ? (
+            <X className="h-6 w-6 text-gray-700" />
+          ) : (
+            <Menu className="h-6 w-6 text-gray-700" />
+          )}
+        </button>
+
+        {/* Mobile Overlay */}
+        {isMobileMenuOpen && (
+          <div
+            className="lg:hidden fixed inset-0 bg-black/50 z-30"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col lg:flex-row overflow-hidden">
           {/* Sidebar dentro do container */}
-          <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+          <aside className={cn(
+            "w-full lg:w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 transition-transform duration-300 lg:translate-x-0",
+            "fixed lg:relative inset-y-0 left-0 z-30 lg:z-auto",
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          )}>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 px-4">
             Acesso rápido
@@ -529,6 +572,7 @@ export default function DashboardPage() {
             const isActive = activeSection === item.id
             // Redirecionar para páginas específicas quando necessário
             const handleClick = () => {
+              setIsMobileMenuOpen(false)
               if (item.id === 'favorites') {
                 router.push('/favorites')
               } else if (item.id === 'saved') {
@@ -590,13 +634,13 @@ export default function DashboardPage() {
       </aside>
 
           {/* Conteúdo principal */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-10">
+          <div className="flex-1 overflow-y-auto w-full">
+            <div className="p-4 lg:p-10">
               {/* Header do Usuário - Sempre visível */}
-              <Card className="mb-8 p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative h-16 w-16 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100">
+              <Card className="mb-6 lg:mb-8 p-4 lg:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center space-x-3 lg:space-x-4">
+                    <div className="relative h-12 w-12 lg:h-16 lg:w-16 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100 flex-shrink-0">
                       {user.avatar_url ? (
                         <Image
                           src={getS3Url(user.avatar_url)}
@@ -610,12 +654,12 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center space-x-3">
-                        <h3 className="text-lg font-semibold text-gray-900">{user.full_name || 'Usuário'}</h3>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+                        <h3 className="text-base lg:text-lg font-semibold text-gray-900 truncate">{user.full_name || 'Usuário'}</h3>
                         {user.is_premium && subscription && (
                           <span className={cn(
-                            "text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider",
+                            "text-[10px] lg:text-xs font-bold px-2 lg:px-3 py-1 rounded-full uppercase tracking-wider flex-shrink-0",
                             subscription.tier === 'lite' ? "bg-blue-100 text-blue-700" :
                             subscription.tier === 'pro' ? "bg-primary-100 text-primary-700" :
                             "bg-purple-100 text-purple-700"
@@ -624,44 +668,44 @@ export default function DashboardPage() {
                           </span>
                         )}
                         {user.is_creator && (
-                          <span className="text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-purple-100 text-purple-700">
+                          <span className="text-[10px] lg:text-xs font-bold px-2 lg:px-3 py-1 rounded-full uppercase tracking-wider bg-purple-100 text-purple-700 flex-shrink-0">
                             Criador
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500">{user.email}</p>
+                      <p className="text-xs lg:text-sm text-gray-500 truncate">{user.email}</p>
                       {subscription && (
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-[10px] lg:text-xs text-gray-400 mt-1">
                           Válido até {format(new Date(subscription.current_period_end), 'dd/MM/yyyy', { locale: ptBR })}
                         </p>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                     {user.is_creator ? (
                       <Button
                         onClick={() => router.push('/creator')}
-                        className="flex items-center space-x-2 bg-primary-500 hover:bg-primary-600 text-white"
+                        className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-primary-500 hover:bg-primary-600 text-white text-xs lg:text-sm"
                       >
-                        <LayoutDashboard className="h-4 w-4" />
+                        <LayoutDashboard className="h-3 w-3 lg:h-4 lg:w-4" />
                         <span>Painel do Criador</span>
                       </Button>
                     ) : (
-                      <Link href="/creator/apply">
+                      <Link href="/creator/apply" className="w-full sm:w-auto">
                         <Button
                           variant="primary"
-                          className="flex items-center space-x-2"
+                          className="w-full sm:w-auto flex items-center justify-center space-x-2 text-xs lg:text-sm"
                         >
-                          <Sparkles className="h-4 w-4" />
+                          <Sparkles className="h-3 w-3 lg:h-4 lg:w-4" />
                           <span>Torne-se criador</span>
                         </Button>
                       </Link>
                     )}
                     <button
                       onClick={handleLogout}
-                      className="flex items-center space-x-2 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+                      className="w-full sm:w-auto flex items-center justify-center space-x-2 text-xs lg:text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors px-3 py-2 rounded-lg hover:bg-gray-50"
                     >
-                      <LogOut className="h-4 w-4" />
+                      <LogOut className="h-3 w-3 lg:h-4 lg:w-4" />
                       <span>Logout</span>
                     </button>
                   </div>
@@ -671,21 +715,21 @@ export default function DashboardPage() {
               {/* Conteúdo dinâmico baseado na seção ativa */}
               {activeSection === 'account' && (
                 <>
-                  <div className="mb-8">
-                    <h1 className="text-4xl font-semibold text-gray-900 tracking-tight mb-2">
+                  <div className="mb-6 lg:mb-8">
+                    <h1 className="text-2xl lg:text-4xl font-semibold text-gray-900 tracking-tight mb-2">
                       Configurações de conta
                     </h1>
-                    <p className="text-gray-500 font-medium">
+                    <p className="text-sm lg:text-base text-gray-500 font-medium">
                       Atualize informações pessoais e revise seus contratos de serviço.
                     </p>
                   </div>
 
                   <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
         {/* Informações Pessoais */}
-        <Card className="mb-8 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Informações pessoais</h2>
+        <Card className="mb-6 lg:mb-8 p-4 lg:p-8">
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-4 lg:mb-6">Informações pessoais</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
             <div>
               <Input
                 label="Nome completo/Razão Social"
@@ -768,10 +812,10 @@ export default function DashboardPage() {
         </Card>
 
         {/* Endereço */}
-        <Card className="mb-8 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Endereço</h2>
+        <Card className="mb-6 lg:mb-8 p-4 lg:p-8">
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-4 lg:mb-6">Endereço</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
             <div>
               <Input
                 label="CEP"
@@ -838,10 +882,10 @@ export default function DashboardPage() {
         </Card>
 
         {/* Alterar Senha */}
-        <Card className="mb-8 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Alterar senha</h2>
+        <Card className="mb-6 lg:mb-8 p-4 lg:p-8">
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900 mb-4 lg:mb-6">Alterar senha</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
             <div>
               <Input
                 label="Nova senha"
@@ -874,7 +918,7 @@ export default function DashboardPage() {
             onClick={handleSave}
             disabled={saving}
             isLoading={saving}
-            className="px-8 h-12"
+            className="w-full sm:w-auto px-6 lg:px-8 h-11 lg:h-12 text-sm lg:text-base"
           >
             <Save className="mr-2 h-4 w-4" />
             Salvar alterações
@@ -886,22 +930,22 @@ export default function DashboardPage() {
 
               {activeSection === 'subscriptions' && (
                 <div>
-                  <div className="mb-8">
-                    <h1 className="text-4xl font-semibold text-gray-900 tracking-tight mb-2">
+                  <div className="mb-6 lg:mb-8">
+                    <h1 className="text-2xl lg:text-4xl font-semibold text-gray-900 tracking-tight mb-2">
                       Assinaturas
                     </h1>
-                    <p className="text-gray-500 font-medium">
+                    <p className="text-sm lg:text-base text-gray-500 font-medium">
                       Gerencie sua assinatura e visualize o histórico de pagamentos.
                     </p>
                   </div>
 
                   {subscriptionDetails ? (
-                    <div className="space-y-6">
+                    <div className="space-y-4 lg:space-y-6">
                       {/* Card Principal da Assinatura */}
-                      <Card className="p-8">
-                        <div className="flex items-start justify-between mb-6">
-                          <div>
-                            <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+                      <Card className="p-4 lg:p-8">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 lg:mb-6">
+                          <div className="flex-1">
+                            <h2 className="text-xl lg:text-2xl font-semibold text-gray-900 mb-2">
                               Assinatura {subscriptionDetails.tier.toUpperCase()}
                             </h2>
                             <span className={cn(
@@ -919,7 +963,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
                           <div>
                             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Contratado em</p>
                             <p className="text-base font-semibold text-gray-900">
@@ -987,13 +1031,13 @@ export default function DashboardPage() {
 
                       {/* Histórico de Transações */}
                       {transactions.length > 0 && (
-                        <Card className="p-8">
-                          <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-semibold text-gray-900">Histórico de Pagamentos</h3>
+                        <Card className="p-4 lg:p-8">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 lg:mb-6">
+                            <h3 className="text-lg lg:text-xl font-semibold text-gray-900">Histórico de Pagamentos</h3>
                             <button
                               onClick={refreshTransactionsStatus}
                               disabled={refreshingTransactions}
-                              className="text-sm font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                              className="text-xs lg:text-sm font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 self-start sm:self-auto"
                             >
                               {refreshingTransactions ? (
                                 <>
@@ -1005,16 +1049,16 @@ export default function DashboardPage() {
                               )}
                             </button>
                           </div>
-                          <div className="space-y-4">
+                          <div className="space-y-3 lg:space-y-4">
                             {transactions.map((transaction) => (
-                              <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-3 mb-1">
-                                    <p className="text-sm font-semibold text-gray-900">
+                              <div key={transaction.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 lg:p-4 bg-gray-50 rounded-lg border border-gray-100">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 lg:gap-3 mb-1">
+                                    <p className="text-xs lg:text-sm font-semibold text-gray-900">
                                       {format(new Date(transaction.created_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
                                     </p>
                                     <span className={cn(
-                                      "px-2 py-1 rounded text-xs font-bold uppercase",
+                                      "px-2 py-1 rounded text-[10px] lg:text-xs font-bold uppercase flex-shrink-0",
                                       transaction.status === 'paid' ? "bg-primary-100 text-primary-700" :
                                       transaction.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
                                       transaction.status === 'overdue' ? "bg-orange-100 text-orange-700" :
@@ -1027,14 +1071,14 @@ export default function DashboardPage() {
                                        transaction.status}
                                     </span>
                                   </div>
-                                  <p className="text-xs text-gray-500">
+                                  <p className="text-[10px] lg:text-xs text-gray-500 break-words">
                                     {transaction.payment_method?.replace('asaas_', '').toUpperCase()} • 
                                     Plano {transaction.subscription_tier?.toUpperCase()} • 
                                     R$ {Number(transaction.amount_brute).toFixed(2).replace('.', ',')}
                                   </p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-lg font-bold text-gray-900">
+                                <div className="text-left sm:text-right flex-shrink-0">
+                                  <p className="text-base lg:text-lg font-bold text-gray-900">
                                     R$ {Number(transaction.amount_brute).toFixed(2).replace('.', ',')}
                                   </p>
                                 </div>
@@ -1045,11 +1089,11 @@ export default function DashboardPage() {
                       )}
                     </div>
                   ) : (
-                    <Card className="p-8 text-center mb-8">
-                      <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhuma assinatura ativa</h3>
-                      <p className="text-gray-500 mb-6">Você ainda não possui uma assinatura premium.</p>
-                      <Button onClick={() => router.push('/premium')}>
+                    <Card className="p-6 lg:p-8 text-center mb-6 lg:mb-8">
+                      <CreditCard className="h-10 w-10 lg:h-12 lg:w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-2">Nenhuma assinatura ativa</h3>
+                      <p className="text-sm lg:text-base text-gray-500 mb-4 lg:mb-6">Você ainda não possui uma assinatura premium.</p>
+                      <Button onClick={() => router.push('/premium')} className="w-full sm:w-auto">
                         Assinar Premium
                       </Button>
                     </Card>
@@ -1057,15 +1101,15 @@ export default function DashboardPage() {
 
                   {/* Todas as Assinaturas (Incluindo Expiradas e Canceladas) */}
                   {allSubscriptions.length > 0 && (
-                    <div className="space-y-6 mt-8">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-semibold text-gray-900">Histórico de Assinaturas</h2>
-                        <span className="text-sm text-gray-500">
+                    <div className="space-y-4 lg:space-y-6 mt-6 lg:mt-8">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <h2 className="text-xl lg:text-2xl font-semibold text-gray-900">Histórico de Assinaturas</h2>
+                        <span className="text-xs lg:text-sm text-gray-500">
                           {allSubscriptions.length} {allSubscriptions.length === 1 ? 'assinatura' : 'assinaturas'}
                         </span>
                       </div>
 
-                      <div className="grid gap-4">
+                      <div className="grid gap-3 lg:gap-4">
                         {(showAllSubscriptions ? allSubscriptions : allSubscriptions.slice(0, SUBSCRIPTIONS_LIMIT)).map((sub) => {
                           const isActive = sub.status === 'active'
                           const isExpired = sub.status === 'expired'
@@ -1074,20 +1118,20 @@ export default function DashboardPage() {
                           
                           return (
                             <Card key={sub.id} className={cn(
-                              "p-6 border-2 transition-all",
+                              "p-4 lg:p-6 border-2 transition-all",
                               isActive ? "border-primary-200 bg-primary-50/30" :
                               isExpired ? "border-red-200 bg-red-50/30" :
                               isCanceled ? "border-gray-200 bg-gray-50/30" :
                               "border-yellow-200 bg-yellow-50/30"
                             )}>
-                              <div className="flex items-start justify-between mb-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-3 mb-2">
-                                    <h3 className="text-lg font-semibold text-gray-900">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 lg:mb-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2 lg:gap-3 mb-2">
+                                    <h3 className="text-base lg:text-lg font-semibold text-gray-900">
                                       Premium {sub.tier.toUpperCase()}
                                     </h3>
                                     <span className={cn(
-                                      "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
+                                      "px-2 lg:px-3 py-1 rounded-full text-[10px] lg:text-xs font-bold uppercase tracking-wider flex-shrink-0",
                                       isActive ? "bg-primary-100 text-primary-700" :
                                       isExpired ? "bg-red-100 text-red-700" :
                                       isCanceled ? "bg-gray-100 text-gray-700" :
@@ -1099,21 +1143,21 @@ export default function DashboardPage() {
                                        'Suspensa'}
                                     </span>
                                   </div>
-                                  <p className="text-sm text-gray-500">
+                                  <p className="text-xs lg:text-sm text-gray-500">
                                     Criada em {format(new Date(sub.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                                   </p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-lg font-bold text-gray-900">
+                                <div className="text-left sm:text-right flex-shrink-0">
+                                  <p className="text-base lg:text-lg font-bold text-gray-900">
                                     R$ {Number(sub.amount).toFixed(2).replace('.', ',')}
                                   </p>
-                                  <p className="text-xs text-gray-500">
+                                  <p className="text-[10px] lg:text-xs text-gray-500">
                                     / {sub.billing_cycle === 'monthly' ? 'mês' : 'ano'}
                                   </p>
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4 pt-3 lg:pt-4 border-t border-gray-200">
                                 <div>
                                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Período</p>
                                   <p className="text-sm font-semibold text-gray-900">
@@ -1183,18 +1227,18 @@ export default function DashboardPage() {
 
                   {/* Histórico Completo de Pagamentos */}
                   {transactions.length > 0 && (
-                    <Card className="p-8 mt-8">
-                      <div className="flex items-center justify-between mb-6">
+                    <Card className="p-4 lg:p-8 mt-6 lg:mt-8">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 lg:mb-6">
                         <div>
-                          <h3 className="text-2xl font-semibold text-gray-900">Histórico Completo de Pagamentos</h3>
-                          <p className="text-sm text-gray-500 mt-1">
+                          <h3 className="text-xl lg:text-2xl font-semibold text-gray-900">Histórico Completo de Pagamentos</h3>
+                          <p className="text-xs lg:text-sm text-gray-500 mt-1">
                             {transactions.length} {transactions.length === 1 ? 'pagamento' : 'pagamentos'} encontrados
                           </p>
                         </div>
                         <button
                           onClick={refreshTransactionsStatus}
                           disabled={refreshingTransactions}
-                          className="text-sm font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                          className="text-xs lg:text-sm font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 self-start sm:self-auto"
                         >
                           {refreshingTransactions ? (
                             <>
@@ -1210,14 +1254,14 @@ export default function DashboardPage() {
                       </div>
                       <div className="space-y-3">
                         {(showAllTransactions ? transactions : transactions.slice(0, TRANSACTIONS_LIMIT)).map((transaction) => (
-                          <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-3 mb-2">
-                                <p className="text-sm font-semibold text-gray-900">
+                          <div key={transaction.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 lg:p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 lg:gap-3 mb-2">
+                                <p className="text-xs lg:text-sm font-semibold text-gray-900">
                                   {format(new Date(transaction.created_at), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}
                                 </p>
                                 <span className={cn(
-                                  "px-2 py-1 rounded text-xs font-bold uppercase",
+                                  "px-2 py-1 rounded text-[10px] lg:text-xs font-bold uppercase flex-shrink-0",
                                   transaction.status === 'paid' ? "bg-primary-100 text-primary-700" :
                                   transaction.status === 'pending' ? "bg-yellow-100 text-yellow-700" :
                                   transaction.status === 'overdue' ? "bg-orange-100 text-orange-700" :
@@ -1230,7 +1274,7 @@ export default function DashboardPage() {
                                    transaction.status}
                                 </span>
                               </div>
-                              <div className="flex items-center space-x-4 text-xs text-gray-500">
+                              <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-[10px] lg:text-xs text-gray-500">
                                 <span>
                                   {transaction.payment_method?.replace('asaas_', '').toUpperCase() || 'N/A'}
                                 </span>
@@ -1248,17 +1292,17 @@ export default function DashboardPage() {
                                 )}
                               </div>
                               {transaction.id && (
-                                <p className="text-xs text-gray-400 mt-1 font-mono">
+                                <p className="text-[10px] lg:text-xs text-gray-400 mt-1 font-mono break-all">
                                   ID: {transaction.id}
                                 </p>
                               )}
                             </div>
-                            <div className="text-right ml-4">
-                              <p className="text-lg font-bold text-gray-900">
+                            <div className="text-left sm:text-right ml-0 sm:ml-4 flex-shrink-0">
+                              <p className="text-base lg:text-lg font-bold text-gray-900">
                                 R$ {Number(transaction.amount_brute).toFixed(2).replace('.', ',')}
                               </p>
                               {transaction.amount_liquid && transaction.amount_liquid !== transaction.amount_brute && (
-                                <p className="text-xs text-gray-500">
+                                <p className="text-[10px] lg:text-xs text-gray-500">
                                   Líquido: R$ {Number(transaction.amount_liquid).toFixed(2).replace('.', ',')}
                                 </p>
                               )}
@@ -1292,11 +1336,11 @@ export default function DashboardPage() {
 
                   {/* Mensagem quando não há histórico */}
                   {transactions.length === 0 && allSubscriptions.length === 0 && !subscriptionDetails && (
-                    <Card className="p-8 text-center">
-                      <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum histórico encontrado</h3>
-                      <p className="text-gray-500 mb-6">Você ainda não possui assinaturas ou pagamentos registrados.</p>
-                      <Button onClick={() => router.push('/premium')}>
+                    <Card className="p-6 lg:p-8 text-center">
+                      <CreditCard className="h-10 w-10 lg:h-12 lg:w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-2">Nenhum histórico encontrado</h3>
+                      <p className="text-sm lg:text-base text-gray-500 mb-4 lg:mb-6">Você ainda não possui assinaturas ou pagamentos registrados.</p>
+                      <Button onClick={() => router.push('/premium')} className="w-full sm:w-auto">
                         Assinar Premium
                       </Button>
                     </Card>
@@ -1308,10 +1352,10 @@ export default function DashboardPage() {
               {activeSection === 'downloads' && (
                 <div>
                   {/* Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 lg:mb-6">
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900 mb-2">Histórico de downloads</h2>
-                      <p className="text-gray-600">
+                      <h2 className="text-xl lg:text-2xl font-bold text-gray-900 mb-2">Histórico de downloads</h2>
+                      <p className="text-sm lg:text-base text-gray-600">
                         Veja o histórico de downloads e acesse seus recursos gráficos anteriores.
                       </p>
                     </div>
@@ -1319,16 +1363,16 @@ export default function DashboardPage() {
                       onClick={handleRefreshDownloads}
                       disabled={refreshingDownloads}
                       variant="secondary"
-                      className="flex items-center gap-2"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs lg:text-sm"
                     >
-                      <RefreshCw className={cn("h-4 w-4", refreshingDownloads && "animate-spin")} />
+                      <RefreshCw className={cn("h-3 w-3 lg:h-4 lg:w-4", refreshingDownloads && "animate-spin")} />
                       Atualizar
                     </Button>
                   </div>
 
                   {/* Barra de Estatísticas */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-                    <div className="flex flex-wrap items-center gap-6 text-sm">
+                  <div className="bg-white border border-gray-200 rounded-lg p-3 lg:p-4 mb-4 lg:mb-6">
+                    <div className="flex flex-wrap items-center gap-3 lg:gap-6 text-xs lg:text-sm">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
                           <Info className="h-4 w-4 text-purple-600" />
@@ -1356,12 +1400,12 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Banner de Informações Importantes */}
-                  <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-6">
-                    <div className="flex gap-3">
-                      <Info className="h-5 w-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                  <div className="bg-primary-50 border border-primary-200 rounded-lg p-3 lg:p-4 mb-4 lg:mb-6">
+                    <div className="flex gap-2 lg:gap-3">
+                      <Info className="h-4 w-4 lg:h-5 lg:w-5 text-primary-600 flex-shrink-0 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-primary-900 mb-1">Informação importante!</h3>
-                        <p className="text-sm text-primary-800">
+                        <h3 className="text-sm lg:text-base font-semibold text-primary-900 mb-1">Informação importante!</h3>
+                        <p className="text-xs lg:text-sm text-primary-800">
                           Se você baixar o mesmo arquivo várias vezes no mesmo dia, ele contará apenas como um download. 
                           No entanto, se você atingir o limite de downloads, não poderá baixar mais nenhum arquivo, mesmo que tenha baixado o mesmo arquivo naquele dia. 
                           Se você baixar um arquivo que já foi baixado no dia anterior, será considerado um novo download.
@@ -1372,14 +1416,92 @@ export default function DashboardPage() {
 
                   {/* Tabela de Downloads */}
                   {loadingDownloads ? (
-                    <div className="text-center py-20">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-                      <p className="mt-4 text-gray-600">Carregando downloads...</p>
+                    <div className="text-center py-12 lg:py-20">
+                      <div className="animate-spin rounded-full h-10 w-10 lg:h-12 lg:w-12 border-b-2 border-primary-600 mx-auto"></div>
+                      <p className="mt-4 text-sm lg:text-base text-gray-600">Carregando downloads...</p>
                     </div>
                   ) : downloads.filter(d => d.resource).length > 0 ? (
                     <Card className="overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
+                      <div className="overflow-x-auto -mx-4 lg:mx-0">
+                        <div className="min-w-full inline-block align-middle">
+                          {/* Mobile View - Cards */}
+                          <div className="lg:hidden space-y-3 p-4">
+                            {downloads.filter(d => d.resource).map((download) => {
+                              if (!download.resource) return null
+                              const resource = download.resource
+                              const downloadDate = new Date(download.downloaded_at)
+                              const licenseId = generateLicenseId(download.id, download.downloaded_at)
+                              const typeInfo = getResourceTypeInfo(resource.resource_type)
+                              const TypeIcon = typeInfo.icon
+
+                              return (
+                                <div key={download.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                  <div className="flex gap-3 mb-3">
+                                    <Link 
+                                      href={`/resources/${resource.id}`}
+                                      className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100"
+                                    >
+                                      {resource.thumbnail_url ? (
+                                        <img
+                                          src={resource.thumbnail_url.startsWith('http') 
+                                            ? resource.thumbnail_url 
+                                            : `/api/image/${resource.thumbnail_url}?q=75`}
+                                          alt={resource.title}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          <TypeIcon className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                      )}
+                                    </Link>
+                                    <div className="min-w-0 flex-1">
+                                      <Link 
+                                        href={`/resources/${resource.id}`}
+                                        className="block"
+                                      >
+                                        <p className="text-xs font-medium text-gray-900 truncate hover:text-primary-600 transition-colors">
+                                          {resource.title}
+                                        </p>
+                                      </Link>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">
+                                          {typeInfo.label}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2 text-xs">
+                                    <div>
+                                      <span className="text-gray-500">Licença: </span>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(licenseId)
+                                          toast.success('ID da licença copiado!')
+                                        }}
+                                        className="text-blue-600 hover:text-blue-700 font-medium"
+                                      >
+                                        {licenseId}
+                                      </button>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Data: </span>
+                                      <span className="text-gray-900">
+                                        {format(downloadDate, "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR })}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-2 h-2 rounded-full bg-primary-500"></div>
+                                      <span className="text-gray-900">Concluído</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+
+                          {/* Desktop View - Table */}
+                          <table className="hidden lg:table w-full">
                           <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1471,15 +1593,16 @@ export default function DashboardPage() {
                             })}
                           </tbody>
                         </table>
+                        </div>
                       </div>
                     </Card>
                   ) : (
-                    <Card className="p-12 text-center">
-                      <Download className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-lg text-gray-600 mb-2">Você ainda não fez nenhum download</p>
+                    <Card className="p-8 lg:p-12 text-center">
+                      <Download className="h-12 w-12 lg:h-16 lg:w-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-base lg:text-lg text-gray-600 mb-2">Você ainda não fez nenhum download</p>
                       <Link
                         href="/explore"
-                        className="text-primary-600 hover:text-primary-700 font-medium inline-block mt-2"
+                        className="text-sm lg:text-base text-primary-600 hover:text-primary-700 font-medium inline-block mt-2"
                       >
                         Explorar recursos
                       </Link>
