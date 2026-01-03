@@ -102,8 +102,18 @@ export async function detectAiGeneratedImage(buffer: Buffer): Promise<{
     // Limitar confiança máxima
     confidence = Math.min(confidence, 1.0)
 
-    // Considerar como gerada por IA se confiança >= 0.5
-    const isAiGenerated = confidence >= 0.5
+    // Considerar como gerada por IA se confiança >= 0.4 (threshold mais baixo para detectar mais imagens)
+    const isAiGenerated = confidence >= 0.4
+    
+    console.log('🔍 AI Detection details:', {
+      confidence,
+      isAiGenerated,
+      reasons,
+      width: metadata.width,
+      height: metadata.height,
+      format: metadata.format,
+      hasExif: !!exif
+    })
 
     return {
       isAiGenerated,
