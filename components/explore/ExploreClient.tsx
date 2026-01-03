@@ -215,13 +215,6 @@ function ExploreContent({
   if (isLegacyMode) {
     const displayResources = hasActiveSearch ? searchResults : (initialResources || [])
 
-    // Calcular altura dinâmica baseada na visibilidade do header
-    // Header visível: 100vh - 168px (PromotionalBar + Header)
-    // Header oculto: 100vh - 40px (apenas PromotionalBar)
-    const containerHeight = isHeaderVisible 
-      ? 'calc(100vh - 168px)' 
-      : 'calc(100vh - 40px)'
-
   return (
     <div className={cn("bg-white overflow-hidden transition-all duration-300", hasHero ? "min-h-screen" : "")} style={!hasHero ? { height: containerHeight } : undefined}>
       <div className={cn("max-w-[1600px] mx-auto flex relative", hasHero ? "min-h-[calc(100vh-64px)]" : "h-full")}>
