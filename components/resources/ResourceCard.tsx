@@ -156,11 +156,36 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
     }
   }, [])
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (useModal) {
+      e.preventDefault()
+      openResourceView(resource.id)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (useModal && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault()
+      openResourceView(resource.id)
+    }
+  }
+
+  const Component = useModal ? 'div' : Link
+  const componentProps = useModal 
+    ? { 
+        onClick: handleClick, 
+        onKeyDown: handleKeyDown,
+        role: 'button', 
+        tabIndex: 0,
+        className: "break-inside-avoid block group w-full h-full cursor-pointer"
+      }
+    : { 
+        href: `/resources/${resource.id}`, 
+        className: "break-inside-avoid block group w-full h-full"
+      }
+
   return (
-    <Link 
-      href={`/resources/${resource.id}`} 
-      className="break-inside-avoid block group w-full h-full"
-    >
+    <Component {...componentProps}>
       <div ref={cardRef} className={`relative overflow-hidden rounded-lg transition-all hover:opacity-90 transition-all duration-200 shadow-sm hover:shadow-md w-full h-full ${isVideo ? 'bg-black' : 'bg-gray-100'}`}>
         {/* Image/Video Container */}
         <div 
@@ -473,6 +498,15 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
           </div>
         </div>
       </div>
-    </Link>
+
+      {/* Ícone de visualizar (só aparece no hover e apenas para recursos que usam modal) */}
+      {useModal && (
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+          <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full shadow-lg">
+            <Eye className="h-6 w-6 text-gray-900" />
+          </div>
+        </div>
+      )}
+    </Component>
   )
 }
