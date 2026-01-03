@@ -1210,7 +1210,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   {resource.keywords.slice(0, 8).map((keyword, index) => (
                     <span 
                       key={index}
-                      className="text-xs font-semibold text-gray-600 bg-gray-50 px-2 py-1 rounded"
+                      className="text-[10px] font-semibold text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded"
                     >
                       #{keyword}
                     </span>
@@ -1224,17 +1224,17 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               <div className="flex items-center gap-2">
                 <button 
                   onClick={handleFavorite} 
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
                 >
-                  <Heart className={`h-4 w-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+                  <Heart className={`h-3.5 w-3.5 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
                   {isFavorited ? 'Curtido' : 'Curtir'}
                 </button>
-                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:text-secondary-500 hover:bg-secondary-50 rounded-lg transition-colors border border-gray-200">
-                  <Share2 className="h-4 w-4" />
+                <button className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 hover:text-secondary-500 hover:bg-secondary-50 rounded-lg transition-colors border border-gray-200">
+                  <Share2 className="h-3.5 w-3.5" />
                   Compartilhar
                 </button>
-                <button className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200">
-                  <Flag className="h-4 w-4" />
+                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200">
+                  <Flag className="h-3.5 w-3.5" />
                 </button>
                 </div>
             </div>
@@ -1243,12 +1243,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
             {resource.resource_type === 'font' && familyCount && familyCount > 1 && (
               <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-xl">
                 <div className="flex items-center gap-2">
-                  <div className="bg-primary-500 p-2 rounded-lg">
-                    <Package className="h-5 w-5 text-white" />
+                  <div className="bg-primary-500 p-1.5 rounded-lg">
+                    <Package className="h-4 w-4 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900">Família Completa</p>
-                    <p className="text-xs text-gray-600 mt-0.5">
+                    <p className="text-xs font-bold text-gray-900">Família Completa</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">
                       Esta fonte faz parte de uma família com {familyCount} variações. Baixe todas juntas!
                     </p>
                   </div>
@@ -1272,7 +1272,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               <Link href={resource.is_premium ? "/premium" : "/signup"} className="block">
                 <button
                   className={cn(
-                    "w-full h-14 rounded-xl flex items-center justify-center px-6 space-x-2 font-semibold text-sm transition-all shadow-lg",
+                    "w-full h-12 rounded-xl flex items-center justify-center px-4 space-x-2 font-semibold text-xs transition-all shadow-lg",
                     resource.is_premium 
                       ? "bg-green-600 hover:bg-green-700 text-white shadow-green-600/20" 
                       : "bg-gray-900 hover:bg-black text-white shadow-gray-900/20"
