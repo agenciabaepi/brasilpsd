@@ -87,30 +87,30 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get('user-agent') || 'unknown'
 
     // ========================================================================
-    // 3. VERIFICAR PLANO ATIVO DO USUÁRIO
+    // 3. BUSCAR PERFIL E RECURSO EM PARALELO (otimização de performance)
     // ========================================================================
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('subscription_tier, is_admin, is_creator')
-      .eq('id', user.id)
-      .single()
+    const [profileResult, resourceResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('subscription_tier, is_admin, is_creator')
+        .eq('id', user.id)
+        .single(),
+      supabase
+        .from('resources')
+        .select('id, status, creator_id, file_url, is_premium')
+        .eq('id', resourceId)
+        .single()
+    ])
 
-    if (profileError || !profile) {
-      console.error('❌ Download failed: Profile not found', { userId: user.id, error: profileError })
-      return NextResponse.json(
-        { error: 'Perfil do usuário não encontrado' },
-        { status: 404 }
-      )
-    }
+    const { data: profile, error: profileError } = profileResult
+    const { data: resource, error: resourceError } = resourceResult
+
 
     // Verificar assinatura ativa (status='active' E current_period_end >= hoje)
     // Usar data no timezone do Brasil para comparação correta
     const now = new Date()
     const todayBR = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
     const today = todayBR.toISOString().split('T')[0] // Formato: YYYY-MM-DD
-    
-    console.log('🔍 Verificando assinatura para usuário:', user.id)
-    console.log('📅 Data de hoje (BR):', today, 'Timestamp:', now.toISOString())
     
     // Buscar TODAS as assinaturas ativas do usuário (sem filtro de data)
     const { data: allActiveSubscriptions, error: subError } = await supabase
@@ -126,13 +126,6 @@ export async function POST(request: NextRequest) {
         { error: 'Erro ao verificar assinatura', message: subError.message },
         { status: 500 }
       )
-    }
-
-    console.log('📋 Assinaturas encontradas:', allActiveSubscriptions?.length || 0)
-    if (allActiveSubscriptions && allActiveSubscriptions.length > 0) {
-      allActiveSubscriptions.forEach(sub => {
-        console.log(`  - Assinatura ${sub.id}: period_end="${sub.current_period_end}" (tipo: ${typeof sub.current_period_end})`)
-      })
     }
 
     // Verificar se alguma assinatura está expirada
@@ -170,11 +163,6 @@ export async function POST(request: NextRequest) {
         // Comparação de strings no formato YYYY-MM-DD (funciona corretamente)
         // Exemplo: "2025-12-22" < "2025-12-25" = true (expirada)
         const isExpired = periodEndDate < today
-        
-        // Log detalhado para debug
-        console.log(`  📊 Comparação: "${periodEndDate}" < "${today}" = ${isExpired}`)
-        
-        console.log(`  - Assinatura ${sub.id}: period_end="${periodEndDate}", hoje="${today}", expirada=${isExpired}`)
         
         if (isExpired) {
           expiredSubscription = sub
@@ -234,27 +222,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
-    // 4. VERIFICAR SE RECURSO EXISTE E ESTÁ APROVADO (ANTES DE VERIFICAR ASSINATURA)
+    // 4. VERIFICAR SE RECURSO EXISTE E ESTÁ APROVADO
     // ========================================================================
-    const { data: resource, error: resourceError } = await supabase
-      .from('resources')
-      .select('id, status, creator_id, file_url, is_premium')
-      .eq('id', resourceId)
-      .single()
-
-    if (resourceError || !resource) {
-      console.error('❌ Download failed: Resource not found', { 
-        resourceId, 
-        error: resourceError 
-      })
-      return NextResponse.json(
-        { 
-          error: 'Recurso não encontrado',
-          message: 'O recurso que você está tentando baixar não existe ou foi removido.'
-        },
-        { status: 404 }
-      )
-    }
+    // Recurso já foi buscado em paralelo acima, apenas verificar se está aprovado
 
     // Verificar se recurso está aprovado OU se é o criador/admin
     const isCreator = resource.creator_id === user.id
@@ -310,15 +280,34 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
-    // 6. VERIFICAR LIMITE DE DOWNLOADS (usando função helper que conta corretamente)
+    // 6. VERIFICAR LIMITE E GERAR URL ASSINADA EM PARALELO (otimização máxima)
     // ========================================================================
-    console.log('🔍 Checking download limit for user:', user.id)
-    
-    // IMPORTANTE: Usar a função helper getDownloadStatus que conta diretamente
-    // ao invés da RPC que não está funcionando corretamente
-    const { getDownloadStatus } = await import('@/lib/utils/downloads')
-    const downloadStatusData = await getDownloadStatus(user.id)
-    
+    // Fazer verificação de limite e geração de URL em paralelo para acelerar
+    const [downloadStatusCheck, signedUrlPromise] = await Promise.allSettled([
+      // Verificar limite de downloads
+      (async () => {
+        const { getDownloadStatus } = await import('@/lib/utils/downloads')
+        return await getDownloadStatus(user.id)
+      })(),
+      // Gerar URL assinada em paralelo (não depende do limite)
+      getSignedDownloadUrl(key, 3600) // 1 hora de validade
+    ])
+
+    // Processar verificação de limite
+    let downloadStatusData: any = null
+    if (downloadStatusCheck.status === 'fulfilled') {
+      downloadStatusData = downloadStatusCheck.value
+    } else {
+      console.error('❌ Download failed: Could not get download status', { userId: user.id, error: downloadStatusCheck.reason })
+      return NextResponse.json(
+        { 
+          error: 'Erro ao verificar limite de downloads',
+          message: 'Não foi possível verificar seu limite de downloads. Por favor, tente novamente em alguns instantes.'
+        },
+        { status: 500 }
+      )
+    }
+
     if (!downloadStatusData) {
       console.error('❌ Download failed: Could not get download status', { userId: user.id })
       return NextResponse.json(
@@ -329,14 +318,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-
-    console.log('✅ Download limit check result:', {
-      userId: user.id,
-      current: downloadStatusData.current,
-      limit: downloadStatusData.limit,
-      remaining: downloadStatusData.remaining,
-      allowed: downloadStatusData.allowed
-    })
 
     // BLOQUEAR SE O LIMITE FOI ATINGIDO - CRÍTICO!
     if (!downloadStatusData.allowed) {
@@ -370,64 +351,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ========================================================================
-    // 7. REGISTRAR DOWNLOAD (com validação e transação atômica)
-    // ========================================================================
+    // Processar URL assinada (já gerada em paralelo)
+    let signedUrl: string
+    if (signedUrlPromise.status === 'fulfilled') {
+      signedUrl = signedUrlPromise.value
+    } else {
+      console.error('❌ Failed to generate signed URL:', signedUrlPromise.reason)
+      return NextResponse.json(
+        { error: 'Erro ao gerar URL de download' },
+        { status: 500 }
+      )
+    }
 
     // ========================================================================
-    // 6. REGISTRAR DOWNLOAD (com validação e transação atômica)
+    // 7. REGISTRAR DOWNLOAD (URL já foi gerada acima em paralelo)
     // ========================================================================
-    console.log('📝 Attempting to register download', {
-      userId: user.id,
-      resourceId,
-      ipAddress,
-      userAgent: userAgent.substring(0, 50)
-    })
+    const rpcParams = {
+      p_user_id: user.id,
+      p_resource_id: resourceId,
+      p_ip_address: ipAddress || null,
+      p_user_agent: userAgent || null
+    }
 
+    const registerResult = await supabase.rpc('register_download', rpcParams)
+    
     let downloadResult: any = null
     let registerError: any = null
 
-    try {
-      const rpcParams = {
-        p_user_id: user.id,
-        p_resource_id: resourceId,
-        p_ip_address: ipAddress || null,
-        p_user_agent: userAgent || null
-      }
-
-      console.log('🔍 Calling register_download RPC with params:', rpcParams)
-
-      const result = await supabase
-        .rpc('register_download', rpcParams)
-
-      console.log('📥 RPC result:', {
-        hasData: !!result.data,
-        dataLength: result.data?.length,
-        hasError: !!result.error,
-        error: result.error
-      })
-
-      downloadResult = result.data
-      registerError = result.error
-
-      if (result.error) {
-        console.error('❌ RPC Error details:', {
-          message: result.error.message,
-          code: result.error.code,
-          details: result.error.details,
-          hint: result.error.hint,
-          fullError: JSON.stringify(result.error, null, 2)
-        })
-      }
-    } catch (err: any) {
-      console.error('❌ Download failed: Exception in register_download', {
-        userId: user.id,
-        resourceId,
-        error: err,
-        message: err?.message,
-        stack: err?.stack
-      })
-      registerError = err
+    if (registerResult.error) {
+      registerError = registerResult.error
+      console.error('❌ Download registration failed:', registerError)
+    } else {
+      downloadResult = registerResult.data
     }
 
     if (registerError) {
@@ -495,35 +450,111 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = downloadResult[0]
+    let result = downloadResult[0]
 
     if (!result.success) {
-      console.warn('⚠️ Download blocked: Registration failed', {
-        userId: user.id,
-        resourceId,
-        message: result?.message,
-        result
-      })
+      // NOVA LÓGICA: Se o erro for sobre já ter baixado no mês, permitir o download mesmo assim
+      // (a comissão não será gerada novamente, mas o usuário pode baixar)
+      const errorMessage = result?.message || ''
+      const isAlreadyDownloadedThisMonth = errorMessage.includes('já baixou este recurso neste mês') ||
+                                            errorMessage.includes('pode ser baixado apenas uma vez por mês')
       
-      return NextResponse.json(
-        {
-          error: result?.message || 'Não foi possível registrar o download',
-          current_count: result?.current_count,
-          limit_count: result?.limit_count,
-          remaining: result?.remaining
-        },
-        { status: 403 }
-      )
+      if (isAlreadyDownloadedThisMonth) {
+        console.log('ℹ️ User already downloaded this month, but allowing download (commission already generated)', {
+          userId: user.id,
+          resourceId,
+          message: errorMessage
+        })
+        
+        // Registrar o download manualmente (para histórico)
+        // A comissão já foi gerada na primeira vez, então não precisa gerar novamente
+        try {
+          const { data: manualDownload, error: manualError } = await supabase
+            .from('downloads')
+            .insert({
+              user_id: user.id,
+              resource_id: resourceId,
+              ip_address: ipAddress || null,
+              user_agent: userAgent || null,
+              downloaded_at: new Date().toISOString()
+            })
+            .select('id')
+            .single()
+          
+          if (manualError && !manualError.message?.includes('duplicate')) {
+            console.warn('⚠️ Error registering manual download (non-critical):', manualError)
+          } else {
+            console.log('✅ Manual download registered for history:', manualDownload?.id)
+          }
+        } catch (err) {
+          console.warn('⚠️ Exception registering manual download (non-critical):', err)
+        }
+        
+        // Continuar com o fluxo normal de download (não retornar erro)
+        // IMPORTANTE: Buscar status atualizado do banco após registrar o download
+        // para garantir que os valores estejam corretos
+        try {
+          const { getDownloadStatus } = await import('@/lib/utils/downloads')
+          const updatedStatus = await getDownloadStatus(user.id)
+          
+          if (updatedStatus) {
+            result = {
+              success: true,
+              download_id: manualDownload?.id || null,
+              current_count: updatedStatus.current,
+              limit_count: updatedStatus.limit,
+              remaining: updatedStatus.remaining,
+              is_new_download: false // Não conta como novo pois já foi baixado no mês
+            }
+            console.log('📊 Updated status after manual download registration:', result)
+          } else {
+            // Fallback para valores antigos se não conseguir atualizar
+            result = {
+              success: true,
+              download_id: manualDownload?.id || null,
+              current_count: downloadStatusData.current,
+              limit_count: downloadStatusData.limit,
+              remaining: downloadStatusData.remaining,
+              is_new_download: false
+            }
+          }
+        } catch (statusError) {
+          console.error('❌ Error getting updated status:', statusError)
+          // Fallback para valores antigos
+          result = {
+            success: true,
+            download_id: manualDownload?.id || null,
+            current_count: downloadStatusData.current,
+            limit_count: downloadStatusData.limit,
+            remaining: downloadStatusData.remaining,
+            is_new_download: false
+          }
+        }
+      } else {
+        // Para outros erros (limite excedido, etc), bloquear normalmente
+        console.warn('⚠️ Download blocked: Registration failed', {
+          userId: user.id,
+          resourceId,
+          message: result?.message,
+          result
+        })
+        
+        return NextResponse.json(
+          {
+            error: result?.message || 'Não foi possível registrar o download',
+            current_count: result?.current_count,
+            limit_count: result?.limit_count,
+            remaining: result?.remaining
+          },
+          { status: 403 }
+        )
+      }
     }
 
     // ========================================================================
-    // 7. GERAR URL ASSINADA (apenas após todas as validações)
+    // 7. INVALIDAR CACHE (download foi registrado, status mudou)
     // ========================================================================
-    const signedUrl = await getSignedDownloadUrl(key, 3600) // 1 hora de validade
-
-    // ========================================================================
-    // 8. INVALIDAR CACHE (download foi registrado, status mudou)
-    // ========================================================================
+    // URL assinada já foi gerada em paralelo acima, não precisa gerar novamente
     deleteCacheByPrefix(`download_status:${user.id}`)
     deleteCacheByPrefix(`download_limit:${user.id}`)
 
@@ -535,23 +566,29 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     // 9. VERIFICAR SE DOWNLOAD FOI REALMENTE REGISTRADO NO BANCO
     // ========================================================================
-    // Verificação adicional: confirmar que o download foi inserido
-    const { data: verifyDownload, error: verifyError } = await supabase
-      .from('downloads')
-      .select('id, created_at')
-      .eq('id', result.download_id)
-      .single()
+    // Verificação adicional: confirmar que o download foi inserido (apenas se tiver download_id)
+    let verifyDownload = null
+    if (result.download_id) {
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('downloads')
+        .select('id, created_at')
+        .eq('id', result.download_id)
+        .single()
 
-    if (verifyError || !verifyDownload) {
-      console.error('⚠️ WARNING: Download ID retornado mas não encontrado no banco!', {
-        downloadId: result.download_id,
-        error: verifyError
-      })
+      if (verifyError || !verifyData) {
+        console.error('⚠️ WARNING: Download ID retornado mas não encontrado no banco!', {
+          downloadId: result.download_id,
+          error: verifyError
+        })
+      } else {
+        verifyDownload = verifyData
+        console.log('✅ Download confirmado no banco:', {
+          downloadId: result.download_id,
+          createdAt: verifyDownload.created_at
+        })
+      }
     } else {
-      console.log('✅ Download confirmado no banco:', {
-        downloadId: result.download_id,
-        createdAt: verifyDownload.created_at
-      })
+      console.log('ℹ️ Download sem ID (já baixado no mês, mas permitido)')
     }
 
     // ========================================================================

@@ -56,29 +56,68 @@ export async function getDownloadStatus(
 
     // Contar recursos ÚNICOS baixados hoje usando a função SQL
     // Isso garante que múltiplos downloads do mesmo recurso contem apenas como 1
+    let current = 0
+    
+    // Primeiro, tentar usar a nova função (se a migration foi aplicada)
     const { data: uniqueCount, error: countError } = await supabase
       .rpc('count_unique_resources_downloaded_today', {
         p_user_id: userId
       })
 
-    let current = 0
     if (!countError && uniqueCount !== null && uniqueCount !== undefined) {
       current = uniqueCount
-      console.log('📊 Unique resources downloaded today:', {
+      console.log('📊 Unique resources downloaded today (new function):', {
         userId,
         current,
         limit
       })
-    } else if (countError) {
-      console.error('❌ Error counting unique resources:', countError)
-      // Fallback: tentar usar a função antiga
-      const { data: fallbackCount } = await supabase
-        .rpc('count_user_downloads_today', {
-          p_user_id: userId
-        })
-      current = fallbackCount || 0
     } else {
-      console.log('⚠️ No unique downloads found for user today:', userId)
+      // Se a função nova não existe ou deu erro, usar fallback
+      console.warn('⚠️ New function not available, using fallback:', countError?.message)
+      
+      // Fallback: contar diretamente usando DISTINCT na query
+      const { data: downloadsData, error: downloadsError } = await supabase
+        .from('downloads')
+        .select('resource_id, created_at, downloaded_at')
+        .eq('user_id', userId)
+      
+      if (!downloadsError && downloadsData) {
+        // Obter data atual no timezone do Brasil
+        const now = new Date()
+        const brasilDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+        const todayYear = brasilDate.getFullYear()
+        const todayMonth = String(brasilDate.getMonth() + 1).padStart(2, '0')
+        const todayDay = String(brasilDate.getDate()).padStart(2, '0')
+        const today = `${todayYear}-${todayMonth}-${todayDay}`
+
+        // Filtrar downloads de hoje e contar recursos únicos
+        const uniqueResources = new Set<string>()
+        downloadsData.forEach(d => {
+          const downloadDate = d.created_at || d.downloaded_at
+          if (!downloadDate) return
+          
+          const downloadDateObj = new Date(downloadDate)
+          const brasilDownloadDate = new Date(downloadDateObj.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+          const downloadYear = brasilDownloadDate.getFullYear()
+          const downloadMonth = String(brasilDownloadDate.getMonth() + 1).padStart(2, '0')
+          const downloadDay = String(brasilDownloadDate.getDate()).padStart(2, '0')
+          const downloadDayStr = `${downloadYear}-${downloadMonth}-${downloadDay}`
+          
+          if (downloadDayStr === today && d.resource_id) {
+            uniqueResources.add(d.resource_id)
+          }
+        })
+        
+        current = uniqueResources.size
+        console.log('📊 Unique resources downloaded today (fallback):', {
+          userId,
+          current,
+          limit,
+          uniqueResources: Array.from(uniqueResources)
+        })
+      } else {
+        console.error('❌ Error fetching downloads for fallback:', downloadsError)
+      }
     }
 
     const remaining = Math.max(0, limit - current)

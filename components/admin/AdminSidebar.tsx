@@ -16,7 +16,8 @@ import {
   CreditCard,
   Repeat,
   Menu,
-  X
+  X,
+  DollarSign
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { createSupabaseClient } from '@/lib/supabase/client'
@@ -32,6 +33,7 @@ const menuItems = [
   { name: 'Assinaturas', href: '/admin/subscriptions', icon: Repeat },
   { name: 'Categorias', href: '/admin/categories', icon: Tag },
   { name: 'Financeiro', href: '/admin/finance', icon: CreditCard },
+  { name: 'Comissões', href: '/admin/commissions', icon: DollarSign },
   { name: 'Configurações', href: '/admin/settings', icon: Settings },
 ]
 

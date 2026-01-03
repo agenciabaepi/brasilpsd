@@ -146,6 +146,25 @@ export default function VerifyEmailPage() {
       // Limpar dados temporários
       sessionStorage.removeItem('signup_data')
 
+      // Enviar email de boas-vindas (não bloquear se falhar)
+      if (data.user && signupData.email) {
+        try {
+          await fetch('/api/auth/send-welcome-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: signupData.email,
+              userName: signupData.fullName || 'Usuário'
+            })
+          }).catch(() => {
+            // Ignorar erros de email (não bloquear criação de conta)
+          })
+        } catch (emailError) {
+          console.error('Erro ao enviar email de boas-vindas:', emailError)
+          // Não bloquear criação de conta se email falhar
+        }
+      }
+
       toast.success('Conta criada com sucesso!')
       router.push('/login')
     } catch (error: any) {

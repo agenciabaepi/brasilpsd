@@ -443,3 +443,213 @@ export function getResourceRejectedTemplate(
   return baseHTML(content, 'Recurso Não Aprovado - BrasilPSD')
 }
 
+/**
+ * Template de texto para email de boas-vindas
+ */
+export function getWelcomeEmailTextTemplate(userName: string): string {
+  const appUrl = getAppUrl()
+  return `
+Bem-vindo ao BrasilPSD, ${userName}!
+
+Sua conta foi criada com sucesso e está pronta para uso!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O QUE VOCÊ PODE FAZER AGORA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Explorar milhares de recursos profissionais
+✅ Baixar recursos gratuitos
+✅ Favoritar seus recursos preferidos
+✅ Criar coleções personalizadas
+✅ Acessar recursos premium com assinatura
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Comece explorando nossa biblioteca de recursos:
+${appUrl}/explore
+
+Acesse seu dashboard:
+${appUrl}/dashboard
+
+Seja um criador e compartilhe seus recursos:
+${appUrl}/creator
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Estamos felizes em tê-lo conosco! Se tiver alguma dúvida, nossa equipe está pronta para ajudar.
+
+Atenciosamente,
+Equipe BrasilPSD
+  `.trim()
+}
+
+/**
+ * Template para email de boas-vindas após ativar conta
+ */
+export function getWelcomeEmailTemplate(userName: string) {
+  const appUrl = getAppUrl()
+  const content = `
+    <h1>Bem-vindo ao BrasilPSD! 🎉</h1>
+    <p>Olá, <strong>${userName}</strong>!</p>
+    <p>Sua conta foi criada com sucesso e está pronta para uso!</p>
+    
+    <div class="info-box" style="background-color: #e8f5e9; border-left-color: #4caf50;">
+      <p style="margin: 0;"><strong>✨ O que você pode fazer agora:</strong></p>
+      <p style="margin: 8px 0 0 0;">✅ Explorar milhares de recursos profissionais</p>
+      <p style="margin: 4px 0 0 0;">✅ Baixar recursos gratuitos</p>
+      <p style="margin: 4px 0 0 0;">✅ Favoritar seus recursos preferidos</p>
+      <p style="margin: 4px 0 0 0;">✅ Criar coleções personalizadas</p>
+      <p style="margin: 4px 0 0 0;">✅ Acessar recursos premium com assinatura</p>
+    </div>
+    
+    <p>Estamos felizes em tê-lo conosco! Comece explorando nossa biblioteca de recursos.</p>
+    <p style="text-align: center;">
+      <a href="${appUrl}/explore" class="button">Explorar Recursos</a>
+    </p>
+    <p style="text-align: center; margin-top: 16px;">
+      <a href="${appUrl}/dashboard" style="color: #667eea; text-decoration: none;">Acessar Dashboard</a> | 
+      <a href="${appUrl}/creator" style="color: #667eea; text-decoration: none;">Seja um Criador</a>
+    </p>
+  `
+  return baseHTML(content, 'Bem-vindo ao BrasilPSD')
+}
+
+/**
+ * Template de texto para email quando criador é aprovado
+ */
+export function getCreatorApprovedTextTemplate(userName: string): string {
+  const appUrl = getAppUrl()
+  return `
+Parabéns, ${userName}!
+
+Sua solicitação para se tornar um criador foi APROVADA!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O QUE VOCÊ PODE FAZER AGORA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Enviar seus recursos para a plataforma
+✅ Compartilhar seu trabalho com a comunidade
+✅ Ganhar visibilidade para seus projetos
+✅ Contribuir com conteúdo de qualidade
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Acesse seu painel de criador:
+${appUrl}/creator
+
+Envie seu primeiro recurso:
+${appUrl}/creator/upload
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Estamos ansiosos para ver seus recursos na plataforma!
+
+Atenciosamente,
+Equipe BrasilPSD
+  `.trim()
+}
+
+/**
+ * Template para email quando criador é aprovado
+ */
+export function getCreatorApprovedTemplate(userName: string) {
+  const appUrl = getAppUrl()
+  const content = `
+    <h1>Parabéns! Você é um Criador! 🎨</h1>
+    <p>Olá, <strong>${userName}</strong>!</p>
+    <p>Sua solicitação para se tornar um criador foi <strong>APROVADA</strong>!</p>
+    
+    <div class="info-box" style="background-color: #e8f5e9; border-left-color: #4caf50;">
+      <p style="margin: 0;"><strong>✨ O que você pode fazer agora:</strong></p>
+      <p style="margin: 8px 0 0 0;">✅ Enviar seus recursos para a plataforma</p>
+      <p style="margin: 4px 0 0 0;">✅ Compartilhar seu trabalho com a comunidade</p>
+      <p style="margin: 4px 0 0 0;">✅ Ganhar visibilidade para seus projetos</p>
+      <p style="margin: 4px 0 0 0;">✅ Contribuir com conteúdo de qualidade</p>
+    </div>
+    
+    <p>Estamos ansiosos para ver seus recursos na plataforma!</p>
+    <p style="text-align: center;">
+      <a href="${appUrl}/creator/upload" class="button">Enviar Primeiro Recurso</a>
+    </p>
+    <p style="text-align: center; margin-top: 16px;">
+      <a href="${appUrl}/creator" style="color: #667eea; text-decoration: none;">Acessar Painel de Criador</a>
+    </p>
+  `
+  return baseHTML(content, 'Criador Aprovado - BrasilPSD')
+}
+
+/**
+ * Template de texto para aviso de assinatura expirando
+ */
+export function getSubscriptionExpiringTextTemplate(
+  userName: string,
+  planName: string,
+  expirationDate: string
+): string {
+  const appUrl = getAppUrl()
+  return `
+Atenção, ${userName}!
+
+Sua assinatura do plano ${planName} expira em 1 dia!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DETALHES DA ASSINATURA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Plano: ${planName}
+Data de Expiração: ${expirationDate}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para continuar aproveitando todos os recursos premium, renove sua assinatura antes que expire.
+
+Renove agora:
+${appUrl}/premium
+
+Acesse seu dashboard:
+${appUrl}/dashboard
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Não perca acesso aos recursos premium! Renove hoje.
+
+Atenciosamente,
+Equipe BrasilPSD
+  `.trim()
+}
+
+/**
+ * Template para aviso de assinatura expirando (1 dia antes)
+ */
+export function getSubscriptionExpiringTemplate(
+  userName: string,
+  planName: string,
+  expirationDate: string
+) {
+  const appUrl = getAppUrl()
+  const content = `
+    <h1>Atenção! Sua Assinatura Expira Amanhã ⚠️</h1>
+    <p>Olá, <strong>${userName}</strong>!</p>
+    <p>Sua assinatura do plano <strong>${planName}</strong> expira em <strong>1 dia</strong>!</p>
+    
+    <div class="info-box" style="background-color: #fff3e0; border-left-color: #ff9800;">
+      <p style="margin: 0;"><strong>📅 Detalhes da Assinatura:</strong></p>
+      <p style="margin: 8px 0 0 0;"><strong>Plano:</strong> ${planName}</p>
+      <p style="margin: 4px 0 0 0;"><strong>Data de Expiração:</strong> ${expirationDate}</p>
+    </div>
+    
+    <p>Para continuar aproveitando todos os recursos premium, renove sua assinatura antes que expire.</p>
+    <p style="text-align: center;">
+      <a href="${appUrl}/premium" class="button">Renovar Assinatura</a>
+    </p>
+    <p style="text-align: center; margin-top: 16px;">
+      <a href="${appUrl}/dashboard" style="color: #667eea; text-decoration: none;">Acessar Dashboard</a>
+    </p>
+    <p style="font-size: 14px; color: #6c757d; margin-top: 24px;">
+      <strong>⚠️ Importante:</strong> Após a expiração, você perderá acesso aos recursos premium. Renove hoje para evitar interrupções!
+    </p>
+  `
+  return baseHTML(content, 'Assinatura Expirando - BrasilPSD')
+}
+

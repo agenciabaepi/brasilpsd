@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -333,40 +333,41 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.resource_type, resource.preview_url, resource.file_url, supabase])
 
+  // Função para carregar status de downloads (usando useCallback para memoizar)
+  const loadDownloadStatus = useCallback(async () => {
+    if (!user) {
+      setDownloadStatus(null)
+      return
+    }
+
+    try {
+      setLoadingDownloadStatus(true)
+      // Adicionar timestamp para evitar cache
+      const response = await fetch(`/api/downloads/status?t=${Date.now()}`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📊 Download status loaded:', data)
+        setDownloadStatus({
+          current: data.current || 0,
+          limit: data.limit || 0,
+          remaining: data.remaining || 0,
+          allowed: data.allowed !== undefined ? data.allowed : (data.remaining > 0)
+        })
+      } else {
+        console.error('Error loading download status:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('Error loading download status:', error)
+    } finally {
+      setLoadingDownloadStatus(false)
+    }
+  }, [user])
+
   // Buscar status de downloads quando usuário estiver logado (apenas se não foi passado inicialmente)
   useEffect(() => {
     // Se já temos o status inicial do servidor, não precisa buscar novamente
     if (initialDownloadStatus) {
       return
-    }
-
-    async function loadDownloadStatus() {
-      if (!user) {
-        setDownloadStatus(null)
-        return
-      }
-
-      try {
-        setLoadingDownloadStatus(true)
-        // Adicionar timestamp para evitar cache
-        const response = await fetch(`/api/downloads/status?t=${Date.now()}`)
-        if (response.ok) {
-          const data = await response.json()
-          console.log('📊 Download status loaded:', data)
-          setDownloadStatus({
-            current: data.current || 0,
-            limit: data.limit || 0,
-            remaining: data.remaining || 0,
-            allowed: data.allowed !== undefined ? data.allowed : (data.remaining > 0)
-          })
-        } else {
-          console.error('Error loading download status:', response.status, response.statusText)
-        }
-      } catch (error) {
-        console.error('Error loading download status:', error)
-      } finally {
-        setLoadingDownloadStatus(false)
-      }
     }
 
     // Se não tiver initialDownloadStatus, carregar do servidor
@@ -397,10 +398,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
     // Listener para atualizar após download
     const handleDownloadCompleted = () => {
+      // Aguardar um pouco mais para garantir que o banco foi atualizado
       setTimeout(() => {
+        console.log('🔄 Refreshing download status after download...')
         loadDownloadStatus()
         checkAlreadyDownloadedToday()
-      }, 500) // Pequeno delay para garantir que o banco foi atualizado
+      }, 1000) // Aumentado para 1 segundo para garantir atualização
     }
 
     // Listener para atualizar quando download é bloqueado
@@ -417,7 +420,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
       window.removeEventListener('download-completed', handleDownloadCompleted)
       window.removeEventListener('download-blocked', handleDownloadBlocked)
     }
-  }, [user, initialDownloadStatus, initialAlreadyDownloadedToday, resource.id])
+  }, [user, initialDownloadStatus, initialAlreadyDownloadedToday, resource.id, loadDownloadStatus, supabase])
 
   // Função para extrair metadados de vídeos antigos
   async function handleExtractMetadata() {
@@ -583,69 +586,83 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
         throw new Error('URL de download não recebida')
       }
 
-      // Incrementar contador do recurso (a API já registrou o download)
-      await supabase.rpc('increment', {
-        table_name: 'resources',
-        column_name: 'download_count',
-        row_id: resource.id,
-      })
-
-      // Atualizar status localmente imediatamente (otimização UX)
-      if (downloadData.current_count !== undefined && downloadData.limit_count !== undefined) {
-        setDownloadStatus({
-          current: downloadData.current_count,
-          limit: downloadData.limit_count,
-          remaining: downloadData.remaining || 0,
-          allowed: downloadData.remaining > 0
-        })
-      }
+      // INICIAR DOWNLOAD IMEDIATAMENTE (antes de qualquer outra operação)
+      // Isso faz o download começar instantaneamente enquanto outras operações acontecem em background
+      const downloadFileName = resource.title || `download-${resource.id}.${resource.file_format || 'mp4'}`
       
-      // Atualizar estado se já foi baixado hoje
-      if (downloadData.is_new_download !== undefined) {
-        setAlreadyDownloadedToday(!downloadData.is_new_download)
-      } else {
-        // Se não veio na resposta, verificar novamente
-        if (user) {
-          try {
-            const { data: checkResult } = await supabase
-              .rpc('has_user_downloaded_resource_today', {
-                p_user_id: user.id,
-                p_resource_id: resource.id
-              })
-            setAlreadyDownloadedToday(Boolean(checkResult))
-          } catch (error) {
-            console.error('Error checking if already downloaded:', error)
-          }
-        }
-      }
+      // Usar download direto para iniciar imediatamente (mais rápido que blob para arquivos grandes)
+      const link = document.createElement('a')
+      link.href = downloadData.url
+      link.download = downloadFileName
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // Mostrar feedback imediato
+      toast.success('Download iniciado!')
 
-      // Forçar download do arquivo (ao invés de abrir em nova aba)
-      // Para URLs de outros domínios (S3), precisamos baixar como blob
-      try {
-        const response = await fetch(downloadData.url)
-        const blob = await response.blob()
-        const objectUrl = window.URL.createObjectURL(blob)
-        
-        const link = document.createElement('a')
-        link.href = objectUrl
-        link.download = resource.title || `download-${resource.id}.${resource.file_format || 'mp4'}`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        
-        // Limpar o object URL após o download
-        window.URL.revokeObjectURL(objectUrl)
-      } catch (fetchError) {
-        // Fallback: se fetch falhar, tentar download direto (pode abrir em nova aba)
-        console.warn('Erro ao baixar como blob, tentando download direto:', fetchError)
-        const link = document.createElement('a')
-        link.href = downloadData.url
-        link.target = '_blank'
-        link.rel = 'noopener noreferrer'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      }
+      // Fazer operações em background (não bloquear o download)
+      Promise.all([
+        // Incrementar contador do recurso (a API já registrou o download)
+        supabase.rpc('increment', {
+          table_name: 'resources',
+          column_name: 'download_count',
+          row_id: resource.id,
+        }).catch(err => console.warn('Error incrementing download count:', err)),
+
+        // Atualizar status localmente
+        (async () => {
+          console.log('📊 Download response data:', {
+            current_count: downloadData.current_count,
+            limit_count: downloadData.limit_count,
+            remaining: downloadData.remaining,
+            is_new_download: downloadData.is_new_download
+          })
+          
+          if (downloadData.current_count !== undefined && downloadData.limit_count !== undefined) {
+            const newStatus = {
+              current: downloadData.current_count,
+              limit: downloadData.limit_count,
+              remaining: downloadData.remaining || 0,
+              allowed: downloadData.remaining > 0
+            }
+            console.log('✅ Updating download status:', newStatus)
+            setDownloadStatus(newStatus)
+          } else {
+            console.warn('⚠️ Download data missing count info, will refresh from server')
+            setTimeout(() => {
+              loadDownloadStatus()
+            }, 1000)
+          }
+          
+          // Atualizar estado se já foi baixado hoje
+          if (downloadData.is_new_download !== undefined) {
+            console.log('📝 is_new_download:', downloadData.is_new_download)
+            setAlreadyDownloadedToday(!downloadData.is_new_download)
+          } else {
+            // Se não veio na resposta, verificar novamente
+            if (user) {
+              try {
+                const { data: checkResult } = await supabase
+                  .rpc('has_user_downloaded_resource_today', {
+                    p_user_id: user.id,
+                    p_resource_id: resource.id
+                  })
+                setAlreadyDownloadedToday(Boolean(checkResult))
+              } catch (error) {
+                console.error('Error checking if already downloaded:', error)
+              }
+            }
+          }
+          
+          // Sempre forçar atualização do status após um tempo para garantir sincronização
+          setTimeout(() => {
+            console.log('🔄 Forcing status refresh after download...')
+            loadDownloadStatus()
+          }, 2000)
+        })()
+      ]).catch(err => console.error('Error in background operations:', err))
       
       // Disparar evento para atualizar estatísticas de downloads (para outros componentes)
       window.dispatchEvent(new CustomEvent('download-completed', {
@@ -656,8 +673,6 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
           remaining: downloadData.remaining
         }
       }))
-
-      toast.success('Download iniciado!')
     } catch (error: any) {
       toast.error(error.message || 'Erro ao baixar recurso')
     } finally {

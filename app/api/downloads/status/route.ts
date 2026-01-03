@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
 import { getDownloadStatus } from '@/lib/utils/downloads'
-import { getCache, setCache, deleteCache, getDownloadStatusCacheKey, DOWNLOAD_STATUS_CACHE_TTL } from '@/lib/utils/cache'
+import { getCache, setCache, deleteCache, deleteCacheByPrefix, getDownloadStatusCacheKey, DOWNLOAD_STATUS_CACHE_TTL } from '@/lib/utils/cache'
 
 /**
  * API Route: GET /api/downloads/status
@@ -37,10 +37,14 @@ export async function GET(request: NextRequest) {
     // Se forçar refresh, deletar cache
     if (forceRefresh) {
       deleteCache(cacheKey)
+      // Também limpar cache por prefixo para garantir
+      deleteCacheByPrefix(`download_status:${user.id}`)
+      deleteCacheByPrefix(`download_limit:${user.id}`)
     }
 
     // Tentar obter do cache primeiro (se não forçar refresh)
-    let status = forceRefresh ? null : getCache<any>(cacheKey)
+    // Mas sempre buscar do banco para garantir dados atualizados
+    let status = null // Sempre buscar do banco para garantir precisão
 
     if (!status) {
       // Obter status de downloads usando a função helper

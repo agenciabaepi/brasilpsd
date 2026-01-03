@@ -114,11 +114,42 @@ export interface CreatorEarning {
   creator_id: string
   resource_id: string
   download_id: string | null
+  user_id: string | null
+  pool_id: string | null
+  month_year: string | null
   amount: number
   commission_rate: number
+  pool_amount: number | null
+  downloads_in_pool: number | null
+  commission_per_download: number | null
   status: string
+  payment_method: string | null
+  payment_reference: string | null
+  notes: string | null
   created_at: string
   paid_at: string | null
+  // Relations
+  resource?: Resource
+  creator?: Profile
+  pool?: RevenuePool
+}
+
+export interface RevenuePool {
+  id: string
+  month_year: string
+  total_revenue: number
+  commission_percentage: number
+  premium_commission_amount: number | null
+  free_commission_amount: number | null
+  commission_type: 'fixed' | 'pool' | null
+  total_downloads: number
+  distributed_amount: number
+  remaining_amount: number
+  status: 'active' | 'closed' | 'distributed'
+  created_at: string
+  updated_at: string
+  closed_at: string | null
+  notes: string | null
 }
 
 export interface Collection {

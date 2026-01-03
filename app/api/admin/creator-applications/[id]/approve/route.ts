@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server'
+import { sendCreatorApprovedEmail } from '@/lib/email/sender'
 
 export async function PUT(
   request: NextRequest,
@@ -85,6 +86,26 @@ export async function PUT(
     if (profileUpdateError) {
       console.error('Erro ao atualizar perfil:', profileUpdateError)
       // Não falhar se o trigger já atualizou
+    }
+
+    // Enviar email ao criador aprovado (não bloquear se falhar)
+    try {
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', application.user_id)
+        .single()
+
+      if (userProfile && userProfile.email) {
+        await sendCreatorApprovedEmail(
+          userProfile.email,
+          userProfile.full_name || 'Criador'
+        )
+        console.log('✅ Email de criador aprovado enviado para:', userProfile.email)
+      }
+    } catch (emailError) {
+      console.error('Erro ao enviar email de aprovação de criador:', emailError)
+      // Não bloquear aprovação se email falhar
     }
 
     return NextResponse.json(

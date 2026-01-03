@@ -224,3 +224,65 @@ export async function sendResourceRejectedEmail(
   })
 }
 
+/**
+ * Envia email de boas-vindas após ativar conta
+ */
+export async function sendWelcomeEmail(
+  email: string,
+  userName: string
+): Promise<void> {
+  const { getWelcomeEmailTemplate, getWelcomeEmailTextTemplate } = await import('./templates')
+  
+  const textVersion = getWelcomeEmailTextTemplate(userName)
+  const htmlVersion = getWelcomeEmailTemplate(userName)
+  
+  await sendEmail({
+    to: email,
+    subject: 'Bem-vindo ao BrasilPSD! 🎉',
+    html: htmlVersion,
+    text: textVersion,
+  })
+}
+
+/**
+ * Envia email quando criador é aprovado
+ */
+export async function sendCreatorApprovedEmail(
+  email: string,
+  userName: string
+): Promise<void> {
+  const { getCreatorApprovedTemplate, getCreatorApprovedTextTemplate } = await import('./templates')
+  
+  const textVersion = getCreatorApprovedTextTemplate(userName)
+  const htmlVersion = getCreatorApprovedTemplate(userName)
+  
+  await sendEmail({
+    to: email,
+    subject: 'Parabéns! Você é um Criador! 🎨',
+    html: htmlVersion,
+    text: textVersion,
+  })
+}
+
+/**
+ * Envia email de aviso de assinatura expirando (1 dia antes)
+ */
+export async function sendSubscriptionExpiringEmail(
+  email: string,
+  userName: string,
+  planName: string,
+  expirationDate: string
+): Promise<void> {
+  const { getSubscriptionExpiringTemplate, getSubscriptionExpiringTextTemplate } = await import('./templates')
+  
+  const textVersion = getSubscriptionExpiringTextTemplate(userName, planName, expirationDate)
+  const htmlVersion = getSubscriptionExpiringTemplate(userName, planName, expirationDate)
+  
+  await sendEmail({
+    to: email,
+    subject: '⚠️ Sua Assinatura Expira Amanhã - BrasilPSD',
+    html: htmlVersion,
+    text: textVersion,
+  })
+}
+
