@@ -50,7 +50,7 @@ interface ResourceDetailClientProps {
 
 export default function ResourceDetailClient({ resource, initialUser, initialIsFavorited = false, initialDownloadStatus = null, initialAlreadyDownloadedToday = false, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
   const router = useRouter()
-  const { openResourceView } = useResourceView()
+  const { openResourceView, closeResourceView } = useResourceView()
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited)
   const [downloading, setDownloading] = useState(false)
   const [user, setUser] = useState<Profile | null>(initialUser || null)
@@ -709,7 +709,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
   // Verificar se está dentro de um modal (pelo contexto ou classe do parent)
   const isInModal = typeof window !== 'undefined' && document.querySelector('[data-resource-modal]')
-  
+
   return (
     <div className={`${isInModal ? 'p-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10'}`}>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -958,26 +958,26 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               if (imageUrl) {
                 return (
                   <div className={`w-full flex items-center justify-center min-h-[400px] ${isPng ? 'bg-checkerboard' : 'bg-white'}`}>
-                    <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
-                      <ProtectedImage
+                <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
+                  <ProtectedImage
                         src={imageUrl}
-                        alt={resource.title}
-                        width={1200}
-                        height={800}
-                        priority
-                        className="max-w-full max-h-[600px]"
+                    alt={resource.title}
+                    width={1200}
+                    height={800}
+                    priority
+                    className="max-w-full max-h-[600px]"
                         quality={isPng ? 100 : 70} // Máxima qualidade para PNGs
-                        objectFit="contain"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-                      />
+                    objectFit="contain"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                  />
                       {/* Badge de IA */}
                       {resource.is_ai_generated && (
                         <div className="absolute top-4 right-4 z-20 bg-gray-900/80 backdrop-blur-sm p-2 rounded-lg shadow-lg" title="Gerado por Inteligência Artificial">
                           <Image src="/images/icon-ia.png" alt="IA" width={20} height={20} className="w-5 h-5" />
-                        </div>
+                </div>
                       )}
-                    </div>
-                  </div>
+              </div>
+                </div>
                 )
               }
               return null
@@ -988,7 +988,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </div>
             )}
           </div>
-        </div>
+          </div>
 
         {/* COLUNA DIREITA (SIDEBAR) */}
         <div className="lg:col-span-5 space-y-6">
@@ -1011,7 +1011,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                     ) : (
                       <User className="h-6 w-6 text-gray-700" />
                     )}
-                  </div>
+            </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-sm font-bold text-gray-900 truncate">{authorName}</p>
@@ -1028,6 +1028,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 <div className="space-y-3">
                   <Link 
                     href={`/creator/${resource.creator_id}`}
+                    onClick={() => {
+                      // Fechar modal se estiver dentro de um
+                      if (isInModal) {
+                        closeResourceView()
+                      }
+                    }}
                     className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
                   >
                     <div className="h-12 w-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -1093,9 +1099,15 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                     >
                       <Check className="h-3.5 w-3.5" />
                       {isFollowingCreator ? 'Seguindo' : 'Seguir'}
-                    </button>
+            </button>
                     <Link
                       href={`/creator/${resource.creator_id}`}
+                      onClick={() => {
+                        // Fechar modal se estiver dentro de um
+                        if (isInModal) {
+                          closeResourceView()
+                        }
+                      }}
                       className="px-4 py-2 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200 flex items-center justify-center gap-1.5"
                     >
                       <User className="h-3.5 w-3.5" />
@@ -1104,7 +1116,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   </div>
                 </div>
               )}
-            </div>
+          </div>
 
             {/* Título */}
             <div className="mb-6">
@@ -1132,23 +1144,23 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
             {/* Informações do Arquivo */}
             <div className="mb-6 space-y-4 pb-6 border-b border-gray-100">
               <div className="space-y-3">
-                {resourceData.resource_type === 'motion' ? (
+                  {resourceData.resource_type === 'motion' ? (
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Formato:</span>
-                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded flex items-center justify-center bg-purple-600 p-0.5">
-                        <Image 
-                          src="/images/Ae-icone.png" 
-                          alt="After Effects" 
+                          <Image 
+                            src="/images/Ae-icone.png" 
+                            alt="After Effects" 
                           width={12} 
                           height={12}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
                       <span className="text-xs font-bold text-gray-900">After Effects</span>
+                      </div>
                     </div>
-                  </div>
-                ) : (
+                  ) : (
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Formato:</span>
                     <span className="text-xs font-bold text-gray-900">{resourceData.file_format?.toUpperCase()}</span>
@@ -1157,33 +1169,33 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Resolução:</span>
-                  <span className="text-xs font-bold text-gray-900">
-                    {resourceData.width && resourceData.height 
-                      ? `${resourceData.width} × ${resourceData.height}` 
-                      : 'N/A'
-                    }
-                  </span>
-                </div>
+                      <span className="text-xs font-bold text-gray-900">
+                        {resourceData.width && resourceData.height 
+                          ? `${resourceData.width} × ${resourceData.height}` 
+                          : 'N/A'
+                        }
+                      </span>
+                    </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Tamanho:</span>
                   <span className="text-xs font-bold text-gray-900">{formatFileSize(resourceData.file_size)}</span>
-                </div>
+                  </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Licença:</span>
                   <span className="text-xs font-bold text-gray-900">{resourceData.is_premium ? 'Premium' : 'Gratuita'}</span>
                 </div>
                 
-                {resourceData.is_ai_generated && (
+                  {resourceData.is_ai_generated && (
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Origem:</span>
-                    <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
-                      <Sparkles className="h-3 w-3" />
-                      IA Gerada
-                    </span>
-                  </div>
-                )}
+                      <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
+                        <Sparkles className="h-3 w-3" />
+                        IA Gerada
+                      </span>
+                    </div>
+                  )}
                 
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Extensão:</span>
@@ -1225,7 +1237,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 <button className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200">
                   <Flag className="h-4 w-4" />
                 </button>
-              </div>
+                </div>
             </div>
 
             {/* Badge de Família (se aplicável) */}
@@ -1473,30 +1485,30 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
                         return (
                           <Component key={collectionResource.id} {...componentProps}>
-                            <div className="relative overflow-hidden rounded-lg bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md">
-                              <div className="relative w-full aspect-square overflow-hidden">
-                                {collectionResource.resource_type === 'font' ? (
-                                  <FontThumbnail resource={collectionResource} size="small" className="w-full h-full" />
-                                ) : collectionResource.thumbnail_url ? (
-                                  <Image
-                                    src={getS3Url(collectionResource.thumbnail_url)}
-                                    alt={collectionResource.title}
-                                    fill
-                                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                                    sizes="120px"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                                    <FileText className="h-8 w-8 text-gray-300" />
-                                  </div>
-                                )}
-                                {collectionResource.is_premium && (
-                                  <div className="absolute top-1.5 right-1.5 bg-gray-900/80 backdrop-blur-sm p-1 rounded-md shadow-lg border border-white/10">
-                                    <Crown className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                                  </div>
-                                )}
-                              </div>
+                          <div className="relative overflow-hidden rounded-lg bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md">
+                            <div className="relative w-full aspect-square overflow-hidden">
+                              {collectionResource.resource_type === 'font' ? (
+                                <FontThumbnail resource={collectionResource} size="small" className="w-full h-full" />
+                              ) : collectionResource.thumbnail_url ? (
+                                <Image
+                                  src={getS3Url(collectionResource.thumbnail_url)}
+                                  alt={collectionResource.title}
+                                  fill
+                                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                  sizes="120px"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                  <FileText className="h-8 w-8 text-gray-300" />
+                                </div>
+                              )}
+                              {collectionResource.is_premium && (
+                                <div className="absolute top-1.5 right-1.5 bg-gray-900/80 backdrop-blur-sm p-1 rounded-md shadow-lg border border-white/10">
+                                  <Crown className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                                </div>
+                              )}
                             </div>
+                          </div>
                           </Component>
                         )
                       })}
