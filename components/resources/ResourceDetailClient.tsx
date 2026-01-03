@@ -712,12 +712,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
   return (
     <div className={`${isInModal ? 'p-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10'}`}>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:items-start">
         
         {/* COLUNA ESQUERDA - IMAGEM/VIDEO */}
-        <div className="lg:col-span-7">
+        <div className="lg:col-span-7 lg:sticky lg:top-24 lg:self-start">
           {/* Preview Image/Video/Audio */}
-          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center min-h-[400px] group relative shadow-sm">
+          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center group relative shadow-sm h-full">
             {resource.resource_type === 'audio' ? (
               <div className="w-full p-8 md:p-12">
                 <AudioPlayer
@@ -957,17 +957,16 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               
               if (imageUrl) {
                 return (
-                  <div className={`w-full flex items-center justify-center min-h-[400px] ${isPng ? 'bg-checkerboard' : 'bg-white'}`}>
-                <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
+                  <div className={`w-full h-full flex items-center justify-center ${isPng ? 'bg-checkerboard' : 'bg-white'}`}>
+                <div className="relative w-full h-full flex items-center justify-center p-4">
                   <ProtectedImage
                         src={imageUrl}
                     alt={resource.title}
                     width={1200}
                     height={800}
                     priority
-                    className="max-w-full max-h-[600px]"
+                    className="max-w-full max-h-full w-auto h-auto object-contain"
                         quality={isPng ? 100 : 70} // Máxima qualidade para PNGs
-                    objectFit="contain"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
                   />
                       {/* Badge de IA */}
