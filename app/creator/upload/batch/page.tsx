@@ -548,7 +548,33 @@ export default function BatchUploadPage() {
     const uploadData = await uploadResponse.json()
     const { url: fileUrl, previewUrl, thumbnailUrl, isAiGenerated, videoMetadata, imageMetadata } = uploadData
 
-    // 2. Buscar perfil do usuário para verificar se é admin
+    // 2. Se a imagem foi detectada como gerada por IA, adicionar categoria "IA" automaticamente
+    if (isAiGenerated) {
+      // Buscar categoria "IA"
+      const { data: iaCategory } = await supabase
+        .from('categories')
+        .select('id, name, slug')
+        .or('slug.eq.ia,slug.eq.ai,name.ilike.%IA%')
+        .maybeSingle()
+      
+      if (iaCategory && !image.category_ids.includes(iaCategory.id)) {
+        // Adicionar categoria "IA" ao estado da imagem
+        const updatedCategoryIds = [iaCategory.id, ...image.category_ids]
+        setImages(prev => prev.map(img => 
+          img.id === image.id 
+            ? { ...img, category_ids: updatedCategoryIds }
+            : img
+        ))
+        // Atualizar a variável local também
+        image.category_ids = updatedCategoryIds
+        console.log('✅ IA detectada: Categoria "IA" adicionada automaticamente')
+        toast.success('Imagem detectada como gerada por IA. Categoria "IA" adicionada automaticamente.', { duration: 3000 })
+      } else if (!iaCategory) {
+        console.warn('⚠️ Categoria "IA" não encontrada no banco de dados')
+      }
+    }
+
+    // 3. Buscar perfil do usuário para verificar se é admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_admin')
@@ -575,6 +601,31 @@ export default function BatchUploadPage() {
         // Adicionar categoria "Imagens" se ainda não estiver na lista
         finalCategoryIds = [imagensCategory.id, ...finalCategoryIds]
         console.log('✅ PNG: Adicionada categoria "Imagens" automaticamente')
+      }
+    }
+    
+    // 5. Se a imagem foi detectada como gerada por IA, adicionar categoria "IA" automaticamente
+    if (isAiGenerated) {
+      // Buscar categoria "IA" (pode ser slug "ia" ou "ai")
+      const { data: iaCategory } = await supabase
+        .from('categories')
+        .select('id')
+        .or('slug.eq.ia,slug.eq.ai,name.ilike.%IA%')
+        .maybeSingle()
+      
+      if (iaCategory && !finalCategoryIds.includes(iaCategory.id)) {
+        // Adicionar categoria "IA" se ainda não estiver na lista
+        finalCategoryIds = [iaCategory.id, ...finalCategoryIds]
+        console.log('✅ IA: Adicionada categoria "IA" automaticamente')
+        
+        // Atualizar o estado da imagem para refletir a categoria adicionada
+        setImages(prev => prev.map(img => 
+          img.id === image.id 
+            ? { ...img, category_ids: finalCategoryIds }
+            : img
+        ))
+      } else if (!iaCategory) {
+        console.warn('⚠️ Categoria "IA" não encontrada no banco de dados')
       }
     }
     
