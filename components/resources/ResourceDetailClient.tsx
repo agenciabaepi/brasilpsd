@@ -965,6 +965,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                         objectFit="contain"
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
                       />
+                      {/* Badge de IA */}
+                      {resource.is_ai_generated && (
+                        <div className="absolute top-4 right-4 z-20 bg-gray-900/80 backdrop-blur-sm p-2 rounded-lg shadow-lg" title="Gerado por Inteligência Artificial">
+                          <Image src="/images/icon-ia.png" alt="IA" width={20} height={20} className="w-5 h-5" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

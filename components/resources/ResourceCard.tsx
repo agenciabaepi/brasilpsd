@@ -333,7 +333,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
             if (imageUrl) {
               return (
                 <div 
-                  className={`w-full ${isPng ? 'bg-checkerboard' : ''}`}
+                  className={`w-full relative ${isPng ? 'bg-checkerboard' : ''}`}
                   style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
                 >
                   <ProtectedImage
@@ -348,6 +348,12 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
                     quality={isPng ? 100 : 65} // Máxima qualidade para PNGs
                     objectFit="contain"
                   />
+                  {/* Badge de IA - posicionado no canto inferior direito da imagem */}
+                  {resource.is_ai_generated && (
+                    <div className="absolute bottom-2 right-2 z-20 bg-gray-900/80 backdrop-blur-sm p-1 rounded shadow-lg" title="Gerado por IA">
+                      <Image src="/images/icon-ia.png" alt="IA" width={16} height={16} className="w-4 h-4" />
+                    </div>
+                  )}
                 </div>
               )
             }
@@ -373,6 +379,11 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
           </div>
 
           <div className="absolute top-2 right-2 z-10 flex gap-1">
+            {resource.is_ai_generated && (
+              <div className="bg-gray-900/80 backdrop-blur-sm p-1 rounded shadow-sm" title="Gerado por IA">
+                <Image src="/images/icon-ia.png" alt="IA" width={16} height={16} className="w-4 h-4" />
+              </div>
+            )}
             {resource.is_official && (
               <div className="bg-gray-900/80 backdrop-blur-sm p-1 rounded shadow-sm">
                 <Image src="/images/verificado.svg" alt="Oficial" width={12} height={12} className="w-3 h-3" />
