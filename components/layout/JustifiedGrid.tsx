@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import justifiedLayout from 'justified-layout'
 import Link from 'next/link'
 import NextImage from 'next/image'
+import { Eye } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { Crown } from 'lucide-react'
 import { isSystemProfile } from '@/lib/utils/system'
+import { useResourceView } from '@/contexts/ResourceViewContext'
 
 const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif', '.svg']
 const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv']
@@ -41,6 +43,7 @@ export default function JustifiedGrid({
   const [containerWidth, setContainerWidth] = useState(0)
   // Cache de dimensões medidas no client quando width/height não vierem do backend
   const [measuredDims, setMeasuredDims] = useState<Record<string, { w: number; h: number }>>({})
+  const { openResourceView } = useResourceView()
 
   // Resolver URL e tipo (image | video)
   // Para PNGs, sempre usar file_url (original) para preservar transparência
@@ -164,11 +167,40 @@ export default function JustifiedGrid({
           resource.thumbnail_url?.toLowerCase().endsWith('.png') ||
           resource.preview_url?.toLowerCase().endsWith('.png')
 
+        // Áudios e fontes sempre usam página própria
+        const isAudio = resource.resource_type === 'audio'
+        const isFont = resource.resource_type === 'font'
+        const useModal = !isAudio && !isFont
+
+        const handleClick = (e: React.MouseEvent) => {
+          if (useModal) {
+            e.preventDefault()
+            openResourceView(resource.id)
+          }
+        }
+
+        const handleKeyDown = (e: React.KeyboardEvent) => {
+          if (useModal && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            openResourceView(resource.id)
+          }
+        }
+
+        const Component = useModal ? 'div' : Link
+        const componentProps = useModal 
+          ? { 
+              onClick: handleClick, 
+              onKeyDown: handleKeyDown,
+              role: 'button', 
+              tabIndex: 0,
+            }
+          : { href: `/resources/${resource.id}` }
+
         return (
-          <Link
+          <Component
             key={resource.id}
-            href={`/resources/${resource.id}`}
-            className={`absolute block overflow-hidden rounded-lg group ${
+            {...componentProps}
+            className={`absolute block overflow-hidden rounded-lg group cursor-pointer ${
               isPNG ? 'bg-checkerboard' : 'bg-gray-100'
             }`}
             style={{
@@ -243,7 +275,16 @@ export default function JustifiedGrid({
                 </span>
               </div>
             </div>
-          </Link>
+
+            {/* Ícone de visualizar (só aparece no hover e apenas para recursos que usam modal) */}
+            {useModal && (
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full shadow-lg">
+                  <Eye className="h-6 w-6 text-gray-900" />
+                </div>
+              </div>
+            )}
+          </Component>
         )
       })}
     </div>

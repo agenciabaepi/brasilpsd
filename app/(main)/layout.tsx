@@ -2,6 +2,8 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import PromotionalBar from '@/components/layout/PromotionalBar'
 import HeaderSpacer from '@/components/layout/HeaderSpacer'
+import { ResourceViewProvider } from '@/contexts/ResourceViewContext'
+import ResourceViewModalWrapper from '@/components/layout/ResourceViewModalWrapper'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { checkAndUpdateSubscriptionStatusClient } from '@/lib/utils/subscription-check'
 
@@ -55,19 +57,22 @@ export default async function MainLayout({
     .order('name', { ascending: true })
 
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* Espaçador dinâmico que ajusta quando o header está oculto */}
-      <HeaderSpacer />
-      <PromotionalBar />
-      <Header 
-        initialUser={profile} 
-        initialSubscription={initialSubscription}
-        initialCategories={categories || []} 
-      />
-      <main className="flex-1">
-        {children}
-      </main>
-      <Footer />
-    </div>
+    <ResourceViewProvider>
+      <div className="flex min-h-screen flex-col">
+        {/* Espaçador dinâmico que ajusta quando o header está oculto */}
+        <HeaderSpacer />
+        <PromotionalBar />
+        <Header 
+          initialUser={profile} 
+          initialSubscription={initialSubscription}
+          initialCategories={categories || []} 
+        />
+        <main className="flex-1">
+          {children}
+        </main>
+        <Footer />
+        <ResourceViewModalWrapper />
+      </div>
+    </ResourceViewProvider>
   )
 }
