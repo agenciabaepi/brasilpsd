@@ -26,7 +26,7 @@ export default function PromotionalBar() {
   const messagesForLoop = [...promotionalMessages, ...promotionalMessages, ...promotionalMessages]
 
   return (
-    <div className="relative w-full bg-black text-white overflow-hidden py-2.5">
+    <div className="fixed top-0 left-0 right-0 z-[60] w-full bg-black text-white overflow-hidden py-2.5">
       <div className="flex animate-scroll-infinite whitespace-nowrap">
         {messagesForLoop.map((message, index) => {
           const Icon = message.icon

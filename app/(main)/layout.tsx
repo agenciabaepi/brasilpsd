@@ -55,6 +55,8 @@ export default async function MainLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Espaçador para compensar header fixo (PromotionalBar ~40px + Header ~128px = ~168px) */}
+      <div className="h-[168px] flex-shrink-0" />
       <PromotionalBar />
       <Header 
         initialUser={profile} 

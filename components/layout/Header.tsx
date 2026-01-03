@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import Logo from '@/components/ui/Logo'
 import { User, Heart, Upload, Menu, X, ChevronDown, Moon, Crown, Sparkles } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types/database'
@@ -29,29 +29,37 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   const supabase = createSupabaseClient()
 
   // Detectar scroll para ocultar/mostrar header
-  useEffect(() => {
-    let lastScrollY = window.scrollY
-    let ticking = false
+  const lastScrollY = useRef(0)
+  const ticking = useRef(false)
 
+  useEffect(() => {
     const handleScroll = () => {
-      if (!ticking) {
+      if (!ticking.current) {
         window.requestAnimationFrame(() => {
           const currentScrollY = window.scrollY
           
           // Se rolar para baixo mais de 100px, ocultar header
           // Se rolar para cima, mostrar header
-          if (currentScrollY > lastScrollY && currentScrollY > 100) {
+          if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
             setIsHeaderVisible(false)
-          } else if (currentScrollY < lastScrollY) {
+          } else if (currentScrollY < lastScrollY.current) {
             setIsHeaderVisible(true)
           }
           
-          lastScrollY = currentScrollY
-          ticking = false
+          // Se estiver no topo, sempre mostrar
+          if (currentScrollY <= 0) {
+            setIsHeaderVisible(true)
+          }
+          
+          lastScrollY.current = currentScrollY
+          ticking.current = false
         })
-        ticking = true
+        ticking.current = true
       }
     }
+
+    // Inicializar com a posição atual
+    lastScrollY.current = window.scrollY
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     
@@ -344,7 +352,7 @@ export default function Header({ initialUser, initialSubscription, initialCatego
 
   return (
     <header 
-      className={`sticky top-0 z-50 w-full border-b border-gray-100 bg-white transition-transform duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 w-full border-b border-gray-100 bg-white transition-transform duration-300 ease-in-out ${
         isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
       }`}
     >
