@@ -126,25 +126,49 @@ export default function CreatorProfilePage() {
       const totalLikes = allResources?.reduce((sum, r) => sum + (r.like_count || 0), 0) || 0
       setLikesCount(totalLikes)
 
+      // Determinar se deve mostrar todos os recursos ou apenas aprovados
+      const isOwnProfile = authUser && authUser.id === creatorId
+      
       // Carregar recursos em destaque (mais baixados)
-      const { data: featuredData } = await supabase
+      let featuredQuery = supabase
         .from('resources')
         .select('*, creator:profiles!creator_id(*), category:categories(*)')
         .eq('creator_id', creatorId)
-        .eq('status', 'approved')
         .order('download_count', { ascending: false })
         .limit(6)
-
+      
+      // Se não for o próprio perfil, mostrar apenas aprovados
+      if (!isOwnProfile) {
+        featuredQuery = featuredQuery.eq('status', 'approved')
+      }
+      
+      const { data: featuredData, error: featuredError } = await featuredQuery
+      
+      if (featuredError) {
+        console.error('Erro ao carregar recursos em destaque:', featuredError)
+      }
+      
       setFeaturedResources(featuredData || [])
 
       // Carregar todos os recursos do criador
-      const { data: resourcesData } = await supabase
+      let resourcesQuery = supabase
         .from('resources')
         .select('*, creator:profiles!creator_id(*), category:categories(*)')
         .eq('creator_id', creatorId)
-        .eq('status', 'approved')
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(100)
+      
+      // Se não for o próprio perfil, mostrar apenas aprovados
+      if (!isOwnProfile) {
+        resourcesQuery = resourcesQuery.eq('status', 'approved')
+      }
+      
+      const { data: resourcesData, error: resourcesError } = await resourcesQuery
+      
+      if (resourcesError) {
+        console.error('Erro ao carregar recursos:', resourcesError)
+        toast.error('Erro ao carregar recursos do criador')
+      }
 
       setResources(resourcesData || [])
 
