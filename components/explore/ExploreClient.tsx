@@ -221,7 +221,7 @@ function ExploreContent({
       <div className={cn("max-w-[1600px] mx-auto flex relative", hasHero ? "min-h-[calc(100vh-64px)]" : "")}>
         <main className={cn(
           "flex-1 flex flex-col p-8 lg:p-12",
-          hasHero ? "min-h-[calc(100vh-64px)]" : ""
+          hasHero ? "min-h-[calc(100vh-64px)]" : "min-h-0"
         )}>
             {/* Header */}
           <div className={`flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 transition-all duration-300 ${
