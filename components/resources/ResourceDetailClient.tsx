@@ -991,20 +991,241 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
         </div>
 
         {/* COLUNA DIREITA (SIDEBAR) */}
-        <div className="lg:col-span-4 space-y-8">
-          <div className="bg-white rounded-3xl p-10 border border-gray-100 sticky top-24 shadow-sm">
-            {/* Header Sidebar */}
-            <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <h1 className="text-2xl font-bold text-gray-900 leading-tight tracking-tighter">
-                    {resource.title}
-                  </h1>
-                  {resource.is_premium && (
-                    <span className="bg-gray-900 text-yellow-400 p-2 rounded-full flex-shrink-0 shadow-lg border border-gray-800">
-                      <Crown className="h-5 w-5 fill-yellow-400" />
-                    </span>
-                  )}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-white rounded-2xl p-6 border border-gray-100 sticky top-24 shadow-sm">
+            {/* Perfil do Criador - Topo */}
+            <div className="mb-6 pb-6 border-b border-gray-100">
+              {isOfficial || !resource.creator_id || isSystemProfileSync(resource.creator_id) ? (
+                <div className="flex items-center space-x-3">
+                  <div className="h-12 w-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {resource.creator?.avatar_url ? (
+                      <Image 
+                        src={resource.creator.avatar_url} 
+                        alt={authorName} 
+                        width={48} 
+                        height={48}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : resource.is_official ? (
+                      <Image src="/images/verificado.svg" alt="Verificado" width={28} height={28} />
+                    ) : (
+                      <User className="h-6 w-6 text-gray-700" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-bold text-gray-900 truncate">{authorName}</p>
+                      {isOfficial && (
+                        <Image src="/images/verificado.svg" alt="Oficial" width={12} height={12} className="flex-shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-600 font-semibold tracking-widest mt-0.5 uppercase">
+                      {isOfficial ? 'Equipe Oficial' : 'Criador Verificado'}
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  <Link 
+                    href={`/creator/${resource.creator_id}`}
+                    className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+                  >
+                    <div className="h-12 w-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {resource.creator?.avatar_url ? (
+                        <Image 
+                          src={resource.creator.avatar_url} 
+                          alt={authorName} 
+                          width={48} 
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="h-6 w-6 text-gray-700" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{authorName}</p>
+                      <p className="text-xs text-gray-600 font-semibold tracking-widest mt-0.5 uppercase">
+                        Criador Verificado
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={async () => {
+                        const { data: { user: authUser } } = await supabase.auth.getUser()
+                        if (!authUser) {
+                          toast.error('Você precisa estar logado para seguir')
+                          return
+                        }
+
+                        if (isFollowingCreator) {
+                          const { error } = await supabase
+                            .from('followers')
+                            .delete()
+                            .eq('follower_id', authUser.id)
+                            .eq('creator_id', resource.creator_id)
+
+                          if (!error) {
+                            setIsFollowingCreator(false)
+                            toast.success('Você deixou de seguir')
+                          }
+                        } else {
+                          const { error } = await supabase
+                            .from('followers')
+                            .insert({
+                              follower_id: authUser.id,
+                              creator_id: resource.creator_id,
+                            })
+
+                          if (!error) {
+                            setIsFollowingCreator(true)
+                            toast.success('Você está seguindo este criador')
+                          }
+                        }
+                      }}
+                      className={cn(
+                        "flex-1 px-4 py-2 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5",
+                        isFollowingCreator
+                          ? "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                          : "bg-gray-900 text-white hover:bg-black"
+                      )}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      {isFollowingCreator ? 'Seguindo' : 'Seguir'}
+                    </button>
+                    <Link
+                      href={`/creator/${resource.creator_id}`}
+                      className="px-4 py-2 text-xs font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200 flex items-center justify-center gap-1.5"
+                    >
+                      <User className="h-3.5 w-3.5" />
+                      Ver perfil
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Título */}
+            <div className="mb-6">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <h1 className="text-xl font-bold text-gray-900 leading-tight tracking-tighter flex-1">
+                  {resource.title}
+                </h1>
+                {resource.is_premium && (
+                  <span className="bg-gray-900 text-yellow-400 p-1.5 rounded-full flex-shrink-0 shadow-lg border border-gray-800">
+                    <Crown className="h-4 w-4 fill-yellow-400" />
+                  </span>
+                )}
+              </div>
+              
+              {/* Data de publicação */}
+              <p className="text-xs text-gray-500 font-medium">
+                {new Date(resource.created_at).toLocaleDateString('pt-BR', { 
+                  day: '2-digit', 
+                  month: '2-digit', 
+                  year: 'numeric' 
+                })}
+              </p>
+            </div>
+
+            {/* Informações do Arquivo */}
+            <div className="mb-6 space-y-4 pb-6 border-b border-gray-100">
+              <div className="space-y-3">
+                {resourceData.resource_type === 'motion' ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Formato:</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded flex items-center justify-center bg-purple-600 p-0.5">
+                        <Image 
+                          src="/images/Ae-icone.png" 
+                          alt="After Effects" 
+                          width={12} 
+                          height={12}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-900">After Effects</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Formato:</span>
+                    <span className="text-xs font-bold text-gray-900">{resourceData.file_format?.toUpperCase()}</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Resolução:</span>
+                  <span className="text-xs font-bold text-gray-900">
+                    {resourceData.width && resourceData.height 
+                      ? `${resourceData.width} × ${resourceData.height}` 
+                      : 'N/A'
+                    }
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Tamanho:</span>
+                  <span className="text-xs font-bold text-gray-900">{formatFileSize(resourceData.file_size)}</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Licença:</span>
+                  <span className="text-xs font-bold text-gray-900">{resourceData.is_premium ? 'Premium' : 'Gratuita'}</span>
+                </div>
+                
+                {resourceData.is_ai_generated && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Origem:</span>
+                    <span className="text-xs font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase">
+                      <Sparkles className="h-3 w-3" />
+                      IA Gerada
+                    </span>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Extensão:</span>
+                  <span className="text-xs font-bold text-gray-900">{resourceData.file_format?.toUpperCase() || 'PNG'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Tags */}
+            {resource.keywords && resource.keywords.length > 0 && (
+              <div className="mb-6 pb-6 border-b border-gray-100">
+                <div className="flex flex-wrap gap-2">
+                  {resource.keywords.slice(0, 8).map((keyword, index) => (
+                    <span 
+                      key={index}
+                      className="text-xs font-semibold text-gray-600 bg-gray-50 px-2 py-1 rounded"
+                    >
+                      #{keyword}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Botões de Ação */}
+            <div className="mb-6 pb-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={handleFavorite} 
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
+                >
+                  <Heart className={`h-4 w-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
+                  {isFavorited ? 'Curtido' : 'Curtir'}
+                </button>
+                <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:text-secondary-500 hover:bg-secondary-50 rounded-lg transition-colors border border-gray-200">
+                  <Share2 className="h-4 w-4" />
+                  Compartilhar
+                </button>
+                <button className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200">
+                  <Flag className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Badge de Família (se aplicável) */}
