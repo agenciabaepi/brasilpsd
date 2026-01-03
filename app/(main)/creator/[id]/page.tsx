@@ -146,6 +146,7 @@ export default function CreatorProfilePage() {
       
       if (featuredError) {
         console.error('Erro ao carregar recursos em destaque:', featuredError)
+        // Não mostrar toast para recursos em destaque, apenas logar o erro
       }
       
       setFeaturedResources(featuredData || [])
@@ -167,7 +168,10 @@ export default function CreatorProfilePage() {
       
       if (resourcesError) {
         console.error('Erro ao carregar recursos:', resourcesError)
-        toast.error('Erro ao carregar recursos do criador')
+        // Só mostrar toast se for um erro inesperado (não é apenas "nenhum resultado")
+        if (resourcesError.code !== 'PGRST116') { // PGRST116 = nenhum resultado encontrado
+          toast.error('Erro ao carregar recursos do criador')
+        }
       }
 
       setResources(resourcesData || [])
