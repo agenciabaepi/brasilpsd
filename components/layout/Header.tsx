@@ -24,10 +24,41 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   const [categories, setCategories] = useState<any[]>(initialCategories)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
-  const [lastScrollY, setLastScrollY] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createSupabaseClient()
+
+  // Detectar scroll para ocultar/mostrar header
+  useEffect(() => {
+    let lastScrollY = window.scrollY
+    let ticking = false
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY
+          
+          // Se rolar para baixo mais de 100px, ocultar header
+          // Se rolar para cima, mostrar header
+          if (currentScrollY > lastScrollY && currentScrollY > 100) {
+            setIsHeaderVisible(false)
+          } else if (currentScrollY < lastScrollY) {
+            setIsHeaderVisible(true)
+          }
+          
+          lastScrollY = currentScrollY
+          ticking = false
+        })
+        ticking = true
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -312,7 +343,11 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   ]
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white">
+    <header 
+      className={`sticky top-0 z-50 w-full border-b border-gray-100 bg-white transition-transform duration-300 ${
+        isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+      }`}
+    >
       {/* Top Row: Logo & User Actions */}
       <div className="border-b border-gray-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
