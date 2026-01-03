@@ -157,6 +157,7 @@ export default function CreatorProfilePage() {
       }
 
       // Carregar todos os recursos do criador
+      let resourcesData: Resource[] | null = null
       try {
         let resourcesQuery = supabase
           .from('resources')
@@ -170,7 +171,7 @@ export default function CreatorProfilePage() {
           resourcesQuery = resourcesQuery.eq('status', 'approved')
         }
         
-        const { data: resourcesData, error: resourcesError } = await resourcesQuery
+        const { data, error: resourcesError } = await resourcesQuery
         
         if (resourcesError) {
           console.error('Erro ao carregar recursos:', resourcesError)
@@ -179,25 +180,30 @@ export default function CreatorProfilePage() {
             toast.error('Erro ao carregar recursos do criador')
           }
           setResources([])
+          resourcesData = []
         } else {
-          setResources(resourcesData || [])
+          resourcesData = data || []
+          setResources(resourcesData)
         }
       } catch (error) {
         console.error('Erro ao carregar recursos:', error)
         toast.error('Erro ao carregar recursos do criador')
         setResources([])
+        resourcesData = []
       }
 
       // Calcular estatísticas (apenas recursos aprovados para estatísticas públicas)
-      const approvedResources = resourcesData?.filter(r => r.status === 'approved') || []
-      const totalDownloads = approvedResources.reduce((sum, r) => sum + (r.download_count || 0), 0)
-      const totalViews = approvedResources.reduce((sum, r) => sum + (r.view_count || 0), 0)
+      if (resourcesData) {
+        const approvedResources = resourcesData.filter(r => r.status === 'approved')
+        const totalDownloads = approvedResources.reduce((sum, r) => sum + (r.download_count || 0), 0)
+        const totalViews = approvedResources.reduce((sum, r) => sum + (r.view_count || 0), 0)
 
-      setStats({
-        totalResources: approvedResources.length,
-        totalDownloads,
-        totalViews,
-      })
+        setStats({
+          totalResources: approvedResources.length,
+          totalDownloads,
+          totalViews,
+        })
+      }
     } catch (error: any) {
       console.error('Erro ao carregar perfil:', error)
       toast.error('Erro ao carregar perfil')
