@@ -37,10 +37,17 @@ export async function GET(
     // Reconstruir o path do S3
     const s3Key = params.path.join('/')
     
-    if (!s3Key || !s3Key.includes('preview') && !s3Key.includes('thumbnail')) {
-      // Apenas permitir acesso a previews e thumbnails, nunca ao arquivo original
+    // Verificar se é um arquivo permitido
+    const isPreview = s3Key.includes('preview')
+    const isThumbnail = s3Key.includes('thumbnail')
+    const isResource = s3Key.includes('resources/')
+    const isPngResource = isResource && (s3Key.toLowerCase().endsWith('.png') || s3Key.toLowerCase().match(/\.png(\?|$)/))
+    
+    // Permitir: previews, thumbnails, e arquivos PNG originais (para preservar transparência)
+    if (!s3Key || (!isPreview && !isThumbnail && !isPngResource)) {
+      // Bloquear acesso a arquivos originais que não sejam PNG
       return NextResponse.json(
-        { error: 'Acesso negado. Apenas previews e thumbnails são permitidos.' },
+        { error: 'Acesso negado. Apenas previews, thumbnails e PNGs originais são permitidos.' },
         { status: 403 }
       )
     }
@@ -76,8 +83,32 @@ export async function GET(
     const imageBuffer = Buffer.from(await response.arrayBuffer())
     const originalContentType = response.headers.get('content-type') || 'image/png'
 
+    // Verificar se é PNG original (para preservar transparência sem processamento)
+    const isOriginalPng = isPngResource && !isPreview && !isThumbnail
+    
+    // Se for PNG original, retornar sem processamento para preservar transparência
+    if (isOriginalPng) {
+      const headers = new Headers()
+      headers.set('Content-Type', 'image/png')
+      headers.set('Content-Length', imageBuffer.length.toString())
+      headers.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400')
+      headers.set('X-Content-Type-Options', 'nosniff')
+      headers.set('X-Frame-Options', 'DENY')
+      headers.set('Content-Disposition', 'inline')
+      
+      return new NextResponse(imageBuffer, {
+        status: 200,
+        headers,
+      })
+    }
+
     // Processar imagem com Sharp (reduzir qualidade e redimensionar se necessário)
     let processedImage = sharp(imageBuffer)
+
+    // Verificar se a imagem tem transparência (canal alpha)
+    const metadata = await processedImage.metadata()
+    const hasAlpha = metadata.hasAlpha === true
+    const isPng = originalContentType.includes('png')
 
     // Redimensionar se width foi especificado
     if (width) {
@@ -85,6 +116,11 @@ export async function GET(
         withoutEnlargement: true,
         fit: 'inside',
       })
+    }
+
+    // Se for PNG com transparência, garantir que o canal alpha seja preservado
+    if (isPng && hasAlpha) {
+      processedImage = processedImage.ensureAlpha()
     }
 
     // Aplicar qualidade reduzida (otimizada para WebP)
@@ -97,20 +133,39 @@ export async function GET(
     let finalContentType: string
 
     if (format === 'webp' || (supportsWebP && !format)) {
-      // Converter para WebP (muito mais eficiente - ~30% menor que JPEG)
-      finalBuffer = await processedImage.webp({
-        quality: outputOptions.quality,
-        effort: 4, // Balance entre velocidade e compressão (0-6)
-      }).toBuffer()
-      finalContentType = 'image/webp'
+      // Para PNGs com transparência, NÃO converter para WebP (preservar PNG)
+      if (isPng && hasAlpha) {
+        finalBuffer = await processedImage.png({ 
+          quality: 100, // Máxima qualidade para PNGs com transparência
+          compressionLevel: 6,
+          adaptiveFiltering: true
+        }).toBuffer()
+        finalContentType = 'image/png'
+      } else {
+        // Converter para WebP (muito mais eficiente - ~30% menor que JPEG)
+        finalBuffer = await processedImage.webp({
+          quality: outputOptions.quality,
+          effort: 4, // Balance entre velocidade e compressão (0-6)
+        }).toBuffer()
+        finalContentType = 'image/webp'
+      }
     } else if (originalContentType.includes('jpeg') || originalContentType.includes('jpg')) {
       finalBuffer = await processedImage.jpeg(outputOptions).toBuffer()
       finalContentType = 'image/jpeg'
     } else if (originalContentType.includes('png')) {
-      finalBuffer = await processedImage.png({ 
-        quality: outputOptions.quality,
-        compressionLevel: 6 // Reduzido de 9 para 6 (mais rápido, ainda bom)
-      }).toBuffer()
+      // Para PNGs, preservar transparência se existir
+      if (hasAlpha) {
+        finalBuffer = await processedImage.png({ 
+          quality: 100, // Máxima qualidade para PNGs com transparência
+          compressionLevel: 6,
+          adaptiveFiltering: true
+        }).toBuffer()
+      } else {
+        finalBuffer = await processedImage.png({ 
+          quality: outputOptions.quality,
+          compressionLevel: 6
+        }).toBuffer()
+      }
       finalContentType = 'image/png'
     } else if (originalContentType.includes('webp')) {
       finalBuffer = await processedImage.webp(outputOptions).toBuffer()
