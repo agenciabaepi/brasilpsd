@@ -29,14 +29,25 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   const supabase = createSupabaseClient()
 
   // Detectar scroll para ocultar/mostrar header
+  // Detecta scroll tanto no window quanto em elementos internos com overflow
   const lastScrollY = useRef(0)
   const ticking = useRef(false)
 
   useEffect(() => {
-    const handleScroll = () => {
+    const handleScroll = (event?: Event) => {
       if (!ticking.current) {
         window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY
+          // Obter scroll do window
+          let currentScrollY = window.scrollY
+          
+          // Se o evento veio de um elemento específico, usar seu scrollTop
+          if (event?.target) {
+            const target = event.target as HTMLElement
+            // Se for um elemento com scroll interno, usar seu scrollTop
+            if (target !== document && target !== document.documentElement && target !== document.body) {
+              currentScrollY = target.scrollTop || window.scrollY
+            }
+          }
           
           // Se rolar para baixo mais de 100px, ocultar header
           // Se rolar para cima, mostrar header
@@ -61,10 +72,43 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     // Inicializar com a posição atual
     lastScrollY.current = window.scrollY
 
+    // Listener para scroll no window
     window.addEventListener('scroll', handleScroll, { passive: true })
+    
+    // Encontrar todos os elementos com overflow e adicionar listeners
+    const scrollableElements: HTMLElement[] = []
+    
+    const findScrollableElements = () => {
+      const allElements = document.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const element = el as HTMLElement
+        const style = window.getComputedStyle(element)
+        if (
+          (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+          element.scrollHeight > element.clientHeight
+        ) {
+          scrollableElements.push(element)
+          element.addEventListener('scroll', handleScroll, { passive: true })
+        }
+      })
+    }
+
+    // Aguardar um pouco para os elementos serem renderizados
+    setTimeout(() => {
+      findScrollableElements()
+    }, 500)
+
+    // Re-verificar periodicamente para elementos que são adicionados dinamicamente
+    const interval = setInterval(() => {
+      findScrollableElements()
+    }, 2000)
     
     return () => {
       window.removeEventListener('scroll', handleScroll)
+      scrollableElements.forEach((el) => {
+        el.removeEventListener('scroll', handleScroll)
+      })
+      clearInterval(interval)
     }
   }, [])
 
