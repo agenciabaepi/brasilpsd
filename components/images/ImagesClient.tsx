@@ -8,6 +8,7 @@ import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { cn } from '@/lib/utils/cn'
 import JustifiedGrid from '@/components/layout/JustifiedGrid'
+import { useHeaderVisibility } from '@/hooks/useHeaderVisibility'
 
 interface ImagesClientProps {
   initialResources: any[]
@@ -27,6 +28,7 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
   })
   const [page, setPage] = useState(1)
   const supabase = createSupabaseClient()
+  const isHeaderVisible = useHeaderVisibility()
 
   const filteredResources = resources.filter(resource => {
     const matchesSearch = !searchQuery || 
@@ -183,7 +185,9 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
         {/* MAIN CONTENT */}
         <main className="flex-1 h-full flex flex-col overflow-hidden p-8 lg:p-12">
           {/* Header Area - Fixed */}
-          <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+          <div className={`flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 transition-all duration-300 ${
+            isHeaderVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full h-0 mb-0 overflow-hidden'
+          }`}>
             <div className="flex items-center gap-4">
               {/* Botão para expandir filtros quando estiverem recolhidos */}
               {!isSidebarOpen && (
