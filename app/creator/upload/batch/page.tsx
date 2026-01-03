@@ -572,7 +572,7 @@ export default function BatchUploadPage() {
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100)
-            console.log(`Upload progress: ${percent}%`)
+            console.log(`📤 Upload progress: ${percent}%`)
           }
         })
 
@@ -604,7 +604,7 @@ export default function BatchUploadPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            key: key,
+            key: key, // Usar a key retornada pelo presigned
             fileName: image.file.name,
             contentType: image.file.type,
             type: 'resource'
@@ -617,12 +617,18 @@ export default function BatchUploadPage() {
           thumbnailUrl = processData.thumbnailUrl || null
           isAiGenerated = processData.isAiGenerated || false
           imageMetadata = processData.imageMetadata || null
-          console.log('✅ Arquivo grande processado com sucesso')
+          console.log('✅ Arquivo grande processado:', {
+            hasPreview: !!previewUrl,
+            hasThumbnail: !!thumbnailUrl,
+            isAiGenerated
+          })
         } else {
-          console.warn('⚠️ Erro ao processar arquivo grande, continuando sem preview/thumbnail')
+          const errorData = await processResponse.json().catch(() => ({}))
+          console.warn('⚠️ Erro ao processar arquivo grande:', errorData.error || 'Erro desconhecido')
+          // Continuar mesmo se o processamento falhar
         }
-      } catch (processError) {
-        console.warn('⚠️ Erro ao processar arquivo grande:', processError)
+      } catch (processError: any) {
+        console.warn('⚠️ Erro ao processar arquivo grande:', processError.message)
         // Continuar mesmo se o processamento falhar
       }
     } else {
