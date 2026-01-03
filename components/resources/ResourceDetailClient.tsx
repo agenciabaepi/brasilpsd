@@ -717,7 +717,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
         {/* COLUNA ESQUERDA - IMAGEM/VIDEO */}
         <div className="lg:col-span-7 lg:sticky lg:top-24 lg:self-start">
           {/* Preview Image/Video/Audio */}
-          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center group relative shadow-sm h-full">
+          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center group relative shadow-sm" style={{ minHeight: 'calc(100vh - 200px)' }}>
             {resource.resource_type === 'audio' ? (
               <div className="w-full p-8 md:p-12">
                 <AudioPlayer
