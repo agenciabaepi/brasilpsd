@@ -352,8 +352,8 @@ export default function Header({ initialUser, initialSubscription, initialCatego
 
   return (
     <header 
-      className={`fixed top-0 left-0 right-0 z-50 w-full border-b border-gray-100 bg-white transition-transform duration-300 ease-in-out ${
-        isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+      className={`fixed left-0 right-0 z-50 w-full border-b border-gray-100 bg-white transition-all duration-300 ease-in-out ${
+        isHeaderVisible ? 'translate-y-0 top-[40px]' : '-translate-y-full top-[40px]'
       }`}
     >
       {/* Top Row: Logo & User Actions */}
