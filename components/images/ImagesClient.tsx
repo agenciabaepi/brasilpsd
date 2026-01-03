@@ -96,16 +96,9 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
     '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#000000'
   ]
 
-  // Calcular altura dinâmica baseada na visibilidade do header
-  // Header visível: 100vh - 168px (PromotionalBar + Header)
-  // Header oculto: 100vh - 40px (apenas PromotionalBar)
-  const containerHeight = isHeaderVisible 
-    ? 'calc(100vh - 168px)' 
-    : 'calc(100vh - 40px)'
-
   return (
-    <div className="bg-white overflow-hidden transition-all duration-300" style={{ height: containerHeight }}>
-      <div className="max-w-[1600px] mx-auto h-full flex relative">
+    <div className="bg-white">
+      <div className="max-w-[1600px] mx-auto flex relative">
         
         {/* SIDEBAR FILTERS */}
         {isSidebarOpen && (
@@ -278,8 +271,8 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
           </div>
         )}
 
-          {/* RESULTS GRID - Scrollable */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide pr-2 -mr-2">
+          {/* RESULTS GRID */}
+          <div className="flex-1 pr-2 -mr-2">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-32 space-y-4">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>

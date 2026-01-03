@@ -216,19 +216,12 @@ function ExploreContent({
   if (isLegacyMode) {
     const displayResources = hasActiveSearch ? searchResults : (initialResources || [])
 
-    // Calcular altura dinâmica baseada na visibilidade do header
-    // Header visível: 100vh - 168px (PromotionalBar + Header)
-    // Header oculto: 100vh - 40px (apenas PromotionalBar)
-    const containerHeight = isHeaderVisible 
-      ? 'calc(100vh - 168px)' 
-      : 'calc(100vh - 40px)'
-
   return (
-    <div className={cn("bg-white overflow-hidden transition-all duration-300", hasHero ? "min-h-screen" : "")} style={!hasHero ? { height: containerHeight } : undefined}>
-      <div className={cn("max-w-[1600px] mx-auto flex relative", hasHero ? "min-h-[calc(100vh-64px)]" : "h-full")}>
+    <div className={cn("bg-white", hasHero ? "min-h-screen" : "")}>
+      <div className={cn("max-w-[1600px] mx-auto flex relative", hasHero ? "min-h-[calc(100vh-64px)]" : "")}>
         <main className={cn(
           "flex-1 flex flex-col p-8 lg:p-12",
-          hasHero ? "min-h-[calc(100vh-64px)]" : "h-full overflow-hidden"
+          hasHero ? "min-h-[calc(100vh-64px)]" : ""
         )}>
             {/* Header */}
           <div className={`flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 transition-all duration-300 ${
@@ -255,7 +248,7 @@ function ExploreContent({
               </div>
               
             {/* Results Grid - JustifiedGrid como na home */}
-            <div className="flex-1 overflow-y-auto scrollbar-hide pr-2 -mr-2">
+            <div className="flex-1 pr-2 -mr-2">
               {isSearching ? (
                 <div className="flex flex-col items-center justify-center py-32 space-y-4">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
