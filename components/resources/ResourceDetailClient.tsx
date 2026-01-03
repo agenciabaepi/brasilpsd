@@ -68,6 +68,26 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false)
   const supabase = createSupabaseClient()
 
+  // Função helper para obter URL da imagem correta para exibição
+  // Para PNGs, sempre usar file_url (original) para preservar transparência
+  const getImageDisplayUrl = useCallback(() => {
+    const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
+    
+    // Para PNGs, sempre usar o arquivo original para preservar transparência
+    if (isPng && resource.file_url) {
+      return getS3Url(resource.file_url)
+    }
+    
+    // Para outros formatos, usar preview_url ou thumbnail_url como antes
+    if (resource.preview_url) {
+      return resource.preview_url
+    }
+    if (resource.thumbnail_url) {
+      return resource.thumbnail_url
+    }
+    return null
+  }, [resource.file_format, resource.resource_type, resource.file_url, resource.preview_url, resource.thumbnail_url])
+
   useEffect(() => {
     // Se já temos initialUser, usar ele e não recarregar (evita flash)
     if (initialUser) {
@@ -919,40 +939,31 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   </div>
                 )}
               </div>
-            ) : resource.preview_url ? (
-              // Usar preview_url (com marca d'água) se disponível - protegida
-              <div className={`w-full flex items-center justify-center min-h-[400px] ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
-                <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
-                  <ProtectedImage
-                    src={resource.preview_url}
-                    alt={resource.title}
-                    width={1200}
-                    height={800}
-                    priority
-                    className="max-w-full max-h-[600px]"
-                    quality={70}
-                    objectFit="contain"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-                  />
-                </div>
-              </div>
-            ) : resource.thumbnail_url ? (
-              <div className={`w-full flex items-center justify-center min-h-[400px] ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-white'}`}>
-                <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
-                  <ProtectedImage
-                    src={resource.thumbnail_url}
-                    alt={resource.title}
-                    width={1200}
-                    height={800}
-                    priority
-                    className="max-w-full max-h-[600px]"
-                    quality={70}
-                    objectFit="contain"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-                  />
-                </div>
-              </div>
-            ) : resource.resource_type === 'font' ? (
+            ) : (() => {
+              const imageUrl = getImageDisplayUrl()
+              const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
+              
+              if (imageUrl) {
+                return (
+                  <div className={`w-full flex items-center justify-center min-h-[400px] ${isPng ? 'bg-checkerboard' : 'bg-white'}`}>
+                    <div className="relative" style={{ maxWidth: '100%', maxHeight: '600px' }}>
+                      <ProtectedImage
+                        src={imageUrl}
+                        alt={resource.title}
+                        width={1200}
+                        height={800}
+                        priority
+                        className="max-w-full max-h-[600px]"
+                        quality={isPng ? 100 : 70} // Máxima qualidade para PNGs
+                        objectFit="contain"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                      />
+                    </div>
+                  </div>
+                )
+              }
+              return null
+            })() || resource.resource_type === 'font' ? (
               <FontPreview fontName={fontName} fontLoaded={fontLoaded} resourceTitle={resource.title} />
             ) : (
               <div className="aspect-video w-full flex flex-col items-center justify-center bg-gray-50">

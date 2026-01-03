@@ -50,6 +50,26 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
     // Fallback para file_url (MP4 completo em resources/) se não houver preview
     return resource.file_url ? getS3Url(resource.file_url) : null
   }
+
+  // Função helper para obter URL da imagem correta para exibição
+  // Para PNGs, sempre usar file_url (original) para preservar transparência
+  const getImageDisplayUrl = () => {
+    const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
+    
+    // Para PNGs, sempre usar o arquivo original para preservar transparência
+    if (isPng && resource.file_url) {
+      return getS3Url(resource.file_url)
+    }
+    
+    // Para outros formatos, usar preview_url ou thumbnail_url como antes
+    if (resource.preview_url) {
+      return resource.preview_url
+    }
+    if (resource.thumbnail_url) {
+      return resource.thumbnail_url
+    }
+    return null
+  }
   
   // Calcular aspect ratio do vídeo baseado nas dimensões
   const getVideoAspectRatio = () => {
@@ -306,44 +326,33 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
           ) : resource.resource_type === 'font' ? (
             // Thumbnail automática para fontes
             <FontThumbnail resource={resource} size="medium" className="w-full" />
-          ) : resource.preview_url ? (
-            // Usar preview_url (com marca d'água) se disponível - protegida
-            <div 
-              className={`w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}
-              style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
-            >
-              <ProtectedImage
-                src={resource.preview_url}
-                alt={resource.title}
-                width={resource.width || 500}
-                height={resource.height || 500}
-                className="w-full h-auto"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                priority={false}
-                loading="lazy"
-                quality={65}
-                objectFit="contain"
-              />
-            </div>
-          ) : resource.thumbnail_url ? (
-            <div 
-              className={`w-full ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : ''}`}
-              style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
-            >
-              <ProtectedImage
-                src={resource.thumbnail_url}
-                alt={resource.title}
-                width={resource.width || 500}
-                height={resource.height || 500}
-                className="w-full h-auto"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                priority={false}
-                loading="lazy"
-                quality={65}
-                objectFit="contain"
-              />
-            </div>
-          ) : (
+          ) : (() => {
+            const imageUrl = getImageDisplayUrl()
+            const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
+            
+            if (imageUrl) {
+              return (
+                <div 
+                  className={`w-full ${isPng ? 'bg-checkerboard' : ''}`}
+                  style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
+                >
+                  <ProtectedImage
+                    src={imageUrl}
+                    alt={resource.title}
+                    width={resource.width || 500}
+                    height={resource.height || 500}
+                    className="w-full h-auto"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    priority={false}
+                    loading="lazy"
+                    quality={isPng ? 100 : 65} // Máxima qualidade para PNGs
+                    objectFit="contain"
+                  />
+                </div>
+              )
+            }
+            return null
+          })() || (
             <div className="aspect-square w-full flex items-center justify-center bg-gray-50 text-gray-400 text-xs font-bold tracking-widest uppercase">
               Sem prévia
             </div>

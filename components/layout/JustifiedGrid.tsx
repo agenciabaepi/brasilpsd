@@ -42,9 +42,21 @@ export default function JustifiedGrid({
   // Cache de dimensões medidas no client quando width/height não vierem do backend
   const [measuredDims, setMeasuredDims] = useState<Record<string, { w: number; h: number }>>({})
 
-  // Resolver URL e tipo (image | video) usando preview -> thumbnail -> file_url
+  // Resolver URL e tipo (image | video)
+  // Para PNGs, sempre usar file_url (original) para preservar transparência
+  // Para outros formatos, usar preview -> thumbnail -> file_url
   const resolveSrc = (resource: Resource): { src: string; kind: 'image' | 'video' } | null => {
-    const candidate = resource.preview_url || resource.thumbnail_url || resource.file_url
+    const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
+    
+    // Para PNGs, sempre usar o arquivo original
+    let candidate: string | null = null
+    if (isPng && resource.file_url) {
+      candidate = resource.file_url
+    } else {
+      // Para outros formatos, usar preview -> thumbnail -> file_url
+      candidate = resource.preview_url || resource.thumbnail_url || resource.file_url
+    }
+    
     if (!candidate) return null
 
     const absolute = candidate.startsWith('http')
@@ -52,7 +64,7 @@ export default function JustifiedGrid({
     const isVideo = isVideoPath(candidate) || resource.resource_type === 'video'
 
     if (isImage) {
-      const src = absolute ? candidate : `/api/image/${candidate}?q=65`
+      const src = absolute ? candidate : `/api/image/${candidate}?q=${isPng ? 100 : 65}` // Máxima qualidade para PNGs
       return { src, kind: 'image' }
     }
 
