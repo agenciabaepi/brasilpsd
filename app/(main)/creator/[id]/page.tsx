@@ -258,22 +258,31 @@ export default function CreatorProfilePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Banner */}
-      <div className="h-64 bg-gradient-to-br from-secondary-500 via-primary-500 to-secondary-600 relative overflow-hidden">
-        {creator.cover_image ? (
-          <Image
-            src={getS3Url(creator.cover_image)}
-            alt="Capa"
-            fill
-            className="object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 opacity-20">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-            <div className="absolute bottom-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+      {/* Banner com preview de recursos */}
+      <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 border-b border-gray-800">
+        {/* Preview de recursos no background */}
+        {resources.length > 0 && (
+          <div className="absolute inset-0 opacity-20 overflow-hidden">
+            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 h-full p-4">
+              {resources.slice(0, 16).map((resource, index) => (
+                resource.thumbnail_url ? (
+                  <div key={resource.id || index} className={`relative aspect-square rounded-lg overflow-hidden ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}>
+                    <Image
+                      src={getS3Url(resource.thumbnail_url)}
+                      alt={resource.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 25vw, 12.5vw"
+                    />
+                  </div>
+                ) : null
+              ))}
+            </div>
           </div>
         )}
-      </div>
+        
+        <div className="relative z-10">
+          <div className="container mx-auto max-w-7xl px-4 pt-8 pb-12">
 
       {/* Profile Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-32 relative z-10">
@@ -323,89 +332,6 @@ export default function CreatorProfilePage() {
               )}
             </div>
 
-            {/* Mensagem de Boas-vindas */}
-            <p className="text-gray-700 text-base font-medium max-w-2xl mb-6 leading-relaxed">
-              Bem-vindo ao nosso perfil oficial, aqui você encontra conteúdos criativos que agregam valor aos seus projetos.
-            </p>
-
-            {/* Botões de Ação */}
-            <div className="flex items-center justify-center space-x-3">
-              {!isOwnProfile && (
-                <button
-                  onClick={handleFollow}
-                  className={cn(
-                    "px-6 py-3 rounded-2xl font-bold text-sm transition-all flex items-center space-x-2",
-                    isFollowing
-                      ? "bg-gray-100 text-gray-900 hover:bg-gray-200"
-                      : "bg-secondary-600 text-white hover:bg-secondary-700"
-                  )}
-                >
-                  {isFollowing ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      <span>Seguindo</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4" />
-                      <span>Seguir</span>
-                    </>
-                  )}
-                </button>
-              )}
-              {isOwnProfile && !isSystemProfilePage && (
-                <Link
-                  href="/creator"
-                  className="px-6 py-3 bg-primary-500 text-white rounded-2xl font-bold text-sm hover:bg-primary-600 transition-all"
-                >
-                  Meu Painel
-                </Link>
-              )}
-              {isSystemProfilePage && currentUser?.is_admin && (
-                <Link
-                  href="/admin/system-profile"
-                  className="px-6 py-3 bg-primary-500 text-white rounded-2xl font-bold text-sm hover:bg-primary-600 transition-all"
-                >
-                  Editar Perfil do Sistema
-                </Link>
-              )}
-              <button className="p-3 rounded-2xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
-                <Share2 className="h-5 w-5" />
-              </button>
-              <button className="p-3 rounded-2xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
-                <Bookmark className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Estatísticas */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-10 border-t border-gray-100">
-            <StatItem 
-              icon={Files} 
-              value={formatNumber(stats.totalResources)} 
-              label="Arquivos" 
-            />
-            <StatItem 
-              icon={Download} 
-              value={formatNumber(stats.totalDownloads)} 
-              label="Downloads" 
-            />
-            <StatItem 
-              icon={Heart} 
-              value={formatNumber(likesCount)} 
-              label="Curtidas" 
-            />
-            <StatItem 
-              icon={User} 
-              value={formatNumber(followersCount)} 
-              label="Seguidores" 
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Conteúdo Principal */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Seção de Destaques */}
         {featuredResources.length > 0 && (
           <div className="mb-12">
