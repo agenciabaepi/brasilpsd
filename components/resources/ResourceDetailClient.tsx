@@ -71,6 +71,11 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   // Função helper para obter URL da imagem correta para exibição
   // Para PNGs, sempre usar file_url (original) para preservar transparência
   const getImageDisplayUrl = useCallback(() => {
+    // Não processar fontes ou vídeos aqui
+    if (resource.resource_type === 'font' || resource.resource_type === 'video' || resource.resource_type === 'motion') {
+      return null
+    }
+    
     const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
     
     // Para PNGs, sempre usar o arquivo original para preservar transparência
@@ -939,6 +944,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   </div>
                 )}
               </div>
+            ) : resource.resource_type === 'font' ? (
+              <FontPreview fontName={fontName} fontLoaded={fontLoaded} resourceTitle={resource.title} />
             ) : (() => {
               const imageUrl = getImageDisplayUrl()
               const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
@@ -963,9 +970,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 )
               }
               return null
-            })() || resource.resource_type === 'font' ? (
-              <FontPreview fontName={fontName} fontLoaded={fontLoaded} resourceTitle={resource.title} />
-            ) : (
+            })() || (
               <div className="aspect-video w-full flex flex-col items-center justify-center bg-gray-50">
                 <FileText className="h-16 w-16 text-gray-200 mb-4" />
                 <p className="text-gray-400 font-semibold tracking-widest text-sm uppercase">Sem Prévia</p>
