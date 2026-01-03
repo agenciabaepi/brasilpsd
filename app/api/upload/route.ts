@@ -205,6 +205,18 @@ export async function POST(request: NextRequest) {
         const image = sharp(buffer)
         const metadata = await image.metadata()
         
+        // Detectar se a imagem tem transparência (canal alpha)
+        const hasAlpha = metadata.hasAlpha === true
+        const isPng = fileExtension === 'png' || metadata.format === 'png'
+        const preserveTransparency = hasAlpha && isPng
+        
+        console.log('🖼️ Thumbnail transparency check:', {
+          hasAlpha,
+          isPng,
+          preserveTransparency,
+          format: metadata.format
+        })
+        
         // Se a imagem já for pequena (menos de 1200px), não redimensionar
         const needsResize = (metadata.width && metadata.width > 1200) || (metadata.height && metadata.height > 1200)
         
@@ -216,19 +228,41 @@ export async function POST(request: NextRequest) {
           })
         }
         
-        // Aplicar watermark e converter para webp com qualidade otimizada
-        const processedBuffer = await pipeline
-          .composite([{ 
-            input: watermarkTile, 
-            tile: true,
-            blend: 'over' 
-          }])
-          .webp({ quality: 75, effort: 4 }) // Reduzir qualidade e effort para ser mais rápido
-          .toBuffer()
+        // Se for PNG com transparência, garantir que o canal alpha seja preservado
+        if (preserveTransparency) {
+          pipeline = pipeline.ensureAlpha()
+        }
+        
+        // Aplicar watermark
+        pipeline = pipeline.composite([{ 
+          input: watermarkTile, 
+          tile: true,
+          blend: 'over' 
+        }])
+        
+        // Escolher formato baseado na transparência
+        let processedBuffer: Buffer
+        if (preserveTransparency) {
+          // Preservar transparência usando PNG
+          processedBuffer = await pipeline
+            .png({ 
+              quality: 90,
+              compressionLevel: 6,
+              adaptiveFiltering: true
+            })
+            .toBuffer()
+          contentType = 'image/png'
+          fileExtension = 'png'
+        } else {
+          // Sem transparência, usar WebP (melhor compressão)
+          processedBuffer = await pipeline
+            .webp({ quality: 75, effort: 4 })
+            .toBuffer()
+          contentType = 'image/webp'
+          fileExtension = 'webp'
+        }
+        
         buffer = Buffer.from(processedBuffer)
-
-        contentType = 'image/webp'
-        fileExtension = 'webp'
       } catch (err) {
         console.warn('Thumbnail processing failed, using original:', err)
         // Se falhar, usar o arquivo original
@@ -384,13 +418,32 @@ export async function POST(request: NextRequest) {
           </svg>
         `)
         
+        // Detectar se a imagem tem transparência (canal alpha)
+        const hasAlpha = metadata.hasAlpha === true
+        const isPng = fileExtension === 'png' || metadata.format === 'png'
+        const preserveTransparency = hasAlpha && isPng
+        
+        console.log('🖼️ Image transparency check:', {
+          hasAlpha,
+          isPng,
+          preserveTransparency,
+          format: metadata.format,
+          channels: metadata.channels
+        })
+        
         // Processar preview com marca d'água e thumbnail em paralelo
         const [previewResult, thumbnailResult] = await Promise.allSettled([
           // 3.1.1. Criar versão com marca d'água para preview
           (async () => {
             console.log('💧 Creating watermarked preview for image...')
-            const watermarked = await image
-              .clone()
+            let processedImage = image.clone()
+            
+            // Se for PNG com transparência, garantir que o canal alpha seja preservado
+            if (preserveTransparency) {
+              processedImage = processedImage.ensureAlpha()
+            }
+            
+            const watermarked = await processedImage
               .composite([{ 
                 input: watermarkTile, 
                 tile: true,
@@ -399,16 +452,21 @@ export async function POST(request: NextRequest) {
               .toBuffer()
             
             if (watermarked && watermarked.length > 0) {
-              const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension || 'jpg'}`
+              // Preservar formato original se for PNG com transparência
+              const previewExtension = preserveTransparency ? 'png' : (fileExtension || 'jpg')
+              const previewContentType = preserveTransparency ? 'image/png' : contentType
+              
+              const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.${previewExtension}`
               const previewKey = `previews/${user.id}/${previewFileName}`
               const url = await uploadFileToS3({
                 file: watermarked,
                 key: previewKey,
-                contentType: contentType,
+                contentType: previewContentType,
                 metadata: {
                   userId: user.id,
                   originalName: file.name,
-                  isPreview: 'true'
+                  isPreview: 'true',
+                  hasAlpha: preserveTransparency ? 'true' : 'false'
                 },
               })
               console.log('✅ Preview with watermark uploaded:', url)
@@ -432,19 +490,44 @@ export async function POST(request: NextRequest) {
               }
             }
             
-            // Criar thumbnail otimizado
-            const thumb = await image
+            // Criar pipeline de processamento
+            let thumbPipeline = image
               .clone()
               .resize(targetWidth, targetHeight, {
                 fit: 'inside',
                 withoutEnlargement: true
               })
-              .jpeg({ 
-                quality: 75,
-                mozjpeg: true,
-                progressive: true
-              })
-              .toBuffer()
+            
+            // Se for PNG com transparência, manter como PNG
+            // Caso contrário, converter para JPEG (menor tamanho)
+            let thumb: Buffer
+            let thumbExtension: string
+            let thumbContentType: string
+            
+            if (preserveTransparency) {
+              // Preservar transparência usando PNG
+              thumb = await thumbPipeline
+                .ensureAlpha() // Garantir que o canal alpha existe
+                .png({ 
+                  quality: 90,
+                  compressionLevel: 6,
+                  adaptiveFiltering: true
+                })
+                .toBuffer()
+              thumbExtension = 'png'
+              thumbContentType = 'image/png'
+            } else {
+              // Sem transparência, usar JPEG (menor tamanho)
+              thumb = await thumbPipeline
+                .jpeg({ 
+                  quality: 75,
+                  mozjpeg: true,
+                  progressive: true
+                })
+                .toBuffer()
+              thumbExtension = 'jpg'
+              thumbContentType = 'image/jpeg'
+            }
             
             const originalSize = buffer.length
             const thumbnailSize = thumb.length
@@ -452,22 +535,25 @@ export async function POST(request: NextRequest) {
             if (thumb && thumb.length > 0) {
               // Só usar o thumbnail se ele for menor que o original
               if (thumbnailSize < originalSize * 0.8 || originalSize > 500 * 1024) {
-                const thumbnailFileName = `thumb-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
+                const thumbnailFileName = `thumb-${Date.now()}-${Math.random().toString(36).substring(7)}.${thumbExtension}`
                 const thumbnailKey = `thumbnails/${user.id}/${thumbnailFileName}`
                 const url = await uploadFileToS3({
                   file: thumb,
                   key: thumbnailKey,
-                  contentType: 'image/jpeg',
+                  contentType: thumbContentType,
                   metadata: {
                     userId: user.id,
                     originalName: file.name,
                     isThumbnail: 'true',
                     originalWidth: metadata.width?.toString() || '',
-                    originalHeight: metadata.height?.toString() || ''
+                    originalHeight: metadata.height?.toString() || '',
+                    hasAlpha: preserveTransparency ? 'true' : 'false'
                   },
                 })
                 console.log('✅ Image thumbnail generated and uploaded:', {
                   url,
+                  format: thumbExtension,
+                  hasTransparency: preserveTransparency,
                   originalSize: `${(originalSize / 1024).toFixed(2)} KB`,
                   thumbnailSize: `${(thumbnailSize / 1024).toFixed(2)} KB`,
                   reduction: `${((1 - thumbnailSize / originalSize) * 100).toFixed(1)}%`
@@ -838,24 +924,61 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Upload do arquivo original (sem marca d'água) para download autorizado
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${previewExtension}`
+    // Para PNGs com transparência, garantir que o formato seja preservado
+    let finalBuffer = buffer
+    let finalExtension = previewExtension || fileExtension || 'jpg'
+    let finalContentType = contentType
+    
+    // Se for PNG com transparência, garantir que está usando o buffer original e formato PNG
+    if (type === 'resource' && file.type.startsWith('image/')) {
+      try {
+        const imageMetadata = await sharp(buffer).metadata()
+        const hasAlpha = imageMetadata.hasAlpha === true
+        const isPng = fileExtension === 'png' || imageMetadata.format === 'png'
+        
+        if (hasAlpha && isPng) {
+          // Para PNGs com transparência, usar o buffer original e garantir formato PNG
+          console.log('🖼️ Preserving PNG with transparency for original file')
+          finalExtension = 'png'
+          finalContentType = 'image/png'
+          
+          // Se o buffer foi modificado (ex: conversão de vídeo), garantir que seja PNG
+          if (previewExtension !== 'png') {
+            finalBuffer = await sharp(buffer)
+              .ensureAlpha()
+              .png({ 
+                quality: 100, // Máxima qualidade para arquivo original
+                compressionLevel: 6,
+                adaptiveFiltering: true
+              })
+              .toBuffer()
+            console.log('✅ Converted back to PNG to preserve transparency')
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not check image metadata for original file:', err)
+        // Continuar com o buffer atual se houver erro
+      }
+    }
+    
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExtension}`
     const fileKey = type === 'thumbnail' ? `thumbnails/${user.id}/${fileName}` : `resources/${user.id}/${fileName}`
 
     console.log('☁️ Uploading original file to S3:', {
       key: fileKey,
-      contentType: contentType,
-      extension: previewExtension,
+      contentType: finalContentType,
+      extension: finalExtension,
       originalExtension: fileExtension,
       wasConverted: wasConverted,
-      size: buffer.length,
+      size: finalBuffer.length,
       elapsed: `${((Date.now() - startTime) / 1000).toFixed(2)}s`
     })
 
     const s3StartTime = Date.now()
     const fileUrl = await uploadFileToS3({
-      file: buffer,
+      file: finalBuffer,
       key: fileKey,
-      contentType: contentType,
+      contentType: finalContentType,
       metadata: {
         userId: user.id,
         originalName: file.name,
