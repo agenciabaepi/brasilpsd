@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { createSupabaseClient } from '@/lib/supabase/client'
-import { Users, FileCheck, FileX, TrendingUp, DollarSign, AlertCircle } from 'lucide-react'
+import { Users, FileCheck, FileX, TrendingUp, DollarSign, AlertCircle, RefreshCw } from 'lucide-react'
 import type { Profile, Resource } from '@/types/database'
 import Link from 'next/link'
 import { getS3Url } from '@/lib/aws/s3'
@@ -22,6 +22,8 @@ export default function AdminDashboardPage() {
     pendingCollections: 0,
     totalDownloads: 0,
   })
+  const [isReprocessing, setIsReprocessing] = useState(false)
+  const [reprocessResult, setReprocessResult] = useState<any>(null)
   const router = useRouter()
   const supabase = createSupabaseClient()
 
@@ -203,6 +205,40 @@ export default function AdminDashboardPage() {
     loadData()
   }
 
+  async function handleReprocessPNGs(limit: number = 10) {
+    if (!confirm(`Deseja reprocessar até ${limit} PNGs para preservar transparência?`)) {
+      return
+    }
+
+    setIsReprocessing(true)
+    setReprocessResult(null)
+
+    try {
+      const response = await fetch('/api/admin/reprocess-pngs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setReprocessResult(data)
+        toast.success(`Reprocessamento concluído: ${data.processed} processados, ${data.skipped} pulados`)
+        if (data.errors && data.errors.length > 0) {
+          console.warn('Erros durante reprocessamento:', data.errors)
+        }
+      } else {
+        toast.error(data.error || 'Erro ao reprocessar PNGs')
+      }
+    } catch (error: any) {
+      console.error('Erro ao reprocessar:', error)
+      toast.error('Erro ao reprocessar PNGs')
+    } finally {
+      setIsReprocessing(false)
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -300,6 +336,60 @@ export default function AdminDashboardPage() {
               <QuickLink href="/admin/users" title="Gestão de Usuários" />
               <QuickLink href="/admin/resources" title="Biblioteca de Arquivos" />
               <QuickLink href="/admin/analytics" title="Relatórios de Performance" />
+            </div>
+          </Card>
+
+          {/* Reprocessar PNGs */}
+          <Card className="border border-gray-200 p-6 lg:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <RefreshCw className="h-5 w-5 text-primary-600" />
+              <h3 className="font-semibold text-sm lg:text-base text-gray-900">Reprocessar PNGs</h3>
+            </div>
+            <p className="text-xs lg:text-sm text-gray-600 mb-4">
+              Corrige previews e thumbnails de PNGs com transparência que ficaram com fundo preto.
+            </p>
+            <div className="space-y-3">
+              <Button
+                onClick={() => handleReprocessPNGs(10)}
+                disabled={isReprocessing}
+                className="w-full"
+                size="sm"
+              >
+                {isReprocessing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Reprocessar 10 PNGs
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => handleReprocessPNGs(50)}
+                disabled={isReprocessing}
+                variant="outline"
+                className="w-full"
+                size="sm"
+              >
+                Reprocessar 50 PNGs
+              </Button>
+              {reprocessResult && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs">
+                  <div className="font-semibold text-gray-900 mb-2">Resultado:</div>
+                  <div className="space-y-1 text-gray-600">
+                    <div>✅ Processados: {reprocessResult.processed}</div>
+                    <div>⏭️ Pulados: {reprocessResult.skipped}</div>
+                    {reprocessResult.errors && reprocessResult.errors.length > 0 && (
+                      <div className="text-red-600">
+                        ❌ Erros: {reprocessResult.errors.length}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         </div>

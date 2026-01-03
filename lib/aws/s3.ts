@@ -188,3 +188,65 @@ export async function uploadToS3FromBuffer(
   })
   return { publicUrl: url, key }
 }
+
+/**
+ * Baixa um arquivo do S3 e retorna como Buffer
+ */
+export async function downloadFileFromS3(key: string): Promise<Buffer> {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  })
+
+  try {
+    const response = await s3Client.send(command)
+    if (!response.Body) {
+      throw new Error('Empty response body')
+    }
+    
+    // Converter stream para Buffer
+    const chunks: Uint8Array[] = []
+    const stream = response.Body as any
+    
+    for await (const chunk of stream) {
+      chunks.push(chunk)
+    }
+    
+    return Buffer.concat(chunks)
+  } catch (error) {
+    console.error('S3 Download error:', error)
+    throw error
+  }
+}
+
+/**
+ * Extrai a chave S3 de uma URL completa
+ */
+export function extractS3KeyFromUrl(url: string): string {
+  if (!url) return ''
+  
+  // Se já for uma chave (sem http), retornar como está
+  if (!url.startsWith('http')) {
+    return url
+  }
+  
+  // Extrair chave de URL S3
+  const s3Match = url.match(/s3\.([^.]+)\.amazonaws\.com\/(.+)$/)
+  if (s3Match) {
+    return s3Match[2]
+  }
+  
+  // Extrair chave de URL CloudFront
+  const cfMatch = url.match(/cloudfront\.net\/(.+)$/)
+  if (cfMatch) {
+    return cfMatch[1]
+  }
+  
+  // Tentar extrair do path
+  try {
+    const urlObj = new URL(url)
+    return urlObj.pathname.substring(1) // Remove leading slash
+  } catch {
+    return url
+  }
+}
