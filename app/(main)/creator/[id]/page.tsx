@@ -178,16 +178,28 @@ export default function CreatorProfilePage() {
         const { data, error: resourcesError } = await resourcesQuery
         
         if (resourcesError) {
-          console.error('Erro ao carregar recursos:', resourcesError)
+          console.error('Erro ao carregar recursos:', {
+            code: resourcesError.code,
+            message: resourcesError.message,
+            details: resourcesError.details,
+            hint: resourcesError.hint
+          })
           // Só mostrar toast se for um erro inesperado (não é apenas "nenhum resultado")
           if (resourcesError.code !== 'PGRST116') { // PGRST116 = nenhum resultado encontrado
-            toast.error('Erro ao carregar recursos do criador')
+            // Evitar múltiplos toasts - verificar se já foi mostrado
+            const errorKey = `resource-error-${creatorId}`
+            if (!sessionStorage.getItem(errorKey)) {
+              sessionStorage.setItem(errorKey, 'true')
+              toast.error('Erro ao carregar recursos do criador')
+              setTimeout(() => sessionStorage.removeItem(errorKey), 1000)
+            }
           }
           setResources([])
           resourcesData = []
         } else {
           resourcesData = data || []
           setResources(resourcesData)
+          console.log(`✅ Carregados ${resourcesData.length} recursos do criador ${creatorId}`)
         }
       } catch (error) {
         console.error('Erro ao carregar recursos:', error)
