@@ -113,7 +113,7 @@ export default function ResourceViewModal({ resourceId, isOpen, onClose }: Resou
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       
       {/* Modal Content */}
-      <div className="relative z-10 w-full max-w-7xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative z-10 w-full max-w-7xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" data-resource-modal>
         {/* Header com botão fechar */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
           <h2 className="text-lg font-semibold text-gray-900">Visualizar Recurso</h2>
@@ -133,16 +133,18 @@ export default function ResourceViewModal({ resourceId, isOpen, onClose }: Resou
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
             </div>
           ) : resource ? (
-            <ResourceDetailClient
-              resource={resource}
-              initialUser={user}
-              initialIsFavorited={isFavorited}
-              initialDownloadStatus={null}
-              initialAlreadyDownloadedToday={false}
-              collection={null}
-              collectionResources={[]}
-              relatedResources={[]}
-            />
+            <div className="p-0">
+              <ResourceDetailClient
+                resource={resource}
+                initialUser={user}
+                initialIsFavorited={isFavorited}
+                initialDownloadStatus={null}
+                initialAlreadyDownloadedToday={false}
+                collection={null}
+                collectionResources={[]}
+                relatedResources={[]}
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-center py-32">
               <p className="text-gray-500">Recurso não encontrado</p>
