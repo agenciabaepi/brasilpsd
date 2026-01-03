@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
 
     const { metadata, fileName, categories, imageBase64, resourceType, generateDescription = true } = await request.json()
 
-    // Se temos imagem visual, não usar fileName para evitar que a IA copie o nome do arquivo
-    const shouldIgnoreFileName = !!imageBase64
+    // Se temos imagem visual, podemos usar fileName como contexto adicional, mas priorizar análise visual
+    const shouldIgnoreFileName = false // Agora permitimos usar o nome do arquivo como contexto
     const isFont = resourceType === 'font'
 
     console.log('📸 AI Generate Content Request:', {
@@ -298,34 +298,29 @@ Responda APENAS com JSON válido (sem markdown, sem código, apenas JSON puro):
         content: [
           {
             type: 'text',
-            text: `🚨 REGRA ABSOLUTA: IGNORE COMPLETAMENTE O NOME DO ARQUIVO. O nome do arquivo é irrelevante e NÃO deve ser usado de forma alguma.
-
-Você está analisando uma IMAGEM. Olhe para a imagem e descreva APENAS o que você REALMENTE VÊ visualmente.
-
-❌ NÃO FAÇA:
-- Usar o nome do arquivo no título
-- Incluir números, datas ou códigos do nome do arquivo
-- Copiar qualquer parte do nome do arquivo
-
-✅ FAÇA:
-- Analise APENAS o conteúdo visual da imagem
-- Descreva o que você vê: pessoas, objetos, cenários, ações, emoções
-- Use português brasileiro natural e descritivo
+            text: `Você está analisando uma IMAGEM. Use a análise visual como PRIORIDADE, mas o nome do arquivo pode fornecer contexto útil.
 
 INSTRUÇÕES:
-1. Olhe atentamente para a imagem e descreva EXATAMENTE o que você vê (pessoas, objetos, cenário, ação, emoção)
-2. Gere um título curto e descritivo (máximo 60 caracteres) em português brasileiro baseado APENAS no que você vê na imagem
-${generateDescription ? '3. Crie uma descrição detalhada (2-3 frases) em português brasileiro\n4. Extraia 3-5 palavras-chave relevantes\n5. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual' : '3. Extraia 3-5 palavras-chave relevantes\n4. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual'}
+1. PRIORIDADE: Olhe atentamente para a imagem e descreva EXATAMENTE o que você REALMENTE VÊ visualmente (pessoas, objetos, cenário, ação, emoção)
+2. CONTEXTO ADICIONAL: O nome do arquivo pode ajudar a entender melhor o contexto, mas NÃO copie números, datas ou códigos do nome do arquivo
+3. Gere um título curto e descritivo (máximo 60 caracteres) em português brasileiro baseado PRINCIPALMENTE no que você vê na imagem, mas pode usar o nome do arquivo como referência se for relevante
+${generateDescription ? '4. Crie uma descrição detalhada (2-3 frases) em português brasileiro\n5. Extraia 3-5 palavras-chave relevantes\n6. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual' : '4. Extraia 3-5 palavras-chave relevantes\n5. Escolha TODAS as categorias apropriadas baseadas no conteúdo visual'}
+
+${fileName ? `Nome do arquivo (para contexto): ${fileName}\n\nIMPORTANTE sobre o nome do arquivo:
+- Use o nome do arquivo APENAS como contexto adicional
+- NÃO copie números, datas (ex: "2022", "05", "12") ou códigos do nome do arquivo
+- Se o nome do arquivo tiver palavras descritivas úteis (ex: "mulher-orando", "paisagem-montanha"), você pode usar essas palavras como referência
+- Mas SEMPRE priorize o que você VÊ na imagem sobre o nome do arquivo` : ''}
 
 EXEMPLOS CORRETOS:
-- Se você vê uma mulher de cabelos longos com as mãos juntas em oração: "Mulher em Oração" ou "Mulher Rezando"
-- Se você vê uma paisagem de montanha ao pôr do sol: "Paisagem Montanhosa ao Pôr do Sol"
-- Se você vê pessoas trabalhando em escritório: "Equipe Trabalhando em Escritório"
+- Imagem mostra mulher rezando + arquivo "mulher-orando.jpg" → "Mulher em Oração" ✅
+- Imagem mostra paisagem montanhosa + arquivo "sunset-mountain.jpg" → "Paisagem Montanhosa ao Pôr do Sol" ✅
+- Imagem mostra equipe trabalhando + arquivo "team-office-2022.jpg" → "Equipe Trabalhando em Escritório" ✅ (ignorou o "2022")
 
-EXEMPLOS INCORRETOS (NÃO FAÇA):
-- "Woman Praying 2022 05 12" ❌ (usou nome do arquivo)
-- "Imagem 12345" ❌ (usou números do arquivo)
-- Qualquer coisa que venha do nome do arquivo ❌
+EXEMPLOS INCORRETOS:
+- "Woman Praying 2022 05 12" ❌ (copiou números e datas do arquivo)
+- "Imagem 12345" ❌ (copiou números do arquivo)
+- Qualquer coisa que seja apenas números ou códigos ❌
 
 Categorias disponíveis:
 ${categoriesText}
@@ -339,7 +334,7 @@ IMPORTANTE: Você DEVE responder APENAS com um objeto JSON válido. NÃO use mar
 
 Formato EXATO da resposta (copie e preencha):
 {
-  "title": "título baseado APENAS no que você vê na imagem",
+  "title": "título baseado no que você vê na imagem (pode usar palavras do nome do arquivo se forem relevantes, mas ignore números/datas)",
   ${generateDescription ? '"description": "descrição detalhada do conteúdo visual",' : ''}
   "keywords": ["palavra1", "palavra2", "palavra3"],
   "category_ids": ["id-da-categoria1", "id-da-categoria2"]

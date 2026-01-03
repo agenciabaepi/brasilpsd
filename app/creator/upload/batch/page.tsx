@@ -310,11 +310,10 @@ export default function BatchUploadPage() {
         body: JSON.stringify({
           metadata: {
             ...metadata,
-            // NÃO incluir fileName quando temos imagem base64 para evitar que a IA use o nome do arquivo
             fileSize: image.file.size,
             fileType: image.file.type,
           },
-          fileName: imageBase64 ? undefined : image.file.name, // Só passar fileName se não tiver imagem visual
+          fileName: image.file.name, // Sempre passar fileName como contexto adicional
           categories: categories.length > 0 ? categories : undefined, // Passar categorias apenas se disponíveis
           imageBase64: imageBase64, // Enviar imagem para análise visual
           generateDescription: false, // Não gerar descrição, apenas título
