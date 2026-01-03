@@ -283,54 +283,173 @@ export default function CreatorProfilePage() {
         
         <div className="relative z-10">
           <div className="container mx-auto max-w-7xl px-4 pt-8 pb-12">
-
-      {/* Profile Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-32 relative z-10">
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-xl p-10">
-          {/* Avatar e Informações Principais */}
-          <div className="flex flex-col items-center text-center mb-10">
-            {/* Avatar */}
-            <div className="relative mb-6">
-              <div className="h-32 w-32 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center overflow-hidden">
-                {creator.avatar_url ? (
-                  <Image
-                    src={creator.avatar_url}
-                    alt={creator.full_name || 'Criador'}
-                    width={128}
-                    height={128}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full bg-gradient-to-br from-secondary-500 to-primary-500 flex items-center justify-center">
-                    <User className="h-16 w-16 text-white" />
+            {/* Conteúdo do Banner */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-end">
+              {/* Informações do criador */}
+              <div className="lg:col-span-2">
+                <div className="flex items-center gap-6 mb-6">
+                  {/* Avatar */}
+                  <div className="relative">
+                    <div className="h-24 w-24 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center overflow-hidden">
+                      {creator.avatar_url ? (
+                        <Image
+                          src={creator.avatar_url}
+                          alt={creator.full_name || 'Criador'}
+                          width={96}
+                          height={96}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full bg-gradient-to-br from-secondary-500 to-primary-500 flex items-center justify-center">
+                          <User className="h-12 w-12 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    {creator.is_creator && (
+                      <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1.5 border-4 border-white">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
                   </div>
-                )}
+                  
+                  <div>
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-white mb-2 drop-shadow-lg">
+                      {creator.full_name || 'Criador Sem Nome'}
+                    </h1>
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-white/80 text-sm">
+                      {createdDate && (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>Desde {createdDate}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <span>Brasil</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="text-base sm:text-lg text-white/90 mb-6 max-w-3xl drop-shadow">
+                  Bem-vindo ao nosso perfil oficial, aqui você encontra conteúdos criativos que agregam valor aos seus projetos.
+                </p>
+
+                {/* Estatísticas */}
+                <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-white/80">
+                  <div className="flex items-center gap-2">
+                    <Files className="h-5 w-5" />
+                    <span className="text-sm font-medium">{formatNumber(stats.totalResources)} arquivos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Download className="h-5 w-5" />
+                    <span className="text-sm font-medium">{formatNumber(stats.totalDownloads)} downloads</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Heart className="h-5 w-5" />
+                    <span className="text-sm font-medium">{formatNumber(likesCount)} curtidas</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    <span className="text-sm font-medium">{formatNumber(followersCount)} seguidores</span>
+                  </div>
+                </div>
               </div>
-              {creator.is_creator && (
-                <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1.5 border-4 border-white">
-                  <Check className="h-3 w-3 text-white" />
+
+              {/* Preview grid dos recursos */}
+              {resources.length > 0 && (
+                <div className="lg:col-span-1">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 p-4 shadow-lg">
+                    <div className="grid grid-cols-2 gap-2">
+                      {resources.slice(0, 4).map((resource, index) => (
+                        resource.thumbnail_url ? (
+                          <Link
+                            key={resource.id || index}
+                            href={`/resources/${resource.id}`}
+                            className={`aspect-square relative rounded-lg overflow-hidden hover:ring-2 hover:ring-primary-500 transition-all group ${resource.file_format?.toLowerCase() === 'png' ? 'bg-checkerboard' : 'bg-gray-100'}`}
+                          >
+                            <Image
+                              src={getS3Url(resource.thumbnail_url)}
+                              alt={resource.title}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-300"
+                              sizes="(max-width: 1024px) 50vw, 25vw"
+                            />
+                          </Link>
+                        ) : (
+                          <div key={index} className="aspect-square rounded-lg bg-white/10 flex items-center justify-center">
+                            <span className="text-white/30 text-xs">Sem prévia</span>
+                          </div>
+                        )
+                      ))}
+                      {resources.length < 4 && (
+                        Array.from({ length: 4 - resources.length }).map((_, i) => (
+                          <div key={`empty-${i}`} className="aspect-square rounded-lg bg-white/10" />
+                        ))
+                      )}
+                    </div>
+                    {resources.length > 4 && (
+                      <p className="text-xs text-white/70 text-center mt-3">
+                        +{resources.length - 4} mais recursos
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Nome */}
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">
-              {creator.full_name || 'Criador Sem Nome'}
-            </h1>
-
-            {/* Localização e Data */}
-            <div className="flex items-center justify-center space-x-6 mb-4 text-gray-600">
-              <div className="flex items-center space-x-2">
-                <MapPin className="h-4 w-4" />
-                <span className="text-sm font-medium">Brasil</span>
-              </div>
-              {createdDate && (
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4" />
-                  <span className="text-sm font-medium">Desde {createdDate}</span>
-                </div>
+      {/* Barra de Ações */}
+      <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
+        <div className="container mx-auto max-w-7xl px-4 py-3 sm:py-4">
+          <div className="flex items-center justify-center sm:justify-start">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-center">
+              {!isOwnProfile && (
+                <button
+                  onClick={handleFollow}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2",
+                    isFollowing
+                      ? "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                      : "bg-secondary-600 text-white hover:bg-secondary-700"
+                  )}
+                >
+                  {isFollowing ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      <span>Seguindo</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      <span>Seguir</span>
+                    </>
+                  )}
+                </button>
               )}
+              {isOwnProfile && !isSystemProfilePage && (
+                <Link
+                  href="/creator"
+                  className="px-4 py-2 bg-primary-500 text-white rounded-lg font-semibold text-sm hover:bg-primary-600 transition-all"
+                >
+                  Meu Painel
+                </Link>
+              )}
+              <button className="p-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
+                <Share2 className="h-5 w-5" />
+              </button>
+              <button className="p-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
+                <Bookmark className="h-5 w-5" />
+              </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Conteúdo Principal */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
         {/* Seção de Destaques */}
         {featuredResources.length > 0 && (
