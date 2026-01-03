@@ -172,12 +172,13 @@ export default function CreatorProfilePage() {
 
       setResources(resourcesData || [])
 
-      // Calcular estatísticas
-      const totalDownloads = resourcesData?.reduce((sum, r) => sum + r.download_count, 0) || 0
-      const totalViews = resourcesData?.reduce((sum, r) => sum + r.view_count, 0) || 0
+      // Calcular estatísticas (apenas recursos aprovados para estatísticas públicas)
+      const approvedResources = resourcesData?.filter(r => r.status === 'approved') || []
+      const totalDownloads = approvedResources.reduce((sum, r) => sum + (r.download_count || 0), 0)
+      const totalViews = approvedResources.reduce((sum, r) => sum + (r.view_count || 0), 0)
 
       setStats({
-        totalResources: resourcesData?.length || 0,
+        totalResources: approvedResources.length,
         totalDownloads,
         totalViews,
       })
