@@ -32,20 +32,22 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   // Detecta scroll tanto no window quanto em elementos internos com overflow
   const lastScrollY = useRef(0)
   const ticking = useRef(false)
+  const scrollableElementsRef = useRef<Set<HTMLElement>>(new Set())
 
   useEffect(() => {
     const handleScroll = (event?: Event) => {
       if (!ticking.current) {
         window.requestAnimationFrame(() => {
-          // Obter scroll do window
-          let currentScrollY = window.scrollY
+          // Obter scroll do window primeiro
+          let currentScrollY = window.scrollY || window.pageYOffset || 0
           
-          // Se o evento veio de um elemento específico, usar seu scrollTop
+          // Se o evento veio de um elemento específico, verificar seu scrollTop
           if (event?.target) {
             const target = event.target as HTMLElement
-            // Se for um elemento com scroll interno, usar seu scrollTop
-            if (target !== document && target !== document.documentElement && target !== document.body) {
-              currentScrollY = target.scrollTop || window.scrollY
+            // Se for um elemento com scroll interno (não window/document), usar seu scrollTop
+            if (target !== document && target !== document.documentElement && target !== document.body && target.scrollTop !== undefined) {
+              // Usar o scrollTop do elemento que está fazendo scroll
+              currentScrollY = target.scrollTop
             }
           }
           
@@ -70,45 +72,57 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     }
 
     // Inicializar com a posição atual
-    lastScrollY.current = window.scrollY
+    lastScrollY.current = window.scrollY || window.pageYOffset || 0
 
     // Listener para scroll no window
     window.addEventListener('scroll', handleScroll, { passive: true })
     
-    // Encontrar todos os elementos com overflow e adicionar listeners
-    const scrollableElements: HTMLElement[] = []
-    
-    const findScrollableElements = () => {
-      const allElements = document.querySelectorAll('*')
-      allElements.forEach((el) => {
+    // Função para encontrar e adicionar listeners em elementos scrolláveis
+    const findAndAttachScrollableElements = () => {
+      // Buscar elementos com overflow-y: auto ou scroll
+      const candidates = document.querySelectorAll('[class*="overflow"], [style*="overflow"]')
+      
+      candidates.forEach((el) => {
         const element = el as HTMLElement
         const style = window.getComputedStyle(element)
+        
+        // Verificar se tem overflow e se realmente é scrollável
         if (
           (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-          element.scrollHeight > element.clientHeight
+          element.scrollHeight > element.clientHeight &&
+          !scrollableElementsRef.current.has(element)
         ) {
-          scrollableElements.push(element)
+          scrollableElementsRef.current.add(element)
           element.addEventListener('scroll', handleScroll, { passive: true })
         }
       })
     }
 
     // Aguardar um pouco para os elementos serem renderizados
-    setTimeout(() => {
-      findScrollableElements()
-    }, 500)
+    const timeout = setTimeout(() => {
+      findAndAttachScrollableElements()
+    }, 1000)
 
-    // Re-verificar periodicamente para elementos que são adicionados dinamicamente
-    const interval = setInterval(() => {
-      findScrollableElements()
-    }, 2000)
+    // Usar MutationObserver para detectar quando novos elementos são adicionados
+    const observer = new MutationObserver(() => {
+      findAndAttachScrollableElements()
+    })
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style']
+    })
     
     return () => {
       window.removeEventListener('scroll', handleScroll)
-      scrollableElements.forEach((el) => {
+      scrollableElementsRef.current.forEach((el) => {
         el.removeEventListener('scroll', handleScroll)
       })
-      clearInterval(interval)
+      scrollableElementsRef.current.clear()
+      observer.disconnect()
+      clearTimeout(timeout)
     }
   }, [])
 
