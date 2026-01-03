@@ -152,12 +152,12 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   return (
     <Link 
       href={`/resources/${resource.id}`} 
-      className="break-inside-avoid block group w-full"
+      className="break-inside-avoid block group w-full h-full"
     >
       <div ref={cardRef} className={`relative overflow-hidden rounded-lg transition-all hover:opacity-90 transition-all duration-200 shadow-sm hover:shadow-md w-full h-full ${isVideo ? 'bg-black' : 'bg-gray-100'}`}>
         {/* Image/Video Container */}
         <div 
-          className={`relative w-full overflow-hidden flex items-center justify-center ${isVideo ? '' : 'min-h-[150px]'}`}
+          className={`relative w-full h-full overflow-hidden flex items-center justify-center ${isVideo ? '' : ''}`}
           onMouseEnter={() => {
             // Debounce para evitar múltiplas chamadas rápidas
             if (hoverTimeoutRef.current) {
@@ -326,6 +326,24 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
           ) : resource.resource_type === 'font' ? (
             // Thumbnail automática para fontes
             <FontThumbnail resource={resource} size="medium" className="w-full" />
+          ) : resource.resource_type === 'audio' ? (
+            // Áudios - mostrar "SEM PRÉVIA" se não houver thumbnail
+            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400 text-xs font-bold tracking-widest uppercase">
+              {resource.thumbnail_url ? (
+                <Image
+                  src={getS3Url(resource.thumbnail_url)}
+                  alt={resource.title}
+                  width={500}
+                  height={500}
+                  className="w-full h-full object-cover"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  priority={false}
+                  loading="lazy"
+                />
+              ) : (
+                'SEM PRÉVIA'
+              )}
+            </div>
           ) : (() => {
             const imageUrl = getImageDisplayUrl()
             const isPng = resource.file_format?.toLowerCase() === 'png' || resource.resource_type === 'png'
@@ -333,20 +351,19 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
             if (imageUrl) {
               return (
                 <div 
-                  className={`w-full relative ${isPng ? 'bg-checkerboard' : ''}`}
-                  style={resource.width && resource.height ? { aspectRatio: `${resource.width} / ${resource.height}` } : undefined}
+                  className={`w-full h-full relative ${isPng ? 'bg-checkerboard' : ''}`}
                 >
                   <ProtectedImage
                     src={imageUrl}
                     alt={resource.title}
                     width={resource.width || 500}
                     height={resource.height || 500}
-                    className="w-full h-auto"
+                    className="w-full h-full object-cover"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     priority={false}
                     loading="lazy"
                     quality={isPng ? 100 : 65} // Máxima qualidade para PNGs
-                    objectFit="contain"
+                    objectFit="cover"
                   />
                   {/* Badge de IA - posicionado no canto inferior direito da imagem */}
                   {resource.is_ai_generated && (
@@ -359,7 +376,7 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
             }
             return null
           })() || (
-            <div className="aspect-square w-full flex items-center justify-center bg-gray-50 text-gray-400 text-xs font-bold tracking-widest uppercase">
+            <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-400 text-xs font-bold tracking-widest uppercase">
               Sem prévia
             </div>
           )}
