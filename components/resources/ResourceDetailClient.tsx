@@ -712,10 +712,10 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
   
   return (
     <div className={`${isInModal ? 'p-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10'}`}>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* COLUNA ESQUERDA */}
-        <div className="lg:col-span-8 space-y-8">
+        {/* COLUNA ESQUERDA - IMAGEM/VIDEO */}
+        <div className="lg:col-span-7">
           {/* Preview Image/Video/Audio */}
           <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center min-h-[400px] group relative shadow-sm">
             {resource.resource_type === 'audio' ? (
@@ -988,31 +988,6 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </div>
             )}
           </div>
-
-          {/* Interaction Bar */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 flex items-center justify-between shadow-sm">
-            <div className="flex items-center space-x-8">
-              <button onClick={handleFavorite} className="flex items-center space-x-2 text-gray-600 hover:text-red-500 transition-colors group">
-                <Heart className={`h-5 w-5 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
-                <span className="text-base font-semibold tracking-tight">{isFavorited ? 'Salvo' : 'Salvar'}</span>
-              </button>
-              <button className="flex items-center space-x-2 text-gray-600 hover:text-secondary-500 transition-colors group">
-                <Share2 className="h-5 w-5" />
-                <span className="text-base font-semibold tracking-tight">Compartilhar</span>
-              </button>
-            </div>
-            <button className="text-gray-300 hover:text-gray-600 transition-colors">
-              <Flag className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* Information Area */}
-          <div className="bg-white rounded-2xl p-10 border border-gray-100 space-y-10 shadow-sm">
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 tracking-tighter flex items-center">
-                <span className="h-6 w-1.5 bg-primary-500 mr-3 rounded-full" />
-                Informações Técnicas
-              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-16">
                 <div className="space-y-4">
                   {resourceData.resource_type === 'motion' ? (
@@ -1184,23 +1159,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </div>
             )}
 
-            {/* Checklist */}
-            <div className="space-y-4 py-6 border-y border-gray-50">
-              <CheckItem text={`Arquivo ${resource.file_format?.toUpperCase()} totalmente editável`} />
-              <CheckItem text="Uso comercial e pessoal liberado" />
-              <CheckItem text="Não exige atribuição de créditos" />
-              <CheckItem text="Qualidade premium verificada" />
-              <CheckItem text="Acesso imediato após confirmação" />
-            </div>
-
             {/* Premium Highlight */}
-            {resource.is_premium && (
-              <div className="bg-primary-50/50 rounded-2xl p-6 border border-primary-100 flex items-start space-x-4 my-8">
-                <AlertCircle className="h-6 w-6 text-secondary-600 flex-shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-gray-900 tracking-tighter">Recurso Assinante</p>
-                  <p className="text-sm text-gray-700 font-bold leading-relaxed tracking-tight">
-                    Disponível apenas para membros premium. Faça o upgrade agora!
+            {resource.is_premium && !user?.is_premium && (
+              <div className="mb-6 pb-6 border-b border-gray-100">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-orange-900">
+                    Arquivo disponível apenas para usuários premium. Atualize seu plano para realizar o download deste item.
                   </p>
                 </div>
               </div>
@@ -1219,12 +1183,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 >
                   {resource.is_premium ? (
                     <>
-                      <Crown className="h-5 w-5 flex-shrink-0" />
-                      <span>Assinar Premium para Baixar</span>
+                      <RefreshCw className="h-4 w-4 flex-shrink-0" />
+                      <span>Atualizar Plano</span>
                     </>
                   ) : (
                     <>
-                      <User className="h-5 w-5 flex-shrink-0" />
+                      <User className="h-4 w-4 flex-shrink-0" />
                       <span>Crie uma conta para Baixar</span>
                     </>
                   )}
@@ -1238,7 +1202,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 </button>
               </Link>
             ) : (
-              <div className="mt-8 space-y-3">
+              <div className="space-y-3">
                 {/* Botão de Download da Família (se aplicável) */}
                 {resource.resource_type === 'font' && familyCount && familyCount > 1 && (
                   <button
@@ -1294,7 +1258,7 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                     }}
                     disabled={downloading || (downloadStatus && !downloadStatus.allowed)}
                     className={cn(
-                      "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group shadow-lg",
+                      "w-full h-14 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-all disabled:opacity-50 group shadow-lg",
                       downloadStatus && !downloadStatus.allowed
                         ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed shadow-gray-400/20"
                         : "bg-primary-600 hover:bg-primary-700 text-white shadow-primary-600/20"
@@ -1314,12 +1278,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                   onClick={handleDownload}
                   disabled={downloading || (downloadStatus && !downloadStatus.allowed)}
                   className={cn(
-                    "w-full h-16 rounded-2xl flex items-center justify-center space-x-3 font-semibold text-sm tracking-widest transition-all disabled:opacity-50 group shadow-lg",
+                    "w-full h-14 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-all disabled:opacity-50 group shadow-lg",
                     downloadStatus && !downloadStatus.allowed
                       ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed shadow-gray-400/20"
                       : resource.resource_type === 'font' && familyCount && familyCount > 1
                       ? "bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-gray-100/20"
-                      : "bg-primary-500 hover:bg-primary-600 text-white shadow-primary-500/20"
+                      : "bg-green-600 hover:bg-green-700 text-white shadow-green-600/20"
                   )}
                   title={downloadStatus && !downloadStatus.allowed ? `Limite de downloads excedido. Você já fez ${downloadStatus.current} de ${downloadStatus.limit} downloads hoje.` : undefined}
                 >
@@ -1372,110 +1336,6 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
               </div>
             )}
 
-            {/* Author Section */}
-            <div className="pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-8">
-              {isOfficial || !resource.creator_id || isSystemProfileSync(resource.creator_id) ? (
-                <div className="flex items-center space-x-4 flex-shrink-0">
-                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {resource.creator?.avatar_url ? (
-                      <Image 
-                        src={resource.creator.avatar_url} 
-                        alt={authorName} 
-                        width={56} 
-                        height={56}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : resource.is_official ? (
-                      <Image src="/images/verificado.svg" alt="Verificado" width={32} height={32} />
-                    ) : (
-                      <User className="h-8 w-8 text-gray-700" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-base font-bold text-gray-900 truncate">{authorName}</p>
-                      {isOfficial && (
-                        <Image src="/images/verificado.svg" alt="Oficial" width={14} height={14} className="flex-shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-600 font-bold tracking-widest mt-0.5 uppercase">
-                      {isOfficial ? 'Equipe Oficial' : 'Criador Verificado'}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <Link 
-                  href={`/creator/${resource.creator_id}`}
-                  className="flex items-center space-x-4 hover:opacity-80 transition-opacity flex-shrink-0"
-                >
-                  <div className="h-14 w-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {resource.creator?.avatar_url ? (
-                      <Image 
-                        src={resource.creator.avatar_url} 
-                        alt={authorName} 
-                        width={56} 
-                        height={56}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <User className="h-8 w-8 text-gray-700" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-base font-bold text-gray-900 truncate">{authorName}</p>
-                    </div>
-                    <p className="text-xs text-gray-600 font-bold tracking-widest mt-0.5 uppercase">
-                      Criador Verificado
-                    </p>
-                  </div>
-                </Link>
-              )}
-              {!isOfficial && resource.creator_id && !isSystemProfileSync(resource.creator_id) && (
-                <button 
-                  onClick={async () => {
-                    const { data: { user: authUser } } = await supabase.auth.getUser()
-                    if (!authUser) {
-                      toast.error('Você precisa estar logado para seguir')
-                      return
-                    }
-
-                    if (isFollowingCreator) {
-                      const { error } = await supabase
-                        .from('followers')
-                        .delete()
-                        .eq('follower_id', authUser.id)
-                        .eq('creator_id', resource.creator_id)
-
-                      if (!error) {
-                        setIsFollowingCreator(false)
-                        toast.success('Você deixou de seguir')
-                      }
-                    } else {
-                      const { error } = await supabase
-                        .from('followers')
-                        .insert({
-                          follower_id: authUser.id,
-                          creator_id: resource.creator_id,
-                        })
-
-                      if (!error) {
-                        setIsFollowingCreator(true)
-                        toast.success('Você está seguindo este criador')
-                      }
-                    }
-                  }}
-                  className={cn(
-                    "px-5 py-2.5 text-xs font-bold rounded-xl transition-colors",
-                    isFollowingCreator
-                      ? "bg-gray-100 text-gray-900 hover:bg-gray-200"
-                      : "bg-gray-900 text-white hover:bg-black"
-                  )}
-                >
-                  {isFollowingCreator ? 'Seguindo' : 'Seguir'}
-                </button>
-              )}
-            </div>
 
             {/* Collection Section */}
             {collection && collectionResources.length > 0 && (
