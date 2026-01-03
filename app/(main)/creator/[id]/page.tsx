@@ -161,7 +161,11 @@ export default function CreatorProfilePage() {
       try {
         let resourcesQuery = supabase
           .from('resources')
-          .select('*, creator:profiles!creator_id(*), category:categories(*)')
+          .select(`
+            *,
+            creator:profiles!creator_id(*),
+            category:categories(*)
+          `)
           .eq('creator_id', creatorId)
           .order('created_at', { ascending: false })
           .limit(100)
