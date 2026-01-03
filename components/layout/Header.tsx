@@ -23,6 +23,8 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   const [subscription, setSubscription] = useState<any>(initialSubscription || null)
   const [categories, setCategories] = useState<any[]>(initialCategories)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const [lastScrollY, setLastScrollY] = useState(0)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createSupabaseClient()
