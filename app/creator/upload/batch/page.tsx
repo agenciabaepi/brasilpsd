@@ -531,23 +531,126 @@ export default function BatchUploadPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Usuário não autenticado')
 
-    // 1. Fazer upload do arquivo para S3
-    const formData = new FormData()
-    formData.append('file', image.file)
-    formData.append('type', 'resource')
+    // 1. Verificar tamanho do arquivo e escolher método de upload
+    const fileSizeMB = image.file.size / (1024 * 1024)
+    const usePresignedUrl = fileSizeMB > 4.5
 
-    const uploadResponse = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    })
+    let fileUrl: string
+    let previewUrl: string | null = null
+    let thumbnailUrl: string | null = null
+    let isAiGenerated = false
+    let videoMetadata: any = null
+    let imageMetadata: any = null
 
-    if (!uploadResponse.ok) {
-      const error = await uploadResponse.json()
-      throw new Error(error.error || 'Erro ao fazer upload')
+    if (usePresignedUrl) {
+      // Upload direto para S3 usando presigned URL (para arquivos grandes)
+      console.log(`📤 Arquivo grande (${fileSizeMB.toFixed(2)}MB), usando presigned URL`)
+      
+      // Obter presigned URL
+      const presignedResponse = await fetch('/api/upload/presigned', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: image.file.name,
+          contentType: image.file.type,
+          fileSize: image.file.size,
+          type: 'resource'
+        })
+      })
+
+      if (!presignedResponse.ok) {
+        const error = await presignedResponse.json()
+        throw new Error(error.error || 'Erro ao gerar URL de upload')
+      }
+
+      const { presignedUrl, key, url } = await presignedResponse.json()
+
+      // Upload direto para S3
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100)
+            console.log(`Upload progress: ${percent}%`)
+          }
+        })
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log('✅ Upload direto concluído')
+            resolve()
+          } else {
+            reject(new Error(`Erro ${xhr.status} no upload direto`))
+          }
+        }
+
+        xhr.onerror = () => {
+          reject(new Error('Erro de rede no upload'))
+        }
+
+        xhr.open('PUT', presignedUrl)
+        xhr.setRequestHeader('Content-Type', image.file.type)
+        xhr.send(image.file)
+      })
+
+      fileUrl = url
+      
+      // Para arquivos grandes via presigned URL, processar depois
+      // Chamar API para processar (gerar preview, thumbnail, detectar IA)
+      try {
+        console.log('🔄 Processando arquivo grande após upload...')
+        const processResponse = await fetch('/api/upload/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: key,
+            fileName: image.file.name,
+            contentType: image.file.type,
+            type: 'resource'
+          })
+        })
+        
+        if (processResponse.ok) {
+          const processData = await processResponse.json()
+          previewUrl = processData.previewUrl || null
+          thumbnailUrl = processData.thumbnailUrl || null
+          isAiGenerated = processData.isAiGenerated || false
+          imageMetadata = processData.imageMetadata || null
+          console.log('✅ Arquivo grande processado com sucesso')
+        } else {
+          console.warn('⚠️ Erro ao processar arquivo grande, continuando sem preview/thumbnail')
+        }
+      } catch (processError) {
+        console.warn('⚠️ Erro ao processar arquivo grande:', processError)
+        // Continuar mesmo se o processamento falhar
+      }
+    } else {
+      // Upload normal via API (para arquivos menores que 4.5MB)
+      console.log(`📤 Arquivo pequeno (${fileSizeMB.toFixed(2)}MB), usando upload normal`)
+      
+      const formData = new FormData()
+      formData.append('file', image.file)
+      formData.append('type', 'resource')
+
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json()
+        throw new Error(error.error || 'Erro ao fazer upload')
+      }
+
+      const uploadData = await uploadResponse.json()
+      fileUrl = uploadData.url
+      previewUrl = uploadData.previewUrl || null
+      thumbnailUrl = uploadData.thumbnailUrl || null
+      isAiGenerated = uploadData.isAiGenerated || false
+      videoMetadata = uploadData.videoMetadata || null
+      imageMetadata = uploadData.imageMetadata || null
     }
-
-    const uploadData = await uploadResponse.json()
-    const { url: fileUrl, previewUrl, thumbnailUrl, isAiGenerated, videoMetadata, imageMetadata } = uploadData
 
     // 2. Se a imagem foi detectada como gerada por IA, adicionar categoria "IA" automaticamente
     if (isAiGenerated) {
