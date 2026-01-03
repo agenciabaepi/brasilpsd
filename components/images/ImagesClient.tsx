@@ -96,8 +96,15 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
     '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#000000'
   ]
 
+  // Calcular altura dinâmica baseada na visibilidade do header
+  // Header visível: 100vh - 168px (PromotionalBar + Header)
+  // Header oculto: 100vh - 40px (apenas PromotionalBar)
+  const containerHeight = isHeaderVisible 
+    ? 'calc(100vh - 168px)' 
+    : 'calc(100vh - 40px)'
+
   return (
-    <div className="h-[calc(100vh-64px)] bg-white overflow-hidden">
+    <div className="bg-white overflow-hidden transition-all duration-300" style={{ height: containerHeight }}>
       <div className="max-w-[1600px] mx-auto h-full flex relative">
         
         {/* SIDEBAR FILTERS */}
