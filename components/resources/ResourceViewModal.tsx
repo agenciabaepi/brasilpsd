@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import ResourceDetailClient from './ResourceDetailClient'
-import type { Resource, Profile } from '@/types/database'
+import type { Resource, Profile, Collection } from '@/types/database'
 
 interface ResourceViewModalProps {
   resourceId: string | null
@@ -17,6 +17,9 @@ export default function ResourceViewModal({ resourceId, isOpen, onClose }: Resou
   const [user, setUser] = useState<Profile | null>(null)
   const [isFavorited, setIsFavorited] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [collection, setCollection] = useState<Collection | null>(null)
+  const [collectionResources, setCollectionResources] = useState<Resource[]>([])
+  const [relatedResources, setRelatedResources] = useState<Resource[]>([])
   const supabase = createSupabaseClient()
 
   useEffect(() => {
@@ -67,6 +70,144 @@ export default function ResourceViewModal({ resourceId, isOpen, onClose }: Resou
             .single()
           setIsFavorited(!!favorite)
         }
+
+        // Buscar coleção e recursos da coleção
+        const { data: collectionResourceList } = await supabase
+          .from('collection_resources')
+          .select('collection_id')
+          .eq('resource_id', resourceId)
+          .limit(1)
+
+        const collectionResourceData = collectionResourceList?.[0]
+
+        if (collectionResourceData?.collection_id) {
+          // Buscar dados da coleção
+          const { data: collectionData } = await supabase
+            .from('collections')
+            .select('*, creator:profiles!creator_id(*)')
+            .eq('id', collectionResourceData.collection_id)
+            .eq('status', 'approved')
+            .maybeSingle()
+
+          if (collectionData) {
+            setCollection(collectionData)
+
+            // Buscar os outros recursos da mesma coleção
+            const { data: otherCollectionResources } = await supabase
+              .from('collection_resources')
+              .select('resource_id, order_index')
+              .eq('collection_id', collectionData.id)
+              .neq('resource_id', resourceId)
+              .order('order_index', { ascending: true })
+              .limit(6)
+
+            if (otherCollectionResources && otherCollectionResources.length > 0) {
+              const resourceIds = otherCollectionResources.map((cr: any) => cr.resource_id)
+
+              const { data: resourcesData } = await supabase
+                .from('resources')
+                .select('*, creator:profiles!creator_id(*)')
+                .in('id', resourceIds)
+                .eq('status', 'approved')
+
+              if (resourcesData) {
+                const resourceMap = new Map(resourcesData.map((r: any) => [r.id, r]))
+                const orderedResources = otherCollectionResources
+                  .map((cr: any) => resourceMap.get(cr.resource_id))
+                  .filter(Boolean)
+                setCollectionResources(orderedResources)
+              }
+            }
+          }
+        }
+
+        // Buscar recursos relacionados
+        let related: Resource[] = []
+
+        // Tentar buscar por subcategoria primeiro
+        if (resourceData.category_id) {
+          const { data: currentCategory } = await supabase
+            .from('categories')
+            .select('id, parent_id')
+            .eq('id', resourceData.category_id)
+            .single()
+
+          if (currentCategory) {
+            if (currentCategory.parent_id) {
+              // É subcategoria - buscar apenas da mesma subcategoria
+              const { data: subcategoryResources } = await supabase
+                .from('resources')
+                .select('*, creator:profiles!creator_id(*)')
+                .eq('status', 'approved')
+                .eq('category_id', resourceData.category_id)
+                .neq('id', resourceId)
+                .order('view_count', { ascending: false })
+                .limit(8)
+
+              if (subcategoryResources && subcategoryResources.length > 0) {
+                related = subcategoryResources
+              }
+            } else {
+              // É categoria principal - buscar subcategorias
+              const { data: subcategories } = await supabase
+                .from('categories')
+                .select('id')
+                .eq('parent_id', currentCategory.id)
+
+              if (subcategories && subcategories.length > 0) {
+                const subcategoryIds = subcategories.map(c => c.id)
+                const { data: categoryResources } = await supabase
+                  .from('resources')
+                  .select('*, creator:profiles!creator_id(*)')
+                  .eq('status', 'approved')
+                  .in('category_id', [resourceData.category_id, ...subcategoryIds])
+                  .neq('id', resourceId)
+                  .order('view_count', { ascending: false })
+                  .limit(8)
+
+                if (categoryResources && categoryResources.length > 0) {
+                  related = categoryResources
+                }
+              } else {
+                // Sem subcategorias, buscar apenas da mesma categoria
+                const { data: categoryResources } = await supabase
+                  .from('resources')
+                  .select('*, creator:profiles!creator_id(*)')
+                  .eq('status', 'approved')
+                  .eq('category_id', resourceData.category_id)
+                  .neq('id', resourceId)
+                  .order('view_count', { ascending: false })
+                  .limit(8)
+
+                if (categoryResources && categoryResources.length > 0) {
+                  related = categoryResources
+                }
+              }
+            }
+          }
+        }
+
+        // Se não encontrou recursos suficientes por categoria, buscar por tipo
+        if (related.length < 8 && resourceData.resource_type) {
+          const remaining = 8 - related.length
+          const existingIds = related.map(r => r.id).concat(resourceId)
+
+          const { data: typeResources } = await supabase
+            .from('resources')
+            .select('*, creator:profiles!creator_id(*)')
+            .eq('status', 'approved')
+            .eq('resource_type', resourceData.resource_type)
+            .neq('id', resourceId)
+            .order('view_count', { ascending: false })
+            .limit(remaining + existingIds.length)
+
+          if (typeResources && typeResources.length > 0) {
+            const newResources = typeResources.filter((r: any) => !existingIds.includes(r.id))
+            related = [...related, ...newResources].slice(0, 8)
+          }
+        }
+
+        setRelatedResources(related)
       } catch (error) {
         console.error('Erro ao carregar recurso:', error)
       } finally {
@@ -140,9 +281,9 @@ export default function ResourceViewModal({ resourceId, isOpen, onClose }: Resou
                 initialIsFavorited={isFavorited}
                 initialDownloadStatus={null}
                 initialAlreadyDownloadedToday={false}
-                collection={null}
-                collectionResources={[]}
-                relatedResources={[]}
+                collection={collection}
+                collectionResources={collectionResources}
+                relatedResources={relatedResources}
               />
             </div>
           ) : (
