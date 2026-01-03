@@ -502,8 +502,8 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
       {/* Ícone de visualizar (só aparece no hover e apenas para recursos que usam modal) */}
       {useModal && (
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-          <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full shadow-lg">
-            <Eye className="h-6 w-6 text-gray-900" />
+          <div className="bg-white/90 backdrop-blur-sm p-4 rounded-full shadow-lg border-2 border-gray-300">
+            <Eye className="h-6 w-6 text-gray-900 stroke-2" />
           </div>
         </div>
       )}
