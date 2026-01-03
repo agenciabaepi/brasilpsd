@@ -40,6 +40,7 @@ export default function CreatorProfilePage() {
     if (id) {
       loadProfile()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   async function loadProfile() {
