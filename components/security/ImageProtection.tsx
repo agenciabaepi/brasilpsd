@@ -8,12 +8,8 @@ import { useEffect } from 'react'
  */
 export default function ImageProtection() {
   useEffect(() => {
-    // TEMPORARIAMENTE DESABILITADO PARA DEBUG
-    // Bloquear DevTools (tentativa básica)
+    // Bloquear DevTools (detecção básica)
     const blockDevTools = () => {
-      // DESABILITADO TEMPORARIAMENTE
-      return
-      /*
       const widthThreshold = window.outerWidth - window.innerWidth > 160
       const heightThreshold = window.outerHeight - window.innerHeight > 160
       
@@ -22,26 +18,30 @@ export default function ImageProtection() {
         console.clear()
         console.log('%c⚠️ Acesso Negado', 'color: red; font-size: 50px; font-weight: bold;')
         console.log('%cEsta página está protegida contra inspeção de elementos.', 'color: red; font-size: 20px;')
+        
+        // Tentar desabilitar console
+        const noop = () => {}
+        const methods = ['log', 'debug', 'info', 'warn', 'error', 'table', 'trace']
+        methods.forEach(method => {
+          // @ts-ignore
+          console[method] = noop
+        })
       }
-      */
     }
 
     // Bloquear atalhos de teclado
     const handleKeyDown = (e: KeyboardEvent) => {
-      // DESABILITADO TEMPORARIAMENTE PARA DEBUG
-      return
-      /*
-      // Bloquear F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S, Ctrl+P
+      // Bloquear F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U, Ctrl+S, Ctrl+P, Ctrl+Shift+K
       if (
         e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'S' || e.key === 'P'))
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C' || e.key === 'K')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'S' || e.key === 'P')) ||
+        (e.key === 'F5' && e.shiftKey) // Shift+F5 (hard refresh com cache)
       ) {
         e.preventDefault()
         e.stopPropagation()
         return false
       }
-      */
     }
 
     // Helper para verificar se é uma imagem ou elemento relacionado

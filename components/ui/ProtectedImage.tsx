@@ -67,11 +67,12 @@ export default function ProtectedImage({
 
     // Bloquear atalhos de teclado
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Bloquear F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S
+      // Bloquear F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+Shift+K, Ctrl+U, Ctrl+S, Ctrl+P
       if (
         e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'S' || e.key === 'P'))
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C' || e.key === 'K')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'S' || e.key === 'P')) ||
+        (e.key === 'F5' && e.shiftKey) // Shift+F5 (hard refresh)
       ) {
         e.preventDefault()
         e.stopPropagation()
@@ -83,17 +84,15 @@ export default function ProtectedImage({
 
     // Bloquear DevTools (tentativa básica)
     const handleDevTools = () => {
-      // TEMPORARIAMENTE DESABILITADO PARA DEBUG
-      return
-      /*
       const widthThreshold = window.outerWidth - window.innerWidth > 160
       const heightThreshold = window.outerHeight - window.innerHeight > 160
       
       if (widthThreshold || heightThreshold) {
-        // DevTools pode estar aberto, mas não podemos fazer muito
+        // DevTools pode estar aberto, tentar bloquear
         console.clear()
+        // Redirecionar ou mostrar aviso (opcional)
+        // window.location.href = '/'
       }
-      */
     }
 
     const interval = setInterval(handleDevTools, 1000)
