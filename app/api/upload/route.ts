@@ -9,6 +9,7 @@ import { generateVideoPreview } from '@/lib/video/preview'
 import { addWatermarkToAudio, extractAudioMetadata } from '@/lib/audio/watermark'
 import { generateDesignFileThumbnail } from '@/lib/design/thumbnail'
 import { isDesignFileFormatSupported } from '@/lib/design/formats'
+import { detectAiGeneratedImage } from '@/lib/utils/ai-image-detector'
 
 export const maxDuration = 300 // 5 minutos para uploads grandes
 export const runtime = 'nodejs'
@@ -155,14 +156,16 @@ export async function POST(request: NextRequest) {
     // 0. AI Detection - apenas para recursos (não para thumbnails)
     if (type === 'resource' && file.type.startsWith('image/')) {
       try {
-        // Processar apenas metadados sem carregar toda a imagem na memória
-        const metadata = await sharp(buffer).metadata()
-        const metadataString = JSON.stringify(metadata).toLowerCase()
-        const aiMarkers = ['midjourney', 'dall-e', 'stablediffusion', 'adobe firefly', 'generative fill', 'artificial intelligence', 'ai generated']
-        isAiGenerated = aiMarkers.some(marker => metadataString.includes(marker))
+        const aiDetection = await detectAiGeneratedImage(buffer)
+        isAiGenerated = aiDetection.isAiGenerated
+        console.log('🤖 AI Detection result:', {
+          isAiGenerated,
+          confidence: aiDetection.confidence,
+          reasons: aiDetection.reasons
+        })
       } catch (err) {
-        console.warn('AI Analysis failed:', err)
-        // Não bloquear upload se falhar
+        console.warn('⚠️ Error detecting AI image:', err)
+        // Continuar mesmo se a detecção falhar
       }
     }
 
@@ -1048,7 +1051,8 @@ export async function POST(request: NextRequest) {
       videoMetadata: videoMetadata || undefined,
       audioMetadata: audioMetadata || undefined,
       imageMetadata: imageMetadata || undefined, // Dimensões da imagem
-      wasProcessed: !!(previewUrl || thumbnailUrl) // Indica se foi processado
+      wasProcessed: !!(previewUrl || thumbnailUrl), // Indica se foi processado
+      isAiGenerated: isAiGenerated // Indica se a imagem foi detectada como gerada por IA
     })
   } catch (error: any) {
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2)
