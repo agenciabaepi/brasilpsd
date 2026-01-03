@@ -2,11 +2,12 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
-import { Heart, Sparkles, Crown, Play, Package } from 'lucide-react'
+import { Heart, Sparkles, Crown, Play, Package, Eye } from 'lucide-react'
 import type { Resource } from '@/types/database'
 import { getS3Url } from '@/lib/aws/s3'
 import { isSystemProfile } from '@/lib/utils/system'
 import FontThumbnail from '@/components/fonts/FontThumbnail'
+import { useResourceView } from '@/contexts/ResourceViewContext'
 import ProtectedImage from '@/components/ui/ProtectedImage'
 
 interface ResourceCardProps {
@@ -24,6 +25,12 @@ export default function ResourceCard({ resource, onFavorite, isFavorited }: Reso
   const [familyCount, setFamilyCount] = useState<number | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Verificar se deve usar modal ou página
+  const isAudio = resource.resource_type === 'audio'
+  const isFont = resource.resource_type === 'font'
+  const useModal = !isAudio && !isFont
+  const { openResourceView } = useResourceView()
   
   // Se for oficial ou o creator_id for do sistema, usar o perfil do sistema
   const isOfficial = resource.is_official || isSystemProfile(resource.creator_id)
