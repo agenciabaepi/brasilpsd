@@ -221,8 +221,21 @@ export default function CreatorProfilePage() {
         })
       }
     } catch (error: any) {
-      console.error('Erro ao carregar perfil:', error)
-      toast.error('Erro ao carregar perfil')
+      console.error('Erro ao carregar perfil:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details
+      })
+      // Evitar múltiplos toasts - verificar se já foi mostrado
+      const errorKey = `profile-error-${id}`
+      if (typeof window !== 'undefined' && !sessionStorage.getItem(errorKey)) {
+        sessionStorage.setItem(errorKey, 'true')
+        // Só mostrar toast se não for um erro de "não encontrado"
+        if (error?.code !== 'PGRST116') {
+          toast.error('Erro ao carregar perfil')
+        }
+        setTimeout(() => sessionStorage.removeItem(errorKey), 1000)
+      }
     } finally {
       setLoading(false)
     }
