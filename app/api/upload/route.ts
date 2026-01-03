@@ -1047,12 +1047,11 @@ export async function POST(request: NextRequest) {
       key: fileKey,
       previewUrl: previewUrl || undefined, // URL da versão completa com marca d'água
       thumbnailUrl: thumbnailUrl || undefined, // URL do preview de vídeo (metade) ou thumbnail estático
-      isAiGenerated,
+      isAiGenerated: isAiGenerated, // Indica se a imagem foi detectada como gerada por IA
       videoMetadata: videoMetadata || undefined,
       audioMetadata: audioMetadata || undefined,
       imageMetadata: imageMetadata || undefined, // Dimensões da imagem
-      wasProcessed: !!(previewUrl || thumbnailUrl), // Indica se foi processado
-      isAiGenerated: isAiGenerated // Indica se a imagem foi detectada como gerada por IA
+      wasProcessed: !!(previewUrl || thumbnailUrl) // Indica se foi processado
     })
   } catch (error: any) {
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2)
