@@ -35,6 +35,7 @@ import FontThumbnail from '@/components/fonts/FontThumbnail'
 import AudioPlayer from '@/components/audio/AudioPlayer'
 import SubscriptionModal from '@/components/premium/SubscriptionModal'
 import ProtectedImage from '@/components/ui/ProtectedImage'
+import { useResourceView } from '@/contexts/ResourceViewContext'
 
 interface ResourceDetailClientProps {
   resource: Resource
@@ -1526,8 +1527,9 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                               )}
                             </div>
                           </div>
-                        </Link>
-                      ))}
+                        </Component>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
