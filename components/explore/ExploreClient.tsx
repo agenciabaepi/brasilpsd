@@ -15,6 +15,7 @@ import SearchBar from '@/components/home/SearchBar'
 import JustifiedGrid from '@/components/layout/JustifiedGrid'
 import Link from 'next/link'
 import { isSystemProfile } from '@/lib/utils/system'
+import { useHeaderVisibility } from '@/hooks/useHeaderVisibility'
 
 interface CategoryResources {
   video: Resource[]
@@ -214,15 +215,24 @@ function ExploreContent({
   if (isLegacyMode) {
     const displayResources = hasActiveSearch ? searchResults : (initialResources || [])
 
+    // Calcular altura dinâmica baseada na visibilidade do header
+    // Header visível: 100vh - 168px (PromotionalBar + Header)
+    // Header oculto: 100vh - 40px (apenas PromotionalBar)
+    const containerHeight = isHeaderVisible 
+      ? 'calc(100vh - 168px)' 
+      : 'calc(100vh - 40px)'
+
   return (
-    <div className={cn("bg-white overflow-hidden", hasHero ? "min-h-screen" : "h-[calc(100vh-64px)]")}>
+    <div className={cn("bg-white overflow-hidden transition-all duration-300", hasHero ? "min-h-screen" : "")} style={!hasHero ? { height: containerHeight } : undefined}>
       <div className={cn("max-w-[1600px] mx-auto flex relative", hasHero ? "min-h-[calc(100vh-64px)]" : "h-full")}>
         <main className={cn(
           "flex-1 flex flex-col p-8 lg:p-12",
           hasHero ? "min-h-[calc(100vh-64px)]" : "h-full overflow-hidden"
         )}>
             {/* Header */}
-          <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6">
+          <div className={`flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 transition-all duration-300 ${
+            isHeaderVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full h-0 mb-0 overflow-hidden'
+          }`}>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
                   {categoryName || 'Todos os Recursos'}
@@ -237,7 +247,9 @@ function ExploreContent({
             </div>
 
             {/* Barra de Pesquisa */}
-            <div className="mb-8">
+            <div className={`mb-8 transition-all duration-300 ${
+              isHeaderVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full h-0 mb-0 overflow-hidden'
+            }`}>
               <SearchBar />
               </div>
               
