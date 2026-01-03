@@ -164,7 +164,7 @@ export default function CreatorProfilePage() {
           .select(`
             *,
             creator:profiles!creator_id(*),
-            category:categories(*)
+            category:categories!category_id(*)
           `)
           .eq('creator_id', creatorId)
           .order('created_at', { ascending: false })
