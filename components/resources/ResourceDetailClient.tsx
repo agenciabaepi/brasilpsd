@@ -50,6 +50,7 @@ interface ResourceDetailClientProps {
 
 export default function ResourceDetailClient({ resource, initialUser, initialIsFavorited = false, initialDownloadStatus = null, initialAlreadyDownloadedToday = false, collection, collectionResources = [], relatedResources = [] }: ResourceDetailClientProps) {
   const router = useRouter()
+  const { openResourceView } = useResourceView()
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited)
   const [downloading, setDownloading] = useState(false)
   const [user, setUser] = useState<Profile | null>(initialUser || null)
