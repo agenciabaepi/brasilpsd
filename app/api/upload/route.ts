@@ -443,18 +443,60 @@ export async function POST(request: NextRequest) {
               processedImage = processedImage.ensureAlpha()
             }
             
-            const watermarked = await processedImage
-              .composite([{ 
-                input: watermarkTile, 
-                tile: true,
-                blend: 'over' 
-              }])
-              .toBuffer()
+            // Aplicar marca d'água e converter para o formato apropriado
+            let watermarked: Buffer
+            let previewExtension: string
+            let previewContentType: string
+            
+            if (preserveTransparency) {
+              // Para PNGs com transparência, forçar formato PNG para preservar transparência
+              watermarked = await processedImage
+                .composite([{ 
+                  input: watermarkTile, 
+                  tile: true,
+                  blend: 'over' 
+                }])
+                .png({ 
+                  quality: 90,
+                  compressionLevel: 6,
+                  adaptiveFiltering: true
+                })
+                .toBuffer()
+              previewExtension = 'png'
+              previewContentType = 'image/png'
+            } else {
+              // Para imagens sem transparência, manter formato original ou converter para JPEG
+              if (fileExtension === 'png' || fileExtension === 'webp') {
+                // Se for PNG sem transparência ou WebP, converter para JPEG (menor tamanho)
+                watermarked = await processedImage
+                  .composite([{ 
+                    input: watermarkTile, 
+                    tile: true,
+                    blend: 'over' 
+                  }])
+                  .jpeg({ 
+                    quality: 85,
+                    mozjpeg: true,
+                    progressive: true
+                  })
+                  .toBuffer()
+                previewExtension = 'jpg'
+                previewContentType = 'image/jpeg'
+              } else {
+                // Manter formato original para outros formatos
+                watermarked = await processedImage
+                  .composite([{ 
+                    input: watermarkTile, 
+                    tile: true,
+                    blend: 'over' 
+                  }])
+                  .toBuffer()
+                previewExtension = fileExtension || 'jpg'
+                previewContentType = contentType
+              }
+            }
             
             if (watermarked && watermarked.length > 0) {
-              // Preservar formato original se for PNG com transparência
-              const previewExtension = preserveTransparency ? 'png' : (fileExtension || 'jpg')
-              const previewContentType = preserveTransparency ? 'image/png' : contentType
               
               const previewFileName = `preview-${Date.now()}-${Math.random().toString(36).substring(7)}.${previewExtension}`
               const previewKey = `previews/${user.id}/${previewFileName}`
