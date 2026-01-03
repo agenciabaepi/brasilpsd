@@ -533,13 +533,13 @@ Responda APENAS no formato JSON válido:
               .filter((catId: any) => typeof catId === 'string' && catId.trim().length > 0)
               .map((catId: string) => catId.trim())
               .filter((catId: string) => {
-                const exists = categoriesList.some((cat: any) => cat.id === catId)
-                if (!exists) {
-                  console.warn(`⚠️ Category ID not found: ${catId}`)
+              const exists = categoriesList.some((cat: any) => cat.id === catId)
+              if (!exists) {
+                console.warn(`⚠️ Category ID not found: ${catId}`)
                   console.warn('Available category IDs:', categoriesList.map((c: any) => c.id).slice(0, 5))
-                }
-                return exists
-              })
+              }
+              return exists
+            })
           } else if (parsed.category_id && typeof parsed.category_id === 'string') {
             const categoryExists = categoriesList.some((cat: any) => cat.id === parsed.category_id.trim())
             if (categoryExists) {
@@ -553,49 +553,75 @@ Responda APENAS no formato JSON válido:
           // Se não encontrou categorias válidas, tentar encontrar por nome
           if (categoryIds.length === 0) {
             console.log('🔍 Trying to find categories by name...')
+            console.log('📋 Available categories:', categoriesList.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug })).slice(0, 10))
+            
             // Procurar por palavras-chave no título/descrição
             const titleLower = (parsed.title || '').toLowerCase()
             const descLower = (parsed.description || '').toLowerCase()
+            const keywordsLower = (parsed.keywords || []).map((k: string) => k.toLowerCase()).join(' ')
+            const searchText = `${titleLower} ${descLower} ${keywordsLower}`
             
-            // Mapear palavras-chave para categorias
+            console.log('🔍 Search text:', searchText.substring(0, 200))
+            
+            // Mapear palavras-chave para categorias (expandido)
             const categoryKeywords: Record<string, string[]> = {
-              'pessoa': ['pessoas'],
-              'natureza': ['natureza'],
-              'negócio': ['negocios', 'negócios'],
-              'tecnologia': ['tecnologia'],
-              'comida': ['comida-bebida', 'comida & bebida'],
-              'viagem': ['viagem-turismo', 'viagem & turismo'],
-              'esporte': ['esportes-fitness', 'esportes & fitness'],
-              'arquitetura': ['arquitetura-interiores', 'arquitetura & interiores'],
-              'abstrato': ['abstrato-artistico', 'abstrato & artístico'],
-              'religioso': ['religiosidade']
+              'pessoa': ['pessoas', 'pessoa', 'homem', 'mulher', 'criança', 'retrato', 'portrait'],
+              'natureza': ['natureza', 'paisagem', 'landscape', 'montanha', 'floresta', 'árvore'],
+              'negócio': ['negocios', 'negócios', 'business', 'escritório', 'trabalho', 'empresa'],
+              'tecnologia': ['tecnologia', 'tech', 'computador', 'digital', 'cibernético'],
+              'comida': ['comida-bebida', 'comida & bebida', 'food', 'comida', 'bebida', 'restaurante'],
+              'viagem': ['viagem-turismo', 'viagem & turismo', 'travel', 'turismo', 'viagem'],
+              'esporte': ['esportes-fitness', 'esportes & fitness', 'sport', 'esporte', 'fitness'],
+              'arquitetura': ['arquitetura-interiores', 'arquitetura & interiores', 'arquitetura', 'interior'],
+              'abstrato': ['abstrato-artistico', 'abstrato & artístico', 'abstrato', 'artístico'],
+              'religioso': ['religiosidade', 'religioso', 'oração', 'rezar', 'igreja', 'fé']
             }
             
             // Tentar encontrar categoria por palavras-chave
             for (const [keyword, slugs] of Object.entries(categoryKeywords)) {
-              if (titleLower.includes(keyword) || descLower.includes(keyword)) {
+              if (searchText.includes(keyword)) {
                 const found = categoriesList.find((cat: any) => 
-                  slugs.some((slug: string) => cat.slug === slug || cat.name.toLowerCase().includes(keyword))
+                  slugs.some((slug: string) => 
+                    cat.slug?.toLowerCase() === slug.toLowerCase() || 
+                    cat.name?.toLowerCase().includes(keyword) ||
+                    cat.name?.toLowerCase().includes(slug)
+                  )
                 )
                 if (found) {
                   categoryIds.push(found.id)
-                  console.log(`✅ Found category by keyword "${keyword}": ${found.name}`)
+                  console.log(`✅ Found category by keyword "${keyword}": ${found.name} (${found.id})`)
                   break // Usar apenas a primeira categoria encontrada
                 }
               }
             }
             
-            // Se ainda não encontrou, usar a primeira categoria disponível como fallback
+            // Se ainda não encontrou, tentar buscar pela primeira categoria que não seja parent
             if (categoryIds.length === 0 && categoriesList.length > 0) {
-              console.warn('⚠️ No category matched, using first available category as fallback')
-              categoryIds = [categoriesList[0].id]
+              // Priorizar subcategorias (que têm parent_id)
+              const subcategories = categoriesList.filter((cat: any) => cat.parent_id)
+              if (subcategories.length > 0) {
+                console.warn('⚠️ No category matched, using first subcategory as fallback:', subcategories[0].name)
+                categoryIds = [subcategories[0].id]
+              } else {
+                console.warn('⚠️ No category matched, using first available category as fallback:', categoriesList[0].name)
+                categoryIds = [categoriesList[0].id]
+              }
             }
+          }
+          
+          // Garantir que sempre temos pelo menos uma categoria se houver categorias disponíveis
+          if (categoryIds.length === 0 && categoriesList.length > 0) {
+            console.warn('⚠️ No valid categories found after all attempts, using first available as fallback')
+            // Usar primeira subcategoria se disponível, senão primeira categoria
+            const subcategories = categoriesList.filter((cat: any) => cat.parent_id)
+            categoryIds = subcategories.length > 0 ? [subcategories[0].id] : [categoriesList[0].id]
+            console.log(`✅ Using fallback category: ${categoryIds[0]}`)
           }
           
           if (categoryIds.length > 0) {
             console.log('✅ Categories validated:', categoryIds)
           } else {
-            console.warn('⚠️ No valid categories found, will return empty array')
+            console.warn('⚠️ No valid categories found and no categories available, will return empty array')
           }
           
           // Garantir que o título seja uma string válida
@@ -607,6 +633,14 @@ Responda APENAS no formato JSON válido:
           const finalKeywords = Array.isArray(parsed.keywords)
             ? parsed.keywords.filter((k: any) => typeof k === 'string' && k.trim().length > 0)
             : []
+          
+          console.log('📤 Final response:', {
+            title: finalTitle,
+            hasDescription: !!parsed.description,
+            keywordsCount: finalKeywords.length,
+            categoryIdsCount: categoryIds.length,
+            categoryIds: categoryIds
+          })
           
           return NextResponse.json({
             title: finalTitle,
