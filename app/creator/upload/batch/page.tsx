@@ -123,6 +123,19 @@ export default function BatchUploadPage() {
       return
     }
 
+    // Garantir que as categorias estejam carregadas antes de processar
+    if (categories.length === 0) {
+      toast.loading('Carregando categorias...', { id: 'loading-categories' })
+      // Aguardar um pouco para garantir que as categorias sejam carregadas
+      await new Promise(resolve => setTimeout(resolve, 500))
+      toast.dismiss('loading-categories')
+      
+      if (categories.length === 0) {
+        toast.error('Erro: Categorias não carregadas. Por favor, recarregue a página.')
+        return
+      }
+    }
+
     toast.loading(`Processando ${imageFiles.length} imagem(ns)...`, { id: 'processing' })
 
     const newImages: BatchImage[] = []
@@ -265,6 +278,17 @@ export default function BatchUploadPage() {
       }
 
       // 3. Gerar título, descrição e categoria usando ChatGPT com análise visual
+      // Garantir que temos categorias antes de chamar a IA
+      if (categories.length === 0) {
+        console.warn('⚠️ No categories available, waiting...')
+        // Tentar aguardar um pouco mais
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        if (categories.length === 0) {
+          console.error('❌ Still no categories after wait')
+          throw new Error('Categorias não disponíveis')
+        }
+      }
+
       console.log('🤖 Sending to AI:', {
         fileName: image.file.name,
         hasImageBase64: !!imageBase64,
@@ -291,7 +315,7 @@ export default function BatchUploadPage() {
             fileType: image.file.type,
           },
           fileName: imageBase64 ? undefined : image.file.name, // Só passar fileName se não tiver imagem visual
-          categories: categories, // Passar categorias para a IA escolher
+          categories: categories.length > 0 ? categories : undefined, // Passar categorias apenas se disponíveis
           imageBase64: imageBase64, // Enviar imagem para análise visual
           generateDescription: false, // Não gerar descrição, apenas título
         }),
@@ -303,7 +327,30 @@ export default function BatchUploadPage() {
       let categoryIds: string[] = []
 
       if (aiResponse.ok) {
-        const aiData = await aiResponse.json()
+        let aiData: any = {}
+        try {
+          const responseText = await aiResponse.text()
+          console.log('📥 Raw AI Response:', responseText.substring(0, 500))
+          
+          // Tentar parsear o JSON
+          try {
+            aiData = JSON.parse(responseText)
+          } catch (parseError) {
+            console.error('❌ Failed to parse JSON, trying to extract...', parseError)
+            // Tentar extrair JSON de dentro de markdown code blocks
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+            if (jsonMatch) {
+              aiData = JSON.parse(jsonMatch[0])
+            } else {
+              throw new Error('No JSON found in response')
+            }
+          }
+        } catch (error: any) {
+          console.error('❌ Error parsing AI response:', error)
+          toast.error('Erro ao processar resposta da IA. Tente novamente.', { duration: 5000 })
+          throw error
+        }
+
         console.log('✅ AI Response received:', {
           title: aiData.title,
           hasDescription: !!aiData.description,
@@ -314,7 +361,7 @@ export default function BatchUploadPage() {
         })
         
         // Aplicar título da IA se existir
-        if (aiData.title && aiData.title.trim()) {
+        if (aiData.title && typeof aiData.title === 'string' && aiData.title.trim()) {
           title = aiData.title.trim()
           console.log('✅ Title applied from AI:', title)
           toast.success(`Título gerado: "${title}"`, { duration: 3000 })
@@ -324,26 +371,47 @@ export default function BatchUploadPage() {
         
         // Não usar descrição da IA (generateDescription: false)
         description = ''
-        keywords = aiData.keywords || []
+        keywords = Array.isArray(aiData.keywords) ? aiData.keywords : []
         
         // Suportar tanto category_id (único) quanto category_ids (múltiplas)
         if (aiData.category_ids && Array.isArray(aiData.category_ids) && aiData.category_ids.length > 0) {
-          categoryIds = aiData.category_ids
-          console.log('✅ Categories from AI (array):', categoryIds)
-          const categoryNames = categoryIds.map(id => {
-            const cat = categories.find((c: any) => c.id === id)
-            return cat?.name || id
-          }).join(', ')
-          toast.success(`Categorias selecionadas: ${categoryNames}`, { duration: 3000 })
-        } else if (aiData.category_id) {
-          categoryIds = [aiData.category_id]
-          console.log('✅ Category from AI (single):', categoryIds)
-          const cat = categories.find((c: any) => c.id === aiData.category_id)
-          if (cat) {
-            toast.success(`Categoria selecionada: ${cat.name}`, { duration: 3000 })
+          // Validar que os IDs existem nas categorias disponíveis
+          categoryIds = aiData.category_ids.filter((id: string) => {
+            const exists = categories.some((c: any) => c.id === id)
+            if (!exists) {
+              console.warn(`⚠️ Category ID ${id} not found in available categories`)
+            }
+            return exists
+          })
+          
+          if (categoryIds.length > 0) {
+            console.log('✅ Categories from AI (array):', categoryIds)
+            const categoryNames = categoryIds.map(id => {
+              const cat = categories.find((c: any) => c.id === id)
+              return cat?.name || id
+            }).join(', ')
+            toast.success(`Categorias selecionadas: ${categoryNames}`, { duration: 3000 })
+          } else {
+            console.warn('⚠️ No valid categories found after filtering')
+            toast.error('IA selecionou categorias inválidas. Selecione manualmente.', { duration: 4000 })
+          }
+        } else if (aiData.category_id && typeof aiData.category_id === 'string') {
+          // Validar que o ID existe
+          const categoryExists = categories.some((c: any) => c.id === aiData.category_id)
+          if (categoryExists) {
+            categoryIds = [aiData.category_id]
+            console.log('✅ Category from AI (single):', categoryIds)
+            const cat = categories.find((c: any) => c.id === aiData.category_id)
+            if (cat) {
+              toast.success(`Categoria selecionada: ${cat.name}`, { duration: 3000 })
+            }
+          } else {
+            console.warn(`⚠️ Category ID ${aiData.category_id} not found in available categories`)
+            toast.error('IA selecionou categoria inválida. Selecione manualmente.', { duration: 4000 })
           }
         } else {
-          console.warn('⚠️ No categories from AI')
+          console.warn('⚠️ No categories from AI response')
+          console.warn('AI Response structure:', Object.keys(aiData))
           toast.error('IA não conseguiu selecionar categorias. Selecione manualmente.', { duration: 4000 })
         }
       } else {

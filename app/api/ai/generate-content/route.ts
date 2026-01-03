@@ -335,13 +335,21 @@ IMPORTANTE SOBRE CATEGORIAS:
 - Use APENAS os IDs que estão na lista acima
 - Uma imagem pode pertencer a múltiplas categorias (ex: "Pessoas" E "Religiosidade")
 
-Responda APENAS com JSON válido (sem markdown, sem código, apenas JSON puro):
+IMPORTANTE: Você DEVE responder APENAS com um objeto JSON válido. NÃO use markdown, NÃO use código, NÃO adicione texto antes ou depois. Apenas o JSON puro.
+
+Formato EXATO da resposta (copie e preencha):
 {
   "title": "título baseado APENAS no que você vê na imagem",
   ${generateDescription ? '"description": "descrição detalhada do conteúdo visual",' : ''}
   "keywords": ["palavra1", "palavra2", "palavra3"],
   "category_ids": ["id-da-categoria1", "id-da-categoria2"]
-}`
+}
+
+Lembre-se:
+- "title" DEVE ser uma string não vazia
+- "keywords" DEVE ser um array de strings
+- "category_ids" DEVE ser um array com pelo menos 1 ID válido da lista acima
+- Use APENAS os IDs que estão na lista de categorias disponíveis`
           },
           {
             type: 'image_url',
@@ -401,8 +409,8 @@ Responda APENAS no formato JSON válido:
         body: JSON.stringify({
           model: model,
           messages: messages,
-          temperature: 0.7,
-          max_tokens: 1000, // Aumentar para garantir resposta completa
+          temperature: 0.3, // Reduzir temperatura para respostas mais consistentes
+          max_tokens: 1500, // Aumentar para garantir resposta completa
           response_format: { type: "json_object" } // Forçar formato JSON
         }),
         signal: controller.signal
@@ -446,27 +454,73 @@ Responda APENAS no formato JSON válido:
     })
 
     if (content) {
+      let parsed: any = null
       try {
         // Limpar o conteúdo (remover markdown code blocks se houver)
         let cleanedContent = content.trim()
+        
+        // Remover markdown code blocks
         if (cleanedContent.startsWith('```json')) {
-          cleanedContent = cleanedContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+          cleanedContent = cleanedContent.replace(/^```json\s*/i, '').replace(/\s*```$/g, '').trim()
         } else if (cleanedContent.startsWith('```')) {
-          cleanedContent = cleanedContent.replace(/```\n?/g, '').trim()
+          cleanedContent = cleanedContent.replace(/^```\s*/g, '').replace(/\s*```$/g, '').trim()
         }
         
-        // Tentar extrair JSON da resposta
+        // Remover qualquer texto antes ou depois do JSON
         const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0])
+          try {
+            parsed = JSON.parse(jsonMatch[0])
+          } catch (parseError: any) {
+            console.error('❌ JSON parse error:', parseError.message)
+            console.error('Content being parsed:', jsonMatch[0].substring(0, 500))
+            // Tentar corrigir JSON comum
+            let fixedJson = jsonMatch[0]
+              .replace(/,\s*}/g, '}') // Remover vírgulas finais
+              .replace(/,\s*]/g, ']') // Remover vírgulas finais em arrays
+              .replace(/'/g, '"') // Substituir aspas simples por duplas
+            try {
+              parsed = JSON.parse(fixedJson)
+            } catch {
+              throw parseError
+            }
+          }
+        } else {
+          console.warn('⚠️ No JSON found in response')
+          console.warn('Response content:', content.substring(0, 500))
+          // Tentar extrair qualquer JSON que possa estar na resposta
+          const allJsonMatches = content.match(/\{[^{}]*\}/g)
+          if (allJsonMatches && allJsonMatches.length > 0) {
+            console.log('🔍 Found potential JSON matches, trying to parse...')
+            for (const match of allJsonMatches) {
+              try {
+                const testParsed = JSON.parse(match)
+                if (testParsed.title || testParsed.category_ids || testParsed.category_id) {
+                  console.log('✅ Found valid JSON in response')
+                  parsed = testParsed
+                  break
+                }
+              } catch {
+                // Continuar tentando
+              }
+            }
+          }
           
+          if (!parsed) {
+            throw new Error('No valid JSON found in response')
+          }
+        }
+        
+        // Se chegou aqui e parsed existe, processar a resposta
+        if (parsed) {
           console.log('📋 Parsed AI Response:', {
             title: parsed.title,
             hasDescription: !!parsed.description,
             keywordsCount: parsed.keywords?.length || 0,
             categoryIds: parsed.category_ids,
             categoryId: parsed.category_id,
-            fontWeight: parsed.font_weight
+            fontWeight: parsed.font_weight,
+            allKeys: Object.keys(parsed)
           })
           
           // Validar se as categorias sugeridas existem
@@ -474,20 +528,25 @@ Responda APENAS no formato JSON válido:
           
           // Suportar tanto category_ids (array) quanto category_id (único) para compatibilidade
           if (parsed.category_ids && Array.isArray(parsed.category_ids) && parsed.category_ids.length > 0) {
-            // Filtrar apenas IDs válidos
-            categoryIds = parsed.category_ids.filter((catId: string) => {
-              const exists = categoriesList.some((cat: any) => cat.id === catId)
-              if (!exists) {
-                console.warn(`⚠️ Category ID not found: ${catId}`)
-              }
-              return exists
-            })
-          } else if (parsed.category_id) {
-            const categoryExists = categoriesList.some((cat: any) => cat.id === parsed.category_id)
+            // Filtrar apenas IDs válidos e strings
+            categoryIds = parsed.category_ids
+              .filter((catId: any) => typeof catId === 'string' && catId.trim().length > 0)
+              .map((catId: string) => catId.trim())
+              .filter((catId: string) => {
+                const exists = categoriesList.some((cat: any) => cat.id === catId)
+                if (!exists) {
+                  console.warn(`⚠️ Category ID not found: ${catId}`)
+                  console.warn('Available category IDs:', categoriesList.map((c: any) => c.id).slice(0, 5))
+                }
+                return exists
+              })
+          } else if (parsed.category_id && typeof parsed.category_id === 'string') {
+            const categoryExists = categoriesList.some((cat: any) => cat.id === parsed.category_id.trim())
             if (categoryExists) {
-              categoryIds = [parsed.category_id]
+              categoryIds = [parsed.category_id.trim()]
             } else {
               console.warn(`⚠️ Category ID not found: ${parsed.category_id}`)
+              console.warn('Available category IDs:', categoriesList.map((c: any) => c.id).slice(0, 5))
             }
           }
           
@@ -521,8 +580,15 @@ Responda APENAS no formato JSON válido:
                 if (found) {
                   categoryIds.push(found.id)
                   console.log(`✅ Found category by keyword "${keyword}": ${found.name}`)
+                  break // Usar apenas a primeira categoria encontrada
                 }
               }
+            }
+            
+            // Se ainda não encontrou, usar a primeira categoria disponível como fallback
+            if (categoryIds.length === 0 && categoriesList.length > 0) {
+              console.warn('⚠️ No category matched, using first available category as fallback')
+              categoryIds = [categoriesList[0].id]
             }
           }
           
@@ -532,22 +598,30 @@ Responda APENAS no formato JSON válido:
             console.warn('⚠️ No valid categories found, will return empty array')
           }
           
+          // Garantir que o título seja uma string válida
+          const finalTitle = (parsed.title && typeof parsed.title === 'string' && parsed.title.trim())
+            ? parsed.title.trim()
+            : extractTitleFromFileName(fileName)
+          
+          // Garantir que keywords seja um array válido
+          const finalKeywords = Array.isArray(parsed.keywords)
+            ? parsed.keywords.filter((k: any) => typeof k === 'string' && k.trim().length > 0)
+            : []
+          
           return NextResponse.json({
-            title: parsed.title || extractTitleFromFileName(fileName),
+            title: finalTitle,
             description: generateDescription ? (parsed.description || generateDescriptionFromMetadata(metadata)) : null,
-            keywords: parsed.keywords || [],
+            keywords: finalKeywords,
             category_ids: categoryIds,
             category_id: categoryIds.length > 0 ? categoryIds[0] : null, // Primeira categoria para compatibilidade
             font_weight: parsed.font_weight || null // Peso da fonte identificado pela IA
           })
-        } else {
-          console.warn('⚠️ No JSON found in response')
-          console.warn('Response content:', content.substring(0, 500))
         }
       } catch (parseError: any) {
         console.error('❌ Failed to parse ChatGPT response as JSON:', parseError)
         console.error('Response content:', content.substring(0, 500))
         console.error('Parse error details:', parseError.message)
+        // Não relançar o erro, continuar com fallback
       }
     }
 
