@@ -134,7 +134,7 @@ export default function CreatorProfilePage() {
       try {
         let featuredQuery = supabase
           .from('resources')
-          .select('*, creator:profiles!creator_id(*), category:categories(*)')
+          .select('*, creator:profiles!creator_id(*), category:categories!category_id(*)')
           .eq('creator_id', creatorId)
           .order('download_count', { ascending: false })
           .limit(6)
