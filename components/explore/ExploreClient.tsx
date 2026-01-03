@@ -70,6 +70,7 @@ function ExploreContent({
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [playingId, setPlayingId] = useState<string | null>(null)
   const supabase = createSupabaseClient()
+  const isHeaderVisible = useHeaderVisibility()
 
   // Verificar se há busca ativa
   const hasActiveSearch = searchQuery.trim().length > 0
