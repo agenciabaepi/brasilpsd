@@ -130,51 +130,62 @@ export default function CreatorProfilePage() {
       const isOwnProfile = authUser && authUser.id === creatorId
       
       // Carregar recursos em destaque (mais baixados)
-      let featuredQuery = supabase
-        .from('resources')
-        .select('*, creator:profiles!creator_id(*), category:categories(*)')
-        .eq('creator_id', creatorId)
-        .order('download_count', { ascending: false })
-        .limit(6)
-      
-      // Se não for o próprio perfil, mostrar apenas aprovados
-      if (!isOwnProfile) {
-        featuredQuery = featuredQuery.eq('status', 'approved')
+      try {
+        let featuredQuery = supabase
+          .from('resources')
+          .select('*, creator:profiles!creator_id(*), category:categories(*)')
+          .eq('creator_id', creatorId)
+          .order('download_count', { ascending: false })
+          .limit(6)
+        
+        // Se não for o próprio perfil, mostrar apenas aprovados
+        if (!isOwnProfile) {
+          featuredQuery = featuredQuery.eq('status', 'approved')
+        }
+        
+        const { data: featuredData, error: featuredError } = await featuredQuery
+        
+        if (featuredError) {
+          console.error('Erro ao carregar recursos em destaque:', featuredError)
+          // Não mostrar toast para recursos em destaque, apenas logar o erro
+        } else {
+          setFeaturedResources(featuredData || [])
+        }
+      } catch (error) {
+        console.error('Erro ao carregar recursos em destaque:', error)
       }
-      
-      const { data: featuredData, error: featuredError } = await featuredQuery
-      
-      if (featuredError) {
-        console.error('Erro ao carregar recursos em destaque:', featuredError)
-        // Não mostrar toast para recursos em destaque, apenas logar o erro
-      }
-      
-      setFeaturedResources(featuredData || [])
 
       // Carregar todos os recursos do criador
-      let resourcesQuery = supabase
-        .from('resources')
-        .select('*, creator:profiles!creator_id(*), category:categories(*)')
-        .eq('creator_id', creatorId)
-        .order('created_at', { ascending: false })
-        .limit(100)
-      
-      // Se não for o próprio perfil, mostrar apenas aprovados
-      if (!isOwnProfile) {
-        resourcesQuery = resourcesQuery.eq('status', 'approved')
-      }
-      
-      const { data: resourcesData, error: resourcesError } = await resourcesQuery
-      
-      if (resourcesError) {
-        console.error('Erro ao carregar recursos:', resourcesError)
-        // Só mostrar toast se for um erro inesperado (não é apenas "nenhum resultado")
-        if (resourcesError.code !== 'PGRST116') { // PGRST116 = nenhum resultado encontrado
-          toast.error('Erro ao carregar recursos do criador')
+      try {
+        let resourcesQuery = supabase
+          .from('resources')
+          .select('*, creator:profiles!creator_id(*), category:categories(*)')
+          .eq('creator_id', creatorId)
+          .order('created_at', { ascending: false })
+          .limit(100)
+        
+        // Se não for o próprio perfil, mostrar apenas aprovados
+        if (!isOwnProfile) {
+          resourcesQuery = resourcesQuery.eq('status', 'approved')
         }
+        
+        const { data: resourcesData, error: resourcesError } = await resourcesQuery
+        
+        if (resourcesError) {
+          console.error('Erro ao carregar recursos:', resourcesError)
+          // Só mostrar toast se for um erro inesperado (não é apenas "nenhum resultado")
+          if (resourcesError.code !== 'PGRST116') { // PGRST116 = nenhum resultado encontrado
+            toast.error('Erro ao carregar recursos do criador')
+          }
+          setResources([])
+        } else {
+          setResources(resourcesData || [])
+        }
+      } catch (error) {
+        console.error('Erro ao carregar recursos:', error)
+        toast.error('Erro ao carregar recursos do criador')
+        setResources([])
       }
-
-      setResources(resourcesData || [])
 
       // Calcular estatísticas (apenas recursos aprovados para estatísticas públicas)
       const approvedResources = resourcesData?.filter(r => r.status === 'approved') || []
