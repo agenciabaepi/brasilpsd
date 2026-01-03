@@ -29,29 +29,34 @@ export default function Header({ initialUser, initialSubscription, initialCatego
   const supabase = createSupabaseClient()
 
   // Detectar scroll para ocultar/mostrar header
-  // Detecta scroll tanto no window quanto em elementos internos com overflow usando event delegation
+  // Detecta scroll tanto no window quanto em elementos internos com overflow
   const lastScrollY = useRef(0)
   const ticking = useRef(false)
+  const scrollableElementsRef = useRef<Set<HTMLElement>>(new Set())
 
   useEffect(() => {
-    const handleScroll = (event: Event) => {
+    const handleScroll = (event?: Event) => {
       if (!ticking.current) {
         window.requestAnimationFrame(() => {
           let currentScrollY = 0
           
           // Determinar de onde veio o scroll
-          if (event.target === window || event.target === document || event.target === document.documentElement || event.target === document.body) {
-            // Scroll do window
-            currentScrollY = window.scrollY || window.pageYOffset || 0
-          } else {
-            // Scroll de um elemento interno
+          if (event?.target) {
             const target = event.target as HTMLElement
-            if (target && target.scrollTop !== undefined) {
-              currentScrollY = target.scrollTop
+            // Se for um elemento com scroll interno, usar seu scrollTop
+            if (target !== window && target !== document && target !== document.documentElement && target !== document.body) {
+              if (target.scrollTop !== undefined) {
+                currentScrollY = target.scrollTop
+              } else {
+                currentScrollY = window.scrollY || window.pageYOffset || 0
+              }
             } else {
-              // Fallback para window scroll
+              // Scroll do window
               currentScrollY = window.scrollY || window.pageYOffset || 0
             }
+          } else {
+            // Sem evento, usar window scroll
+            currentScrollY = window.scrollY || window.pageYOffset || 0
           }
           
           // Se rolar para baixo mais de 100px, ocultar header
@@ -77,14 +82,57 @@ export default function Header({ initialUser, initialSubscription, initialCatego
     // Inicializar com a posição atual
     lastScrollY.current = window.scrollY || window.pageYOffset || 0
 
-    // Usar event delegation - capturar todos os eventos de scroll no document
-    // Isso funciona porque eventos de scroll fazem bubble até o document
-    document.addEventListener('scroll', handleScroll, { passive: true, capture: true })
+    // Listener para scroll no window
     window.addEventListener('scroll', handleScroll, { passive: true })
     
+    // Função para encontrar e adicionar listeners em elementos scrolláveis
+    const findAndAttachScrollableElements = () => {
+      // Buscar todos os elementos que podem ter overflow
+      const allElements = document.querySelectorAll('*')
+      
+      allElements.forEach((el) => {
+        const element = el as HTMLElement
+        // Pular se já tem listener
+        if (scrollableElementsRef.current.has(element)) return
+        
+        const style = window.getComputedStyle(element)
+        
+        // Verificar se tem overflow e se realmente é scrollável
+        if (
+          (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+          element.scrollHeight > element.clientHeight
+        ) {
+          scrollableElementsRef.current.add(element)
+          element.addEventListener('scroll', handleScroll, { passive: true })
+        }
+      })
+    }
+
+    // Aguardar um pouco para os elementos serem renderizados
+    const timeout = setTimeout(() => {
+      findAndAttachScrollableElements()
+    }, 500)
+
+    // Usar MutationObserver para detectar quando novos elementos são adicionados
+    const observer = new MutationObserver(() => {
+      findAndAttachScrollableElements()
+    })
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style']
+    })
+    
     return () => {
-      document.removeEventListener('scroll', handleScroll, { capture: true } as any)
       window.removeEventListener('scroll', handleScroll)
+      scrollableElementsRef.current.forEach((el) => {
+        el.removeEventListener('scroll', handleScroll)
+      })
+      scrollableElementsRef.current.clear()
+      observer.disconnect()
+      clearTimeout(timeout)
     }
   }, [])
 
