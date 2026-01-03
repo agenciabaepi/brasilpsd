@@ -712,12 +712,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
   return (
     <div className={`${isInModal ? 'p-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10'}`}>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-start">
         
         {/* COLUNA ESQUERDA - IMAGEM/VIDEO */}
-        <div className="lg:col-span-7 lg:sticky lg:top-24 lg:self-start">
+        <div className="lg:col-span-8 lg:sticky lg:top-24 lg:self-start">
           {/* Preview Image/Video/Audio */}
-          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center group relative shadow-sm" style={{ minHeight: 'calc(100vh - 200px)' }}>
+          <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex items-start justify-center group relative shadow-sm">
             {resource.resource_type === 'audio' ? (
               <div className="w-full p-8 md:p-12">
                 <AudioPlayer
@@ -990,10 +990,10 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
           </div>
 
         {/* COLUNA DIREITA (SIDEBAR) */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 sticky top-24 shadow-sm">
+        <div className="lg:col-span-4">
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 sticky top-24 shadow-sm space-y-4">
             {/* Perfil do Criador - Topo */}
-            <div className="mb-6 pb-6 border-b border-gray-100">
+            <div className="mb-4 pb-4 border-b border-gray-100">
               {isOfficial || !resource.creator_id || isSystemProfileSync(resource.creator_id) ? (
                 <div className="flex items-center space-x-3">
                   <div className="h-12 w-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -1011,20 +1011,20 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                       <User className="h-6 w-6 text-gray-700" />
                     )}
             </div>
-                  <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-sm font-bold text-gray-900 truncate">{authorName}</p>
+                      <p className="text-xs font-bold text-gray-900 truncate">{authorName}</p>
                       {isOfficial && (
-                        <Image src="/images/verificado.svg" alt="Oficial" width={12} height={12} className="flex-shrink-0" />
+                        <Image src="/images/verificado.svg" alt="Oficial" width={10} height={10} className="flex-shrink-0" />
                       )}
                     </div>
-                    <p className="text-xs text-gray-600 font-semibold tracking-widest mt-0.5 uppercase">
+                    <p className="text-[10px] text-gray-600 font-semibold tracking-widest mt-0.5 uppercase">
                       {isOfficial ? 'Equipe Oficial' : 'Criador Verificado'}
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <Link 
                     href={`/creator/${resource.creator_id}`}
                     onClick={() => {
@@ -1033,9 +1033,9 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                         closeResourceView()
                       }
                     }}
-                    className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+                    className="flex items-center space-x-2.5 hover:opacity-80 transition-opacity"
                   >
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
                       {resource.creator?.avatar_url ? (
                         <Image 
                           src={resource.creator.avatar_url} 
@@ -1049,8 +1049,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">{authorName}</p>
-                      <p className="text-xs text-gray-600 font-semibold tracking-widest mt-0.5 uppercase">
+                      <p className="text-xs font-bold text-gray-900 truncate">{authorName}</p>
+                      <p className="text-[10px] text-gray-600 font-semibold tracking-widest mt-0.5 uppercase">
                         Criador Verificado
                       </p>
                     </div>
@@ -1220,8 +1220,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
             )}
 
             {/* Botões de Ação */}
-            <div className="mb-6 pb-6 border-b border-gray-100">
-              <div className="flex items-center gap-3">
+            <div className="mb-4 pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={handleFavorite} 
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-gray-200"
@@ -1241,8 +1241,8 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
             {/* Badge de Família (se aplicável) */}
             {resource.resource_type === 'font' && familyCount && familyCount > 1 && (
-              <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-xl">
-                <div className="flex items-center gap-3">
+              <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-xl">
+                <div className="flex items-center gap-2">
                   <div className="bg-primary-500 p-2 rounded-lg">
                     <Package className="h-5 w-5 text-white" />
                   </div>
@@ -1258,9 +1258,9 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
             {/* Premium Highlight */}
             {resource.is_premium && !user?.is_premium && (
-              <div className="mb-6 pb-6 border-b border-gray-100">
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-orange-900">
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <p className="text-[10px] font-semibold text-orange-900">
                     Arquivo disponível apenas para usuários premium. Atualize seu plano para realizar o download deste item.
                   </p>
                 </div>
@@ -1292,9 +1292,9 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 </button>
               </Link>
             ) : resource.is_premium && !user.is_premium ? (
-              <Link href="/premium" className="block mt-8">
-                <button className="w-full h-16 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl flex items-center justify-center px-6 space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg shadow-blue-500/20 uppercase">
-                  <Crown className="h-5 w-5 flex-shrink-0" />
+              <Link href="/premium" className="block">
+                <button className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-xl flex items-center justify-center px-4 space-x-2 font-bold text-xs tracking-widest transition-all shadow-lg shadow-blue-500/20 uppercase">
+                  <Crown className="h-4 w-4 flex-shrink-0" />
                   <span>Assinar Premium para Baixar</span>
                 </button>
               </Link>
