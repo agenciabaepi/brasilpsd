@@ -1497,38 +1497,61 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
                 <div className="relative">
                   <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
                     <div className="flex gap-3" style={{ width: 'max-content' }}>
-                      {collectionResources.map((collectionResource) => (
-                        <Link
-                          key={collectionResource.id}
-                          href={`/resources/${collectionResource.id}`}
-                          className="group block flex-shrink-0"
-                          style={{ width: '120px' }}
-                        >
-                          <div className="relative overflow-hidden rounded-lg bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md">
-                            <div className="relative w-full aspect-square overflow-hidden">
-                              {collectionResource.resource_type === 'font' ? (
-                                <FontThumbnail resource={collectionResource} size="small" className="w-full h-full" />
-                              ) : collectionResource.thumbnail_url ? (
-                                <Image
-                                  src={getS3Url(collectionResource.thumbnail_url)}
-                                  alt={collectionResource.title}
-                                  fill
-                                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                                  sizes="120px"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                                  <FileText className="h-8 w-8 text-gray-300" />
-                                </div>
-                              )}
-                              {collectionResource.is_premium && (
-                                <div className="absolute top-1.5 right-1.5 bg-gray-900/80 backdrop-blur-sm p-1 rounded-md shadow-lg border border-white/10">
-                                  <Crown className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                                </div>
-                              )}
+                      {collectionResources.map((collectionResource) => {
+                        // Áudios e fontes sempre usam página própria
+                        const isAudio = collectionResource.resource_type === 'audio'
+                        const isFont = collectionResource.resource_type === 'font'
+                        const useModal = !isAudio && !isFont
+
+                        const handleClick = (e: React.MouseEvent) => {
+                          if (useModal) {
+                            e.preventDefault()
+                            openResourceView(collectionResource.id)
+                          }
+                        }
+
+                        const Component = useModal ? 'div' : Link
+                        const componentProps = useModal 
+                          ? { 
+                              onClick: handleClick, 
+                              role: 'button', 
+                              tabIndex: 0,
+                              className: "group block flex-shrink-0 cursor-pointer",
+                              style: { width: '120px' }
+                            }
+                          : { 
+                              href: `/resources/${collectionResource.id}`, 
+                              className: "group block flex-shrink-0",
+                              style: { width: '120px' }
+                            }
+
+                        return (
+                          <Component key={collectionResource.id} {...componentProps}>
+                            <div className="relative overflow-hidden rounded-lg bg-gray-100 border border-gray-100 hover:border-primary-200 transition-all duration-300 shadow-sm hover:shadow-md">
+                              <div className="relative w-full aspect-square overflow-hidden">
+                                {collectionResource.resource_type === 'font' ? (
+                                  <FontThumbnail resource={collectionResource} size="small" className="w-full h-full" />
+                                ) : collectionResource.thumbnail_url ? (
+                                  <Image
+                                    src={getS3Url(collectionResource.thumbnail_url)}
+                                    alt={collectionResource.title}
+                                    fill
+                                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                    sizes="120px"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                    <FileText className="h-8 w-8 text-gray-300" />
+                                  </div>
+                                )}
+                                {collectionResource.is_premium && (
+                                  <div className="absolute top-1.5 right-1.5 bg-gray-900/80 backdrop-blur-sm p-1 rounded-md shadow-lg border border-white/10">
+                                    <Crown className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </Component>
+                          </Component>
                         )
                       })}
                     </div>
