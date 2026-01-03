@@ -36,6 +36,7 @@ export default function BatchUploadPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [processingIndex, setProcessingIndex] = useState(0)
+  const [applyCategoryToAll, setApplyCategoryToAll] = useState<string>('') // Categoria selecionada para aplicar a todas
   
   const router = useRouter()
   const supabase = createSupabaseClient()
@@ -798,31 +799,94 @@ export default function BatchUploadPage() {
                   <span className="text-sm text-gray-600">
                     {readyCount} de {images.length} imagem(ns) pronta(s)
                   </span>
-                  {/* Opção global para definir licença */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-600">Aplicar a todas:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImages(prev => prev.map(img => ({ ...img, is_premium: false })))
-                        toast.success('Todas as imagens definidas como Grátis')
-                      }}
-                      className="px-3 py-1.5 bg-blue-500 text-white rounded-md text-xs font-medium hover:bg-blue-600 transition-colors"
-                      disabled={isUploading}
-                    >
-                      Grátis
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImages(prev => prev.map(img => ({ ...img, is_premium: true })))
-                        toast.success('Todas as imagens definidas como Premium')
-                      }}
-                      className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
-                      disabled={isUploading}
-                    >
-                      Premium
-                    </button>
+                  {/* Opções globais para aplicar a todas as imagens */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {/* Opção para aplicar categoria a todas */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-600">Categoria para todas:</span>
+                      <select
+                        value={applyCategoryToAll}
+                        onChange={(e) => {
+                          const categoryId = e.target.value
+                          setApplyCategoryToAll(categoryId)
+                          
+                          if (categoryId) {
+                            const category = categories.find(c => c.id === categoryId)
+                            if (category) {
+                              // Adicionar a categoria selecionada a todas as imagens (sem remover as existentes)
+                              setImages(prev => prev.map(img => {
+                                const hasCategory = img.category_ids.includes(categoryId)
+                                if (hasCategory) return img
+                                
+                                return {
+                                  ...img,
+                                  category_ids: [...img.category_ids, categoryId]
+                                }
+                              }))
+                              toast.success(`Categoria "${category.name}" adicionada a todas as imagens`)
+                            }
+                          } else {
+                            // Se selecionar "Nenhuma", não fazer nada (ou pode remover todas as categorias se necessário)
+                            setApplyCategoryToAll('')
+                          }
+                        }}
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium bg-white hover:bg-gray-50 transition-colors"
+                        disabled={isUploading || categories.length === 0}
+                      >
+                        <option value="">Selecione uma categoria</option>
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                      {applyCategoryToAll && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Remover a categoria selecionada de todas as imagens
+                            setImages(prev => prev.map(img => ({
+                              ...img,
+                              category_ids: img.category_ids.filter(id => id !== applyCategoryToAll)
+                            })))
+                            const category = categories.find(c => c.id === applyCategoryToAll)
+                            toast.success(`Categoria "${category?.name || ''}" removida de todas as imagens`)
+                            setApplyCategoryToAll('')
+                          }}
+                          className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                          disabled={isUploading}
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Opção global para definir licença */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-gray-600">Licença para todas:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImages(prev => prev.map(img => ({ ...img, is_premium: false })))
+                          toast.success('Todas as imagens definidas como Grátis')
+                        }}
+                        className="px-3 py-1.5 bg-blue-500 text-white rounded-md text-xs font-medium hover:bg-blue-600 transition-colors"
+                        disabled={isUploading}
+                      >
+                        Grátis
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImages(prev => prev.map(img => ({ ...img, is_premium: true })))
+                          toast.success('Todas as imagens definidas como Premium')
+                        }}
+                        className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
+                        disabled={isUploading}
+                      >
+                        Premium
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <Button
