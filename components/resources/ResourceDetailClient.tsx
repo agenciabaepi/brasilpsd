@@ -1172,12 +1172,12 @@ export default function ResourceDetailClient({ resource, initialUser, initialIsF
 
             {/* Download Button */}
             {!user ? (
-              <Link href={resource.is_premium ? "/premium" : "/signup"} className="block mt-8">
+              <Link href={resource.is_premium ? "/premium" : "/signup"} className="block">
                 <button
                   className={cn(
-                    "w-full h-16 rounded-2xl flex items-center justify-center px-6 space-x-3 font-bold text-sm tracking-widest transition-all shadow-lg uppercase",
+                    "w-full h-14 rounded-xl flex items-center justify-center px-6 space-x-2 font-semibold text-sm transition-all shadow-lg",
                     resource.is_premium 
-                      ? "bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20" 
+                      ? "bg-green-600 hover:bg-green-700 text-white shadow-green-600/20" 
                       : "bg-gray-900 hover:bg-black text-white shadow-gray-900/20"
                   )}
                 >
