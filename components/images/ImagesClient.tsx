@@ -183,7 +183,7 @@ export default function ImagesClient({ initialResources }: ImagesClientProps) {
         )}
 
         {/* MAIN CONTENT */}
-        <main className="flex-1 h-full flex flex-col overflow-hidden p-8 lg:p-12">
+        <main className="flex-1 flex flex-col p-8 lg:p-12">
           {/* Header Area - Fixed */}
           <div className={`flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 transition-all duration-300 ${
             isHeaderVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full h-0 mb-0 overflow-hidden'
